@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use disco::codegen::{CType, CFunction};
+use disco::codegen::{CEntryPoint, CFunctionBody};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input_path = Path::new("foo.disco");
@@ -20,9 +20,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_path = Path::new(stem);
 
     // Generated code
-    let cmain = CFunction {
-        name: "main".to_string(),
-        return_type: CType::Int,
+    let cmain = CEntryPoint {
+        body: CFunctionBody {},
     };
 
     //TODO: Add proper logging
