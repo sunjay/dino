@@ -78,6 +78,7 @@ Rust dynamic library linked with the compiled code.
 
 ## Future Features
 
+* Pull-based compiler (query-response architecture)
 * Module system
 * Panic / Stack unwinding
 * Trait system
