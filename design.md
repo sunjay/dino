@@ -11,7 +11,7 @@
 1. Disco Source Code
 2. AST
 3. AST (types inferred)
-4. IR (might add later)
+4. IR
 5. C code
 
 ## Primitive Types

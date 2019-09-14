@@ -1,6 +1,7 @@
-//! The abstract syntax tree of the program.
+//! An intermediate representation of the program designed for easier code generation
 //!
-//! This is the closest representation to the actual syntax.
+//! * All types are inferred at this point
+//! * Method resolution has been completed
 
 #[derive(Debug)]
 pub struct Program {
