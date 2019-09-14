@@ -21,8 +21,8 @@ impl fmt::Display for CType {
 
 #[derive(Debug)]
 pub struct CFunction {
-    pub return_type: CType,
     pub name: String,
+    pub return_type: CType,
 }
 
 impl fmt::Display for CFunction {
