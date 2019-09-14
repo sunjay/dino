@@ -1,0 +1,16 @@
+// A high-level description of the disco language grammar using a syntax based
+// on EBNF.
+//
+// This file is meant to be an easier to look at version of the parser source
+// code. It is not guaranteed to be up to date or complete. For the most
+// accurate information about the grammar of the language, please see the parser
+// source code itself.
+
+program := decl*
+decl := function
+
+function := "fn" ident "(" ")" block
+block := "{" "}"
+
+whitespace := " \t\r\n" | comment
+comment := "//" any* "\n"
