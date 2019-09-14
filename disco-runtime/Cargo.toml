@@ -1,17 +1,16 @@
-[workspace]
-members = [
-  "disco-runtime",
-]
-
 [package]
-name = "disco"
+name = "disco-runtime"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
 edition = "2018"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
-tempfile = "3.1"
-nom = "5.0"
-snafu = "0.5"
+
+[build-dependencies]
+cbindgen = "0.9.1"
