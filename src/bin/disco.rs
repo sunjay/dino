@@ -5,10 +5,22 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use disco::codegen::{CEntryPoint, CFunctionBody};
+use disco::{
+    ast,
+    resolve::ProgramDecls,
+    codegen::{CEntryPoint, CFunctionBody}
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input_path = Path::new("foo.disco");
+
+    let input_program = r#"
+        fn main() {}
+    "#;
+
+    let program = ast::Program::parse(input_program)?;
+    let decls = ProgramDecls::new(program)?;
+    println!("{:?}", decls);
 
     // Check that the path and stem are valid
     let stem = match (input_path.file_stem(), input_path.extension()) {
@@ -49,6 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
+        //TODO: Link with runtime
         .args(warning_flags)
         .arg(code_file_path)
         .arg("-o")

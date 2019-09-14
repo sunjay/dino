@@ -6,7 +6,7 @@
 // accurate information about the grammar of the language, please see the parser
 // source code itself.
 
-program := decl*
+module := decl*
 decl := function
 
 function := "fn" ident "(" ")" block

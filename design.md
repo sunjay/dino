@@ -9,10 +9,10 @@
 ## Pipeline
 
 1. Disco Source Code
-2. AST
-3. AST (types inferred)
-4. IR
-5. C code
+2. AST (parsing)
+3. Declarations (name resolution)
+4. IR (type inference & checking)
+5. C code (code generation)
 
 ## Primitive Types
 

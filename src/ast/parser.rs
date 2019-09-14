@@ -4,11 +4,11 @@ use nom::{
     character::complete::char,
     combinator::{all_consuming, map, recognize},
     bytes::complete::{tag, take_while1, take_while},
-    sequence::{tuple, pair, delimited},
+    sequence::{tuple, pair, delimited, terminated, preceded},
     multi::many0,
 };
 
-use crate::ast::*;
+use super::*;
 
 type Input<'a> = &'a str;
 type IResult<'a, O> = nom::IResult<Input<'a>, O, VerboseError<Input<'a>>>;
@@ -25,19 +25,31 @@ impl From<nom::Err<VerboseError<Input<'_>>>> for Error {
     }
 }
 
-/// Attempts to parse the given input program
-pub fn parse_program(input: &str) -> Result<Program, Error> {
-    Ok(program(input).map(|(inp, prog)| match inp {
-        "" => prog,
+/// Attempts to parse the given input module
+pub fn parse_module(input: &str) -> Result<Module, Error> {
+    let (inp, module) = match module(input) {
+        Ok((inp, module)) => (inp, module),
+        Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
+            //TODO: Convert to Error type above
+            panic!("Error: {}", nom::error::convert_error(input, err));
+        },
+        // This should not be reachable because we are using the 'complete' versions of all parsers
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+    };
+
+    Ok(match inp {
+        "" => module,
         // Should never reach this case because the parser should ensure that all input is consumed
         _ => unreachable!(),
-    })?)
+    })
 }
 
-fn program(input: Input) -> IResult<Program> {
-    let (inp, decls) = all_consuming(many0(delimited(ws0, decl, ws0)))(input)?;
+fn module(input: Input) -> IResult<Module> {
+    let (inp, decls) = all_consuming(
+        preceded(ws0, many0(terminated(decl, ws0)))
+    )(input)?;
 
-    Ok((inp, Program {decls}))
+    Ok((inp, Module {decls}))
 }
 
 fn decl(input: Input) -> IResult<Decl> {
