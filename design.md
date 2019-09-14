@@ -47,6 +47,7 @@ Rust dynamic library linked with the compiled code.
 * Function declaration: `fn name(arg1: ty1, arg2: ty2) -> ty { body }`
   * Entry point: `fn main() { body }`
   * Multiple declarations with the same fully-qualified name are not allowed
+  * Declaration after use: no forward declarations necessary
 * Function calls: `name(val1, val2)`
 * Boolean Operators:
   * Not: `!a`
