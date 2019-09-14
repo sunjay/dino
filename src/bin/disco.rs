@@ -7,6 +7,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use disco::{
     ast,
+    tycheck,
     resolve::ProgramDecls,
     codegen::{CEntryPoint, CFunctionBody}
 };
@@ -20,7 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let program = ast::Program::parse(input_program)?;
     let decls = ProgramDecls::new(program)?;
-    println!("{:?}", decls);
+    let program_ir = tycheck::infer_and_check(decls)?;
+    println!("{:?}", program_ir);
 
     // Check that the path and stem are valid
     let stem = match (input_path.file_stem(), input_path.extension()) {

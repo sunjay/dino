@@ -1,5 +1,6 @@
 //! An intermediate representation of the program designed for easier code generation.
 //!
+//! By creating values of the types in this module, you guarantee that:
 //! * All types are inferred and checked at this point
 //! * Method resolution has been completed
 

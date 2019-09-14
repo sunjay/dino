@@ -73,4 +73,9 @@ impl<'a> DeclMap<'a> {
     pub fn get(&self, name: &Ident<'a>) -> Option<&Decl<'a>> {
         self.decls.get(name).map(|entry| &entry.decl)
     }
+
+    /// Returns an iterator that goes through each declaration in the map
+    pub fn iter(&self) -> impl Iterator<Item=&Decl<'a>> {
+        self.decls.iter().map(|entry| &entry.decl)
+    }
 }

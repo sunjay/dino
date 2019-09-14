@@ -9,7 +9,7 @@ use crate::ast;
 #[derive(Debug)]
 pub struct ProgramDecls<'a> {
     /// The top-level declarations in the program
-    decls: DeclMap<'a>,
+    pub top_level_decls: DeclMap<'a>,
 }
 
 impl<'a> ProgramDecls<'a> {
@@ -18,7 +18,7 @@ impl<'a> ProgramDecls<'a> {
         let ast::Module {decls} = top_level_module;
 
         Ok(Self {
-            decls: DeclMap::new(decls)?,
+            top_level_decls: DeclMap::new(decls)?,
         })
     }
 }
