@@ -3,17 +3,19 @@
 //! * All types are inferred at this point
 //! * Method resolution has been completed
 
+use crate::ast::Ident;
+
 #[derive(Debug)]
-pub struct Program {
-    pub decls: Vec<Decl>,
+pub struct Module<'a> {
+    pub decls: Vec<Decl<'a>>,
 }
 
 #[derive(Debug)]
-pub enum Decl {
-    Function(Function),
+pub enum Decl<'a> {
+    Function(Function<'a>),
 }
 
 #[derive(Debug)]
-pub struct Function {
-    pub name: String,
+pub struct Function<'a> {
+    pub name: Ident<'a>,
 }

@@ -3,7 +3,7 @@
 //! This is the closest representation to the actual syntax.
 
 #[derive(Debug)]
-pub struct Program<'a> {
+pub struct Module<'a> {
     pub decls: Vec<Decl<'a>>,
 }
 
@@ -14,5 +14,7 @@ pub enum Decl<'a> {
 
 #[derive(Debug)]
 pub struct Function<'a> {
-    pub name: &'a str,
+    pub name: Ident<'a>,
 }
+
+pub type Ident<'a> = &'a str;
