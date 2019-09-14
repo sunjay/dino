@@ -1,0 +1,2 @@
+// This function is not main
+fn foo() {}
