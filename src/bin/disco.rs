@@ -65,6 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
         .arg(format!("-L{}", tmp_dir.path().display()))
         .args(warning_flags)
+        .arg("-g")
         .arg(code_file_path)
         .arg("-o")
         .arg(output_path)
