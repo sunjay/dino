@@ -1,24 +1,37 @@
 use std::io::Write;
 use std::fs::File;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "disco", about)]
+struct CompilerOptions {
+    /// The program to compile
+    #[structopt(name = "input", parse(from_os_str))]
+    program_path: PathBuf,
+    /// Write output to <file>
+    #[structopt(short = "o", name = "file")]
+    output_path: Option<PathBuf>,
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_path = Path::new("tests/run-pass/empty-main.disco");
+    let CompilerOptions {program_path, output_path} = CompilerOptions::from_args();
 
-    let code = disco::compile_executable(input_path)?;
+    let code = disco::compile_executable(&program_path)?;
 
     // Check that the path and stem are valid
-    let stem = match (input_path.file_stem(), input_path.extension()) {
-        (Some(stem), Some(ext)) if ext == "disco" => stem,
+    let program_stem = match (program_path.file_stem(), program_path.extension()) {
+        (Some(stem), Some(ext)) if !stem.is_empty() && ext == "disco" => stem,
         _ => Err("Invalid input path. Must use extension `disco`".to_string())?,
     };
 
     // Default output path is the input path without its stem
-    let output_path = Path::new(stem);
+    let output_path = output_path.as_ref().map(|p| p.as_path())
+        .unwrap_or_else(|| Path::new(program_stem));
 
     //TODO: Add proper logging
     //TODO: Add support for outputing the generated C code (CLI flag)

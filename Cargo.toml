@@ -7,6 +7,7 @@ members = [
 name = "disco"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
+description = "Compiler for the disco programming language"
 edition = "2018"
 build = "build.rs"
 
@@ -14,6 +15,7 @@ build = "build.rs"
 tempfile = "3.1"
 nom = "5.0"
 snafu = "0.5"
+structopt = "0.3"
 
 [build-dependencies]
 build-helper = "0.1"
