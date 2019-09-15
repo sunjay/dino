@@ -10,7 +10,10 @@ module := decl*
 decl := function
 
 function := "fn" ident "(" ")" block
-block := "{" "}"
+block := "{" stmt* "}"
+
+stmt := var_decl
+var_decl := "let" ident ":" ty "=" integer_literal ";"
 
 whitespace := " \t\r\n" | comment
 comment := "//" any* "\n"

@@ -2,6 +2,7 @@ use std::fmt;
 use std::collections::HashSet;
 use std::borrow::Borrow;
 use std::error::Error;
+use std::hash::{Hash, Hasher};
 
 use crate::ast::{Decl, Ident};
 
@@ -19,9 +20,15 @@ impl fmt::Display for DuplicateDecl {
 impl Error for DuplicateDecl {}
 
 /// Allows decls to be looked up by name while still storing the name in the Decl type
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 struct DeclEntry<'a> {
     decl: Decl<'a>,
+}
+
+impl<'a> Hash for DeclEntry<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.decl.name().hash(state)
+    }
 }
 
 impl<'a> Borrow<&'a str> for DeclEntry<'a> {

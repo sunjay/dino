@@ -27,6 +27,6 @@ fn infer_and_check_decl<'a>(decl: &ast::Decl<'a>) -> Result<ir::Decl<'a>, Error>
 }
 
 fn infer_and_check_function<'a>(func: &ast::Function<'a>) -> Result<ir::Function<'a>, Error> {
-    let ast::Function {name} = func;
+    let ast::Function {name, body} = func;
     Ok(ir::Function {name})
 }

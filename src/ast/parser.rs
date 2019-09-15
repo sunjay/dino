@@ -1,8 +1,9 @@
 use snafu::Snafu;
 use nom::{
     error::VerboseError,
-    character::complete::char,
-    combinator::{all_consuming, map, recognize},
+    branch::alt,
+    character::complete::{char, digit1},
+    combinator::{all_consuming, map, map_res, recognize, opt},
     bytes::complete::{tag, take_while1, take_while},
     sequence::{tuple, pair, delimited, terminated, preceded},
     multi::many0,
@@ -65,8 +66,9 @@ fn function(input: Input) -> IResult<Function> {
         function_params,
         ws0,
         block,
-    )), |(_, _, name, _, _params, _, _block)| Function {
+    )), |(_, _, name, _, _params, _, body)| Function {
         name,
+        body,
     })(input)
 }
 
@@ -75,9 +77,44 @@ fn function_params(input: Input) -> IResult<()> {
     delimited(char('('), |inp| Ok((inp, ())), char(')'))(input)
 }
 
-fn block(input: Input) -> IResult<()> {
-    //TODO: Actually parse statements
-    delimited(char('{'), |inp| Ok((inp, ())), char('}'))(input)
+fn block(input: Input) -> IResult<Block> {
+    map(
+        delimited(
+            char('{'),
+            preceded(ws0, many0(terminated(stmt, ws0))),
+            char('}'),
+        ),
+        |stmts| Block {stmts},
+    )(input)
+}
+
+fn stmt(input: Input) -> IResult<Stmt> {
+    map(var_decl, Stmt::VarDecl)(input)
+}
+
+fn var_decl(input: Input) -> IResult<VarDecl> {
+    map(
+        tuple((
+            tag("let"),
+            ws1,
+            ident,
+            ws0,
+            char(':'),
+            ws0,
+            ident,
+            ws0,
+            char('='),
+            ws0,
+            expr,
+            ws0,
+            char(';'),
+        )),
+        |(_, _, ident, _, _, _, ty, _, _, _, expr, _, _)| VarDecl {ident, ty, expr},
+    )(input)
+}
+
+fn expr(input: Input) -> IResult<Expr> {
+    map(integer_literal, Expr::IntegerLiteral)(input)
 }
 
 fn ident(input: Input) -> IResult<&str> {
@@ -87,6 +124,22 @@ fn ident(input: Input) -> IResult<&str> {
         // Followed by any other identifier characters
         take_while(|c: char| c.is_alphanumeric() || c == '_'),
     ))(input)
+}
+
+fn integer_literal(input: Input) -> IResult<i64> {
+    use nom::ParseTo;
+    use nom::error::{ParseError, ErrorKind};
+
+    map_res(
+        recognize(tuple((
+            opt(alt((char('+'), char('-')))),
+            digit1,
+        ))),
+        |val: Input| match val.parse_to() {
+            Some(n) => Ok(n),
+            None => Err(nom::Err::Error(VerboseError::from_error_kind(input, ErrorKind::ParseTo))),
+        },
+    )(input)
 }
 
 /// Parses at least one whitespace character
