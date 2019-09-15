@@ -1,28 +1,15 @@
 use std::io::Write;
-use std::fs::{self, File};
+use std::fs::File;
 use std::error::Error;
 use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use disco::{
-    ast,
-    tycheck,
-    codegen,
-    resolve::ProgramDecls,
-};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_path = Path::new("foo.disco");
+    let input_path = Path::new("tests/run-pass/empty-main.disco");
 
-    let input_program = r#"
-        fn main() {}
-    "#;
-
-    let program = ast::Program::parse(input_program)?;
-    let decls = ProgramDecls::new(program)?;
-    let program_ir = tycheck::infer_and_check(decls)?;
-    let code = codegen::executable(&program_ir)?;
+    let code = disco::compile_executable(input_path)?;
 
     // Check that the path and stem are valid
     let stem = match (input_path.file_stem(), input_path.extension()) {
@@ -41,8 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tmp_dir = TempDir::new()?;
 
     // Write out the shared library and associated header file that contains the language runtime
-    fs::write(tmp_dir.path().join(codegen::RUNTIME_HEADER_FILENAME), codegen::RUNTIME_HEADER_CONTENTS)?;
-    fs::write(tmp_dir.path().join(codegen::RUNTIME_LIB_FILENAME), codegen::RUNTIME_LIB_CONTENTS)?;
+    disco::runtime::write_runtime_files(tmp_dir.path())?;
 
     let code_file_path = tmp_dir.path().join("main.c");
     // Drop the file as soon as possible so it finishes being written to
@@ -63,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
-        .arg(format!("-l{}", codegen::RUNTIME_LIB_NAME))
+        .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
         .arg(format!("-L{}", tmp_dir.path().display()))
         .args(warning_flags)
         .arg(code_file_path)

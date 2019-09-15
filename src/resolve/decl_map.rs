@@ -6,17 +6,17 @@ use std::error::Error;
 use crate::ast::{Decl, Ident};
 
 #[derive(Debug)]
-pub struct DuplicateDecl<'a> {
-    duplicate: Ident<'a>,
+pub struct DuplicateDecl {
+    duplicate: String,
 }
 
-impl<'a> fmt::Display for DuplicateDecl<'a> {
+impl fmt::Display for DuplicateDecl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "the name '{}' is defined multiple times", self.duplicate)
     }
 }
 
-impl<'a> Error for DuplicateDecl<'a> {}
+impl Error for DuplicateDecl {}
 
 /// Allows decls to be looked up by name while still storing the name in the Decl type
 #[derive(Debug, Hash)]
@@ -52,14 +52,14 @@ pub struct DeclMap<'a> {
 
 impl<'a> DeclMap<'a> {
     /// Collects the declarations and groups them by name
-    pub fn new(input_decls: Vec<Decl<'a>>) -> Result<Self, DuplicateDecl<'a>> {
+    pub fn new(input_decls: Vec<Decl<'a>>) -> Result<Self, DuplicateDecl> {
         let mut decls = HashSet::new();
 
         for decl in input_decls {
             let entry = DeclEntry {decl};
             if decls.contains(&entry) {
                 return Err(DuplicateDecl {
-                    duplicate: *entry.decl.name(),
+                    duplicate: entry.decl.name().to_string(),
                 });
             }
 

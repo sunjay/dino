@@ -4,16 +4,12 @@
 //! only use a very general subset of C that could allow us to potentially switch to a different
 //! code generation representation.
 
-mod runtime {
-    // Load information about the language runtime
-    include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
-}
 mod trans;
-
-pub use runtime::*;
 pub use trans::*;
 
 use std::fmt;
+
+use crate::runtime::RUNTIME_HEADER_FILENAME;
 
 #[derive(Debug)]
 pub struct CExecutableProgram {
