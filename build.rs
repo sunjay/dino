@@ -33,6 +33,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .join(profile().to_string())
         .join(&runtime_lib_filename);
 
+    if !runtime_lib_path.exists() {
+        panic!("Runtime library has not been generated yet. Run `cargo build --all`");
+    }
+
     // Generate a module that embeds the entire runtime
     let code = RUNTIME_LIB_MOD_SOURCE_CODE
         .replace("{runtime_header_filename}", runtime_header_filename)
