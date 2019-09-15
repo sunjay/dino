@@ -25,17 +25,19 @@ impl fmt::Display for CExecutableProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "#include \"{}\"\n", RUNTIME_HEADER_FILENAME)?;
 
+        let Self {functions, entry_point} = self;
+
         // Output forward declarations so we don't have to worry about outputting the functions in
         // a specific order
-        for func in &self.functions {
+        for func in functions {
             writeln!(f, "{};", func.sig)?;
         }
 
         // Write out entry point, which may rely on any number of the forward declarations
-        writeln!(f, "{}", self.entry_point)?;
+        writeln!(f, "{}", entry_point)?;
 
         // Finally, write out the code for each forward declared function
-        for func in &self.functions {
+        for func in functions {
             writeln!(f, "{};", func)?;
         }
 
@@ -64,9 +66,11 @@ pub struct CEntryPoint {
 
 impl fmt::Display for CEntryPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {body} = self;
+
         // This is the only place where `int` is explicitly used. Use DInt everywhere else.
         writeln!(f, "int main(void) {{")?;
-        writeln!(f, "{}", self.body)?;
+        writeln!(f, "{}", body)?;
         // Return an exit code of zero because if the program got to this point it succeeded
         writeln!(f, "return 0;")?;
         write!(f, "}}")
@@ -81,8 +85,9 @@ pub struct CFunction {
 
 impl fmt::Display for CFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{} {{", self.sig)?;
-        writeln!(f, "{}", self.body)?;
+        let Self {sig, body} = self;
+        writeln!(f, "{} {{", sig)?;
+        writeln!(f, "{}", body)?;
         write!(f, "}}")
     }
 }
@@ -94,23 +99,26 @@ pub struct CFunctionSignature {
     /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
+    /// The type returned from the function
     pub return_type: CType,
 }
 
 impl fmt::Display for CFunctionSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}(", self.return_type, self.mangled_name)?;
+        let Self {mangled_name, return_type} = self;
+
+        write!(f, "{} {}(", return_type, mangled_name)?;
 
         //TODO: Write out parameter types AND parameter names
-        // if self.param_types.is_empty() {
+        // if param_types.is_empty() {
         //     // Empty parentheses in C imply any number of arguments being allowed. Using `void`
         //     // is more explicit.
         //     write!(f, "void")?;
         // } else {
         //     // Need to avoid trailing commas
-        //     write!(f, "{}", self.param_types[0])?;
+        //     write!(f, "{}", param_types[0])?;
         //
-        //     for param_ty in &self.param_types[1..] {
+        //     for param_ty in &param_types[1..] {
         //         write!(f, ", {}", param_ty)?;
         //     }
         // }
@@ -123,11 +131,81 @@ impl fmt::Display for CFunctionSignature {
 
 #[derive(Debug)]
 pub struct CFunctionBody {
-    //TODO
+    pub stmts: Vec<CStmt>,
 }
 
 impl fmt::Display for CFunctionBody {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Ok(()) //TODO
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {stmts} = self;
+
+        for stmt in stmts {
+            writeln!(f, "{}", stmt)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum CStmt {
+    VarDecl(CVarDecl),
+}
+
+impl fmt::Display for CStmt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CStmt::*;
+        match self {
+            VarDecl(var_decl) => write!(f, "{}", var_decl),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CVarDecl {
+    /// The mangled name of the variable. This name MUST be unique within the boundary of the
+    /// function block containing this declaration.
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub mangled_name: String,
+    /// The type of the variable
+    pub ty: CType,
+    /// The initializer expression for this variable
+    pub init_expr: CInitializerExpr,
+}
+
+impl fmt::Display for CVarDecl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {mangled_name, ty, init_expr} = self;
+        write!(f, "{} {} = {};", ty, mangled_name, init_expr)
+    }
+}
+
+/// Special expressions that can be used to initialize a variable
+#[derive(Debug)]
+pub enum CInitializerExpr {
+    Expr(CExpr),
+}
+
+impl fmt::Display for CInitializerExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CInitializerExpr::*;
+        match self {
+            Expr(expr) => write!(f, "{}", expr),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum CExpr {
+    IntegerLiteral(i64),
+}
+
+impl fmt::Display for CExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CExpr::*;
+        match self {
+            IntegerLiteral(value) => write!(f, "{}", value),
+        }
     }
 }

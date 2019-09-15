@@ -57,11 +57,11 @@ pub enum Stmt<'a> {
 #[derive(Debug)]
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
-    ident: Ident<'a>,
+    pub ident: Ident<'a>,
     /// The type of the identifier
-    ty: Ident<'a>,
+    pub ty: Ident<'a>,
     /// The expression for the value to assign to the variable
-    expr: Expr,
+    pub expr: Expr,
 }
 
 #[derive(Debug)]

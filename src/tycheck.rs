@@ -28,5 +28,25 @@ fn infer_and_check_decl<'a>(decl: &ast::Decl<'a>) -> Result<ir::Decl<'a>, Error>
 
 fn infer_and_check_function<'a>(func: &ast::Function<'a>) -> Result<ir::Function<'a>, Error> {
     let ast::Function {name, body} = func;
-    Ok(ir::Function {name})
+
+    //TODO: Support variable shadowing
+    let body = ir::Block {
+        stmts: body.stmts.iter().map(|stmt| Ok(match stmt {
+            //TODO: Perform type checking
+            ast::Stmt::VarDecl(ast::VarDecl {ident, ty, expr}) => ir::Stmt::VarDecl(ir::VarDecl {
+                ident,
+                ty,
+                expr: infer_and_check_expr(expr)?,
+            }),
+        })).collect::<Result<_, _>>()?,
+    };
+
+    Ok(ir::Function {name, body})
+}
+
+fn infer_and_check_expr(expr: &ast::Expr) -> Result<ir::Expr, Error> {
+    //TODO: Perform type checking
+    Ok(match expr {
+        &ast::Expr::IntegerLiteral(value) => ir::Expr::IntegerLiteral(value),
+    })
 }

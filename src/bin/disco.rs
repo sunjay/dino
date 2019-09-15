@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // See: https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
     //  Or: https://clang.llvm.org/docs/DiagnosticsReference.html
     let warning_flags = &["-Werror", "-Wall", "-Wextra", "-Wformat=2", "-Wshadow",
-        "-Wpointer-arith", "-Wcast-qual", "-Wno-missing-braces"];
+        "-Wpointer-arith", "-Wcast-qual", "-Wno-unused-variable"];
     // Run the C compiler and copy the result back
     let status = Command::new("clang")
         .arg("-std=c99")

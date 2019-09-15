@@ -34,4 +34,30 @@ impl<'a> Decl<'a> {
 #[derive(Debug)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
+    pub body: Block<'a>,
+}
+
+#[derive(Debug)]
+pub struct Block<'a> {
+    pub stmts: Vec<Stmt<'a>>,
+}
+
+#[derive(Debug)]
+pub enum Stmt<'a> {
+    VarDecl(VarDecl<'a>),
+}
+
+#[derive(Debug)]
+pub struct VarDecl<'a> {
+    /// The identifier to assign a value to
+    pub ident: Ident<'a>,
+    /// The type of the identifier
+    pub ty: Ident<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr,
+}
+
+#[derive(Debug)]
+pub enum Expr {
+    IntegerLiteral(i64),
 }
