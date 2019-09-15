@@ -8,8 +8,8 @@ use tempfile::TempDir;
 use disco::{
     ast,
     tycheck,
+    codegen,
     resolve::ProgramDecls,
-    codegen::{CEntryPoint, CFunctionBody}
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let program = ast::Program::parse(input_program)?;
     let decls = ProgramDecls::new(program)?;
     let program_ir = tycheck::infer_and_check(decls)?;
-    println!("{:?}", program_ir);
+    let code = codegen::executable(&program_ir)?;
 
     // Check that the path and stem are valid
     let stem = match (input_path.file_stem(), input_path.extension()) {
@@ -33,13 +33,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Default output path is the input path without its stem
     let output_path = Path::new(stem);
 
-    // Generated code
-    let cmain = CEntryPoint {
-        body: CFunctionBody {},
-    };
-
     //TODO: Add proper logging
-    println!("{}", cmain);
+    //TODO: Add support for outputing the generated C code (CLI flag)
+    println!("{}", code);
 
     // Write the generated code to a temporary file so we can run it through a C compiler
     let tmp_dir = TempDir::new()?;
@@ -49,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // and so it is closed when we close the temporary directory
     {
         let mut code_file = File::create(&code_file_path)?;
-        writeln!(code_file, "{}", cmain)?;
+        writeln!(code_file, "{}", code)?;
     }
 
     // Enabling all the warnings and making them an error because this compiler should never get to
@@ -59,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let warning_flags = &["-Werror", "-Wall", "-Wextra", "-Wformat=2", "-Wshadow",
         "-Wpointer-arith", "-Wcast-qual", "-Wno-missing-braces"];
     // Run the C compiler and copy the result back
-    Command::new("clang")
+    let status = Command::new("clang")
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
@@ -69,6 +65,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("-o")
         .arg(output_path)
         .status()?;
+
+    if !status.success() {
+        panic!("bug: code generation failed");
+    }
 
     // By closing the `TempDir` explicitly we can check that it has been deleted successfully. If
     // we don't close it explicitly, the directory will still be deleted when `tmp_dir` goes out of

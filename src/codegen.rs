@@ -4,6 +4,10 @@
 //! only use a very general subset of C that could allow us to potentially switch to a different
 //! code generation representation.
 
+mod trans;
+
+pub use trans::*;
+
 use std::fmt;
 
 #[derive(Debug)]
@@ -17,10 +21,24 @@ pub struct CExecutableProgram {
 }
 
 impl fmt::Display for CExecutableProgram {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //TODO: Include runtime header
-        //TODO: Generate forward declarations first, then entry point, then all functions
-        unimplemented!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //TODO: writeln!(f, "#include \"disco-runtime.h\"\n")?;
+
+        // Output forward declarations so we don't have to worry about outputting the functions in
+        // a specific order
+        for func in &self.functions {
+            writeln!(f, "{};", func.sig)?;
+        }
+
+        // Write out entry point, which may rely on any number of the forward declarations
+        writeln!(f, "{}", self.entry_point)?;
+
+        // Finally, write out the code for each forward declared function
+        for func in &self.functions {
+            writeln!(f, "{};", func)?;
+        }
+
+        Ok(())
     }
 }
 

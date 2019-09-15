@@ -5,6 +5,7 @@ use snafu::Snafu;
 use crate::{ast, ir};
 use crate::resolve::ProgramDecls;
 
+/// Type inference and type checking errors
 #[derive(Debug, Snafu)]
 pub enum Error {
 }
