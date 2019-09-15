@@ -27,6 +27,7 @@ pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
 
     for decl in decls {
         match decl {
+            //TODO: Validate that `main` takes zero arguments and has no return type
             ir::Decl::Function(ir::Function {name, body}) if *name == "main" => {
                 entry_point = Some(CEntryPoint {
                     body: gen_function_body(body)?,
