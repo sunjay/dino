@@ -45,6 +45,7 @@ Rust dynamic library linked with the compiled code.
 
 * Variable declaration: `let name: type = value;`
   * Variable shadowing
+  * Assignment operator: `name = value;`
 * Function declaration: `fn name(arg1: ty1, arg2: ty2) -> ty { body }`
   * Entry point: `fn main() { body }`
   * Multiple declarations with the same fully-qualified name are not allowed
