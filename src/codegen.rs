@@ -4,8 +4,13 @@
 //! only use a very general subset of C that could allow us to potentially switch to a different
 //! code generation representation.
 
+mod runtime {
+    // Load information about the language runtime
+    include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
+}
 mod trans;
 
+pub use runtime::*;
 pub use trans::*;
 
 use std::fmt;
@@ -22,7 +27,7 @@ pub struct CExecutableProgram {
 
 impl fmt::Display for CExecutableProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //TODO: writeln!(f, "#include \"disco-runtime.h\"\n")?;
+        writeln!(f, "#include \"{}\"\n", RUNTIME_HEADER_FILENAME)?;
 
         // Output forward declarations so we don't have to worry about outputting the functions in
         // a specific order

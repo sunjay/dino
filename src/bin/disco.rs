@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::fs::File;
+use std::fs::{self, File};
 use std::error::Error;
 use std::path::Path;
 use std::process::Command;
@@ -39,8 +39,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Write the generated code to a temporary file so we can run it through a C compiler
     let tmp_dir = TempDir::new()?;
-    let code_file_path = tmp_dir.path().join("main.c");
 
+    // Write out the shared library and associated header file that contains the language runtime
+    fs::write(tmp_dir.path().join(codegen::RUNTIME_HEADER_FILENAME), codegen::RUNTIME_HEADER_CONTENTS)?;
+    fs::write(tmp_dir.path().join(codegen::RUNTIME_LIB_FILENAME), codegen::RUNTIME_LIB_CONTENTS)?;
+
+    let code_file_path = tmp_dir.path().join("main.c");
     // Drop the file as soon as possible so it finishes being written to
     // and so it is closed when we close the temporary directory
     {
@@ -59,7 +63,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
-        //TODO: Link with runtime
+        .arg(format!("-l{}", codegen::RUNTIME_LIB_NAME))
+        .arg(format!("-L{}", tmp_dir.path().display()))
         .args(warning_flags)
         .arg(code_file_path)
         .arg("-o")

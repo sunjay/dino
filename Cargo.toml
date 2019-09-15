@@ -8,10 +8,15 @@ name = "disco"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+build = "build.rs"
 
 [dependencies]
 tempfile = "3.1"
 nom = "5.0"
 snafu = "0.5"
+
+[build-dependencies]
+build-helper = "0.1"
+# This dependency is never actually meant to be used. It is however required to
+# be built so that its static library / header file can be used.
+disco-runtime = { version = "0.1", path = "./disco-runtime" }
