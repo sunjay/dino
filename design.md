@@ -56,6 +56,8 @@ Rust dynamic library linked with the compiled code.
   * And: `a && b`
   * Or: `a || b`
 * Numeric Operators:
+  * Unary negative: `-a`
+  * Unary positive: `+a`
   * Addition: `a + b`
   * Subtraction: `a - b`
   * Multiplication: `a * b`
