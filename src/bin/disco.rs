@@ -62,11 +62,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
-        .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
-        .arg(format!("-L{}", tmp_dir.path().display()))
         .args(warning_flags)
         .arg("-g")
         .arg(code_file_path)
+        // Must link AFTER source code or else the linker will discard all the symbols
+        .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
+        .arg(format!("-L{}", tmp_dir.path().display()))
         .arg("-o")
         .arg(output_path)
         .status()?;

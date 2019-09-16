@@ -10,7 +10,14 @@ build = "build.rs"
 [lib]
 crate-type = ["staticlib"]
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [dependencies]
+panic-halt = "0.2.0"
 
 [build-dependencies]
 cbindgen = "0.9.1"

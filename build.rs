@@ -29,12 +29,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let runtime_lib_path = manifest_path
+        .join("disco-runtime")
         .join("target")
         .join(profile().to_string())
         .join(&runtime_lib_filename);
 
     if !runtime_lib_path.exists() {
-        panic!("Runtime library has not been generated yet. Run `cargo build --all`");
+        panic!("Runtime library has not been generated yet. Run `cargo build --manifest-path disco-runtime/Cargo.toml`");
     }
 
     // Generate a module that embeds the entire runtime

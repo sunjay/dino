@@ -5,18 +5,10 @@ Programming language / compiler experiments.
 ## Building & Running
 
 You need to have the `disco-runtime` library built before building the compiler.
-You can build both using the command:
+To build the runtime, use the command:
 
 ```sh
-cargo build --all
-```
-
-This usually takes care of building everything in the right order
-(`disco-runtime` before `disco`). If it doesn't, you can explicitly build
-the runtime using the command:
-
-```sh
-cargo build -p disco-runtime
+cargo build --manifest-path disco-runtime/Cargo.toml
 ```
 
 Once that is built, you can use the following command to build and run the
