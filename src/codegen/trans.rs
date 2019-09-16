@@ -29,6 +29,11 @@ pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
         match decl {
             //TODO: Validate that `main` takes zero arguments and has no return type
             ir::Decl::Function(ir::Function {name, body}) if *name == "main" => {
+                // Note that it is guaranteed that `entry_point` will only be assigned once since
+                // the IR assumes that all declaration names have been checked to be unique within
+                // a given module.
+                debug_assert!(entry_point.is_none(), "bug: allowed multiple entry points");
+
                 entry_point = Some(CEntryPoint {
                     body: gen_function_body(body)?,
                 });
@@ -71,8 +76,17 @@ fn gen_var_decl(var_decl: &ir::VarDecl) -> Result<CVarDecl, Error> {
 }
 
 fn gen_expr(expr: &ir::Expr) -> Result<CExpr, Error> {
+    //TODO: Determine function names to call by dispatching on the type
     Ok(match expr {
         &ir::Expr::IntegerLiteral(value) => CExpr::IntegerLiteral(value),
+        ir::Expr::Add(left, right) => CExpr::Call(CCallExpr {
+            func_name: "__disco__DInt__operator_add".to_string(),
+            args: vec![gen_expr(&left)?, gen_expr(&right)?],
+        }),
+        ir::Expr::Sub(left, right) => CExpr::Call(CCallExpr {
+            func_name: "__disco__DInt__operator_sub".to_string(),
+            args: vec![gen_expr(&left)?, gen_expr(&right)?],
+        }),
     })
 }
 

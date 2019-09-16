@@ -47,6 +47,7 @@ impl fmt::Display for CExecutableProgram {
 
 #[derive(Debug)]
 pub enum CType {
+    /// An integer that is (at least) 64-bits wide.
     DInt,
 }
 
@@ -149,6 +150,8 @@ impl fmt::Display for CFunctionBody {
 #[derive(Debug)]
 pub enum CStmt {
     VarDecl(CVarDecl),
+    /// An expression followed by a semi-colon is a statement
+    Expr(CExpr),
 }
 
 impl fmt::Display for CStmt {
@@ -156,6 +159,7 @@ impl fmt::Display for CStmt {
         use CStmt::*;
         match self {
             VarDecl(var_decl) => write!(f, "{}", var_decl),
+            Expr(expr) => write!(f, "{};", expr),
         }
     }
 }
@@ -199,13 +203,59 @@ impl fmt::Display for CInitializerExpr {
 #[derive(Debug)]
 pub enum CExpr {
     IntegerLiteral(i64),
+    Call(CCallExpr),
 }
 
 impl fmt::Display for CExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use CExpr::*;
         match self {
-            IntegerLiteral(value) => write!(f, "{}", value),
+            // Since DInt is 64-bits, we need the LL suffix or the literal is not 64-bits wide.
+            // https://en.cppreference.com/w/c/language/integer_constant
+            IntegerLiteral(value) => write!(f, "{}LL", value),
+            Call(call) => write!(f, "{}", call),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct CCallExpr {
+    /// The name of the function to call
+    pub func_name: String,
+    /// The argument expressions to pass to the function
+    pub args: Vec<CExpr>,
+}
+
+impl fmt::Display for CCallExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {func_name, args} = self;
+        write!(f, "{}({})", func_name, Commas {values: args, empty: ""})?;
+        Ok(())
+    }
+}
+
+/// Writes out a comma-separated list, ensuring that there is no trailing comma since that is not
+/// supported in C.
+struct Commas<'a, T: fmt::Display, D: fmt::Display> {
+    /// The values to write out in a comma-separated list
+    values: &'a [T],
+    /// The default value to write out if the list of values is empty
+    empty: D,
+}
+
+impl<'a, T: fmt::Display, D: fmt::Display> fmt::Display for Commas<'a, T, D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {values, empty} = self;
+
+        if values.is_empty() {
+            return write!(f, "{}", empty);
+        }
+
+        write!(f, "{}", values[0])?;
+        for value in &values[1..] {
+            write!(f, ", {}", value)?;
+        }
+
+        Ok(())
     }
 }

@@ -6,7 +6,7 @@ use nom::{
     combinator::{all_consuming, map, map_res, recognize, opt},
     bytes::complete::{tag, take_while1, take_while},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::many0,
+    multi::{many0, fold_many0},
 };
 
 use super::*;
@@ -114,6 +114,20 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 }
 
 fn expr(input: Input) -> IResult<Expr> {
+    // Need to start the fold at the input position *after* the first factor
+    let (input, first_factor) = factor(input)?;
+    fold_many0(
+        tuple((ws0, alt((char('+'), char('-'))), ws0, factor)),
+        first_factor,
+        |acc: Expr, (_, op, _, fac)| match op {
+            '+' => Expr::Add(Box::new(acc), Box::new(fac)),
+            '-' => Expr::Sub(Box::new(acc), Box::new(fac)),
+            _ => unreachable!(),
+        },
+    )(input)
+}
+
+fn factor(input: Input) -> IResult<Expr> {
     map(integer_literal, Expr::IntegerLiteral)(input)
 }
 

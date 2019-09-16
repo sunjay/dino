@@ -64,9 +64,11 @@ pub struct VarDecl<'a> {
     pub expr: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     IntegerLiteral(i64),
+    Add(Box<Expr>, Box<Expr>),
+    Sub(Box<Expr>, Box<Expr>),
 }
 
 pub type Ident<'a> = &'a str;

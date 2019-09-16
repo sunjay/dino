@@ -60,4 +60,6 @@ pub struct VarDecl<'a> {
 #[derive(Debug)]
 pub enum Expr {
     IntegerLiteral(i64),
+    Add(Box<Expr>, Box<Expr>),
+    Sub(Box<Expr>, Box<Expr>),
 }

@@ -48,5 +48,13 @@ fn infer_and_check_expr(expr: &ast::Expr) -> Result<ir::Expr, Error> {
     //TODO: Perform type checking
     Ok(match expr {
         &ast::Expr::IntegerLiteral(value) => ir::Expr::IntegerLiteral(value),
+        ast::Expr::Add(left, right) => ir::Expr::Add(
+            Box::new(infer_and_check_expr(left)?),
+            Box::new(infer_and_check_expr(right)?),
+        ),
+        ast::Expr::Sub(left, right) => ir::Expr::Sub(
+            Box::new(infer_and_check_expr(left)?),
+            Box::new(infer_and_check_expr(right)?),
+        ),
     })
 }
