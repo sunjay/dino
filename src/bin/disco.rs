@@ -1,11 +1,11 @@
 use std::io::Write;
 use std::fs::File;
-use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
 use structopt::StructOpt;
+use terminator::Terminator;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "disco", about)]
@@ -18,7 +18,7 @@ struct CompilerOptions {
     output_path: Option<PathBuf>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Terminator> {
     let CompilerOptions {program_path, output_path} = CompilerOptions::from_args();
 
     let code = disco::compile_executable(&program_path)?;
