@@ -19,7 +19,9 @@
 * `bool` - boolean (`true` or `false`)
 * `int` - integer (future: dynamically-sized?)
 * `real` - floating-point number
+* `complex` - complex numbers (pair of `real` values)
 * `bstr` - byte string
+  * `byte` - byte character
 * `[T]` - list (dynamically-sized)
 * `set<T>` - hash set
 * `map<K, V>` - hash map
@@ -29,8 +31,13 @@
 Literals:
 
 * integers: `1`, `2`, `-4`, `34950`
+  * other literals: `0xA3` (hex), `0o70` (octal), `0b1111` (binary)
+  * separators: `1_000_000`, `1____0____` (underscores are ignored)
+  * all literals must at least one digit (i.e. `0x_` is invalid)
 * real numbers: `1`, `3.14`, `-1e-3` (notice that integers can be used)
+* complex numbers: `3.2j`, `2.3i`, `4.5 - 5i`
 * byte string: `b"cool stuff"` (notice the `b` prefix for forward compat)
+  * byte character: `b'c'`
 * list: `[a, b, c]` or `[x; len]`
 * hash map: `map!{b"key1": val1, b"key2": val2}`
 * hash set: `set!{val1, val2}`
