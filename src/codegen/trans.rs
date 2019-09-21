@@ -80,11 +80,11 @@ fn gen_expr(expr: &ir::Expr) -> Result<CExpr, Error> {
     Ok(match expr {
         &ir::Expr::IntegerLiteral(value) => CExpr::IntegerLiteral(value),
         ir::Expr::Call(ir::CallExpr {func_name: "Add::add", args}) => CExpr::Call(CCallExpr {
-            func_name: "__disco__DInt__operator_add".to_string(),
+            func_name: "__disco__DInt__Add__add".to_string(),
             args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
         }),
         ir::Expr::Call(ir::CallExpr {func_name: "Sub::sub", args}) => CExpr::Call(CCallExpr {
-            func_name: "__disco__DInt__operator_sub".to_string(),
+            func_name: "__disco__DInt__Sub__sub".to_string(),
             args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
         }),
         _ => unimplemented!(),

@@ -1,52 +1,112 @@
-use std::fs;
+use std::fmt;
+use std::io::Write;
+use std::fs::File;
 use std::error::Error;
+use std::path::Path;
 
 use build_helper::{profile, cargo, windows, unix, out_dir};
 
-const RUNTIME_LIB_MOD_SOURCE_CODE: &str = r#"
-pub const RUNTIME_HEADER_FILENAME: &str = "{runtime_header_filename}";
-pub const RUNTIME_HEADER_CONTENTS: &[u8] = include_bytes!("{runtime_header_path}");
+/// A Rust module that represents a static library
+///
+/// The generated module will place the entire library and its header into a static in the code.
+struct StaticLibraryModule<'a> {
+    /// The uppercase prefix of all generated constants
+    prefix: &'a str,
+    /// The C header filename (.h)
+    header_filename: &'a str,
+    /// The full path to the header file
+    header_path: &'a Path,
+    /// The static library name to be provided to the C compiler
+    lib_name: &'a str,
+    /// The filename of the static library (platform dependent)
+    lib_filename: &'a str,
+    /// The full path to the static library file
+    lib_path: &'a Path,
+}
 
-pub const RUNTIME_LIB_NAME: &str = "{runtime_lib_name}";
-pub const RUNTIME_LIB_FILENAME: &str = "{runtime_lib_filename}";
-pub const RUNTIME_LIB_CONTENTS: &[u8] = include_bytes!("{runtime_lib_path}");
-"#;
+impl<'a> fmt::Display for StaticLibraryModule<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self {prefix, header_filename, header_path, lib_name, lib_filename, lib_path} = self;
+
+        writeln!(f, r#"pub static {prefix}_HEADER_FILENAME: &str = "{header_filename}";"#,
+            prefix = prefix, header_filename = header_filename)?;
+        writeln!(f, r#"pub static {prefix}_HEADER_CONTENTS: &[u8] = include_bytes!("{header_path}");"#,
+            prefix = prefix, header_path = header_path.display())?;
+        writeln!(f)?;
+
+        writeln!(f, r#"pub static {prefix}_LIB_NAME: &str = "{lib_name}";"#,
+            prefix = prefix, lib_name = lib_name)?;
+        writeln!(f, r#"pub static {prefix}_LIB_FILENAME: &str = "{lib_filename}";"#,
+            prefix = prefix, lib_filename = lib_filename)?;
+        writeln!(f, r#"pub static {prefix}_LIB_CONTENTS: &[u8] = include_bytes!("{lib_path}");"#,
+            prefix = prefix, lib_path = lib_path.display())?;
+
+        Ok(())
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let manifest_path = cargo::manifest::dir();
-
     // Requires that the disco-runtime crate already be built
-    let runtime_header_filename = "disco-runtime.h";
-    let runtime_header_path = manifest_path.join("disco-runtime").join(runtime_header_filename);
+    generate_static_lib_mod(
+        &manifest_path,
+        "disco-runtime",
+        "disco-runtime.h",
+        "disco_runtime",
+        "RUNTIME",
+        "runtime.rs",
+    )?;
+    generate_static_lib_mod(
+        &manifest_path,
+        "disco-std",
+        "disco-std.h",
+        "disco_std",
+        "DISCO_STD",
+        "disco_std.rs",
+    )?;
 
-    let runtime_lib_name = "disco_runtime";
-    let runtime_lib_filename = if windows() {
-        "disco_runtime.lib"
+    Ok(())
+}
+
+fn generate_static_lib_mod(
+    manifest_path: &Path,
+    project_dir: &str,
+    header_filename: &str,
+    lib_name: &str,
+    prefix: &str,
+    module_filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    let header_path = &manifest_path.join(project_dir).join(header_filename);
+
+    let lib_filename = &if windows() {
+        format!("{}.lib", lib_name)
     } else if unix() {
-        "libdisco_runtime.a"
+        format!("lib{}.a", lib_name)
     } else {
-        panic!("Unsupported platform. Unable to determine runtime library filename.");
+        panic!("Unsupported platform. Unable to determine {} library filename.", lib_name);
     };
 
-    let runtime_lib_path = manifest_path
-        .join("disco-runtime")
+    let lib_path = &manifest_path
+        .join(project_dir)
         .join("target")
         .join(profile().to_string())
-        .join(&runtime_lib_filename);
+        .join(&lib_filename);
 
-    if !runtime_lib_path.exists() {
-        panic!("Runtime library has not been generated yet. Run `cargo build --manifest-path disco-runtime/Cargo.toml`");
+    if !lib_path.exists() {
+        panic!("{} library has not been generated yet. Run `cargo build --manifest-path {}/Cargo.toml`", lib_name, project_dir);
     }
 
-    // Generate a module that embeds the entire runtime
-    let code = RUNTIME_LIB_MOD_SOURCE_CODE
-        .replace("{runtime_header_filename}", runtime_header_filename)
-        .replace("{runtime_header_path}", runtime_header_path.to_str().unwrap())
-        .replace("{runtime_lib_name}", runtime_lib_name)
-        .replace("{runtime_lib_filename}", runtime_lib_filename)
-        .replace("{runtime_lib_path}", runtime_lib_path.to_str().unwrap());
+    let module = StaticLibraryModule {
+        prefix,
+        header_filename,
+        header_path,
+        lib_name,
+        lib_filename,
+        lib_path,
+    };
 
-    fs::write(out_dir().join("runtime.rs"), code)?;
+    let mut file = File::create(out_dir().join(module_filename))?;
+    writeln!(file, "{}", module)?;
 
     Ok(())
 }

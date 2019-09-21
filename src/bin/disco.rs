@@ -40,8 +40,9 @@ fn main() -> Result<(), Terminator> {
     // Write the generated code to a temporary file so we can run it through a C compiler
     let tmp_dir = TempDir::new()?;
 
-    // Write out the shared library and associated header file that contains the language runtime
+    // Write out the runtime and std libraries and associated header files
     disco::runtime::write_runtime_files(tmp_dir.path())?;
+    disco::disco_std::write_std_files(tmp_dir.path())?;
 
     let code_file_path = tmp_dir.path().join("main.c");
     // Drop the file as soon as possible so it finishes being written to
@@ -67,6 +68,7 @@ fn main() -> Result<(), Terminator> {
         .arg(code_file_path)
         // Must link AFTER source code or else the linker will discard all the symbols
         .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
+        .arg(format!("-l{}", disco::disco_std::DISCO_STD_LIB_NAME))
         .arg(format!("-L{}", tmp_dir.path().display()))
         .arg("-o")
         .arg(output_path)
