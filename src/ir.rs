@@ -3,6 +3,7 @@
 //! By creating values of the types in this module, you guarantee that:
 //! * All types are inferred and checked at this point
 //! * Method resolution has been completed
+//!     * Every call knows all its types and operators have been desugared
 //! * All declaration names are unique within any given module
 
 pub use crate::ast::Ident;
@@ -54,12 +55,19 @@ pub struct VarDecl<'a> {
     /// The type of the identifier
     pub ty: Ident<'a>,
     /// The expression for the value to assign to the variable
-    pub expr: Expr,
+    pub expr: Expr<'a>,
 }
 
 #[derive(Debug)]
-pub enum Expr {
+pub enum Expr<'a> {
     IntegerLiteral(i64),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
+    Call(CallExpr<'a>),
+}
+
+#[derive(Debug)]
+pub struct CallExpr<'a> {
+    /// The name of the function to call
+    pub func_name: Ident<'a>,
+    /// The argument expressions to pass to the function
+    pub args: Vec<Expr<'a>>,
 }

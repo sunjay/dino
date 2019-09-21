@@ -79,14 +79,15 @@ fn gen_expr(expr: &ir::Expr) -> Result<CExpr, Error> {
     //TODO: Determine function names to call by dispatching on the type
     Ok(match expr {
         &ir::Expr::IntegerLiteral(value) => CExpr::IntegerLiteral(value),
-        ir::Expr::Add(left, right) => CExpr::Call(CCallExpr {
+        ir::Expr::Call(ir::CallExpr {func_name: "Add::add", args}) => CExpr::Call(CCallExpr {
             func_name: "__disco__DInt__operator_add".to_string(),
-            args: vec![gen_expr(&left)?, gen_expr(&right)?],
+            args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
         }),
-        ir::Expr::Sub(left, right) => CExpr::Call(CCallExpr {
+        ir::Expr::Call(ir::CallExpr {func_name: "Sub::sub", args}) => CExpr::Call(CCallExpr {
             func_name: "__disco__DInt__operator_sub".to_string(),
-            args: vec![gen_expr(&left)?, gen_expr(&right)?],
+            args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
         }),
+        _ => unimplemented!(),
     })
 }
 

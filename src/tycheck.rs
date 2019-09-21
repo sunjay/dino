@@ -10,7 +10,7 @@ use crate::resolve::ProgramDecls;
 pub enum Error {
 }
 
-pub fn infer_and_check(decls: ProgramDecls) -> Result<ir::Program, Error> {
+pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {
     let ProgramDecls {top_level_decls} = decls;
 
     let top_level_module = ir::Module {
@@ -20,13 +20,13 @@ pub fn infer_and_check(decls: ProgramDecls) -> Result<ir::Program, Error> {
     Ok(ir::Program {top_level_module})
 }
 
-fn infer_and_check_decl<'a>(decl: &ast::Decl<'a>) -> Result<ir::Decl<'a>, Error> {
+fn infer_and_check_decl<'a>(decl: &'a ast::Decl<'a>) -> Result<ir::Decl<'a>, Error> {
     Ok(match decl {
         ast::Decl::Function(func) => ir::Decl::Function(infer_and_check_function(func)?),
     })
 }
 
-fn infer_and_check_function<'a>(func: &ast::Function<'a>) -> Result<ir::Function<'a>, Error> {
+fn infer_and_check_function<'a>(func: &'a ast::Function<'a>) -> Result<ir::Function<'a>, Error> {
     let ast::Function {name, body} = func;
 
     //TODO: Support variable shadowing
@@ -48,13 +48,19 @@ fn infer_and_check_expr(expr: &ast::Expr) -> Result<ir::Expr, Error> {
     //TODO: Perform type checking
     Ok(match expr {
         &ast::Expr::IntegerLiteral(value) => ir::Expr::IntegerLiteral(value),
-        ast::Expr::Add(left, right) => ir::Expr::Add(
-            Box::new(infer_and_check_expr(left)?),
-            Box::new(infer_and_check_expr(right)?),
-        ),
-        ast::Expr::Sub(left, right) => ir::Expr::Sub(
-            Box::new(infer_and_check_expr(left)?),
-            Box::new(infer_and_check_expr(right)?),
-        ),
+        ast::Expr::Add(left, right) => ir::Expr::Call(ir::CallExpr {
+            func_name: "Add::add",
+            args: vec![
+                infer_and_check_expr(left)?,
+                infer_and_check_expr(right)?,
+            ],
+        }),
+        ast::Expr::Sub(left, right) => ir::Expr::Call(ir::CallExpr {
+            func_name: "Sub::sub",
+            args: vec![
+                infer_and_check_expr(left)?,
+                infer_and_check_expr(right)?,
+            ],
+        }),
     })
 }

@@ -69,7 +69,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
         .with_context(|| ParseError {path: path.to_path_buf()})?;
     let decls = resolve::ProgramDecls::new(program)
         .with_context(|| DuplicateDecl {path: path.to_path_buf()})?;
-    let program_ir = tycheck::infer_and_check(decls)
+    let program_ir = tycheck::infer_and_check(&decls)
         .with_context(|| TypeError {path: path.to_path_buf()})?;
     let code = codegen::executable(&program_ir)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
