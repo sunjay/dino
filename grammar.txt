@@ -7,10 +7,8 @@
 // source code itself.
 
 module := decl*
-decl := impl | function
+decl := function
 
-impl := "impl" ident "for" ident impl_block
-impl_block := "{" function* "}"
 function := "fn" ident "(" ")" block
 block := "{" stmt* "}"
 

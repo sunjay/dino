@@ -26,22 +26,22 @@ pub struct Module<'a> {
 
 #[derive(Debug)]
 pub enum Decl<'a> {
-    /// A free function that is not part of any particular trait
     Function(Function<'a>),
-    /// A method is declared in an `impl` block
-    Method(Method<'a>),
+}
+
+impl<'a> Decl<'a> {
+    pub fn name(&self) -> &Ident<'a> {
+        use Decl::*;
+        match self {
+            Function(func) => &func.name,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
     pub body: Block<'a>,
-}
-
-#[derive(Debug)]
-pub struct Method {
-    self_type: Ident<'a>,
-    func: Function<'a>,
 }
 
 #[derive(Debug)]
