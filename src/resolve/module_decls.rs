@@ -1,10 +1,10 @@
 use std::fmt;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::borrow::Borrow;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{Decl, Ident};
+use crate::ast::{Decl, Ident, Function, Method};
 
 #[derive(Debug)]
 pub struct DuplicateDecl {
@@ -19,45 +19,25 @@ impl fmt::Display for DuplicateDecl {
 
 impl Error for DuplicateDecl {}
 
-/// Allows decls to be looked up by name while still storing the name in the Decl type
+/// Maps method Self types to a function declaration
+type MethodMap<'a> = HashMap<Ident<'a>, Function<'a>>;
+
 #[derive(Debug)]
-struct DeclEntry<'a> {
-    decl: Decl<'a>,
+pub struct DeclEntry<'a> {
+    Function(Function<'a>),
+    ImplMethod(Method<'a>),
 }
 
-impl<'a> Hash for DeclEntry<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.decl.name().hash(state)
-    }
-}
-
-impl<'a> Borrow<&'a str> for DeclEntry<'a> {
-    fn borrow(&self) -> &&'a str {
-        self.decl.name()
-    }
-}
-
-impl<'a> PartialEq for DeclEntry<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.decl.name() == other.decl.name()
-    }
-}
-
-impl<'a> PartialEq<str> for DeclEntry<'a> {
-    fn eq(&self, other: &str) -> bool {
-        *self.decl.name() == other
-    }
-}
-
-impl<'a> Eq for DeclEntry<'a> {}
-
-/// The declarations in a module, indexed by name
+/// The declarations in a module, indexed by name and/or type
 #[derive(Debug)]
-pub struct DeclMap<'a> {
-    decls: HashSet<DeclEntry<'a>>,
+pub struct ModuleDecls<'a> {
+    /// Maps function fully-qualified names to a function declaration
+    functions: HashMap<Ident<'a>, Function<'a>>,
+    /// Maps fully-qualified method names to a table of their Self types and declarations
+    impl_methods: HashMap<Ident<'a>, MethodMap<'a>>,
 }
 
-impl<'a> DeclMap<'a> {
+impl<'a> ModuleDecls<'a> {
     /// Collects the declarations and groups them by name
     pub fn new(input_decls: Vec<Decl<'a>>) -> Result<Self, DuplicateDecl> {
         let mut decls = HashSet::new();

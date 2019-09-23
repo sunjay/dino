@@ -1,0 +1,18 @@
+//! The disco standard library
+
+extern "C" {
+    fn __disco__DInt__Add__add(x: int, y: int) -> int;
+    fn __disco__DInt__Sub__sub(x: int, y: int) -> int;
+}
+
+impl Add for int {
+    fn add(self, other: int) -> int {
+        __disco__DInt__Add__add(self, other)
+    }
+}
+
+impl Sub for int {
+    fn sub(self, other: int) -> int {
+        __disco__DInt__Sub__sub(self, other)
+    }
+}
