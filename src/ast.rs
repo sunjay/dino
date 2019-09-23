@@ -52,6 +52,7 @@ pub struct Block<'a> {
 #[derive(Debug)]
 pub enum Stmt<'a> {
     VarDecl(VarDecl<'a>),
+    Expr(Expr<'a>),
 }
 
 #[derive(Debug)]
@@ -61,14 +62,20 @@ pub struct VarDecl<'a> {
     /// The type of the identifier
     pub ty: Ident<'a>,
     /// The expression for the value to assign to the variable
-    pub expr: Expr,
+    pub expr: Expr<'a>,
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub enum Expr<'a> {
+    FuncCall(FuncCall<'a>),
     IntegerLiteral(i64),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
+    Var(Ident<'a>),
+}
+
+#[derive(Debug, Clone)]
+pub struct FuncCall<'a> {
+    pub func_name: Ident<'a>,
+    pub args: Vec<Expr<'a>>,
 }
 
 pub type Ident<'a> = &'a str;

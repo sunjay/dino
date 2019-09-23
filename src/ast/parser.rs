@@ -6,7 +6,7 @@ use nom::{
     combinator::{all_consuming, map, map_res, recognize, opt},
     bytes::complete::{tag, take_while1, take_while},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::{many0, fold_many0},
+    multi::{many0, separated_list},
 };
 
 use super::*;
@@ -28,7 +28,7 @@ impl From<nom::Err<VerboseError<Input<'_>>>> for Error {
 
 /// Attempts to parse the given input module
 pub fn parse_module(input: &str) -> Result<Module, Error> {
-    let (inp, module) = match module(input) {
+    let (inp, module) = match all_consuming(module)(input) {
         Ok((inp, module)) => (inp, module),
         Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
             //TODO: Convert to Error type above
@@ -46,11 +46,10 @@ pub fn parse_module(input: &str) -> Result<Module, Error> {
 }
 
 fn module(input: Input) -> IResult<Module> {
-    let (inp, decls) = all_consuming(
-        preceded(ws0, many0(terminated(decl, ws0)))
-    )(input)?;
-
-    Ok((inp, Module {decls}))
+    map(
+        preceded(ws0, many0(terminated(decl, ws0))),
+        |decls| Module {decls},
+    )(input)
 }
 
 fn decl(input: Input) -> IResult<Decl> {
@@ -89,7 +88,10 @@ fn block(input: Input) -> IResult<Block> {
 }
 
 fn stmt(input: Input) -> IResult<Stmt> {
-    map(var_decl, Stmt::VarDecl)(input)
+    alt((
+        map(var_decl, Stmt::VarDecl),
+        map(tuple((expr, ws0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
+    ))(input)
 }
 
 fn var_decl(input: Input) -> IResult<VarDecl> {
@@ -114,21 +116,27 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 }
 
 fn expr(input: Input) -> IResult<Expr> {
-    // Need to start the fold at the input position *after* the first factor
-    let (input, first_factor) = factor(input)?;
-    fold_many0(
-        tuple((ws0, alt((char('+'), char('-'))), ws0, factor)),
-        first_factor,
-        |acc: Expr, (_, op, _, fac)| match op {
-            '+' => Expr::Add(Box::new(acc), Box::new(fac)),
-            '-' => Expr::Sub(Box::new(acc), Box::new(fac)),
-            _ => unreachable!(),
-        },
+    alt((
+        map(func_call, Expr::FuncCall),
+        map(integer_literal, Expr::IntegerLiteral),
+        map(ident, Expr::Var),
+    ))(input)
+}
+
+fn func_call(input: Input) -> IResult<FuncCall> {
+    map(
+        tuple((ident, ws0, func_args)),
+        |(func_name, _, args)| FuncCall {func_name, args},
     )(input)
 }
 
-fn factor(input: Input) -> IResult<Expr> {
-    map(integer_literal, Expr::IntegerLiteral)(input)
+fn func_args(input: Input) -> IResult<Vec<Expr>> {
+    delimited(char('('), comma_separated(expr), char(')'))(input)
+}
+
+fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
+    where F: Fn(Input<'r>) -> IResult<T> {
+    separated_list(tuple((ws0, char(','), ws0)), parser)
 }
 
 fn ident(input: Input) -> IResult<&str> {

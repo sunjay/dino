@@ -12,11 +12,12 @@ decl := function
 function := "fn" ident "(" ")" block
 block := "{" stmt* "}"
 
-stmt := var_decl
+stmt := var_decl | expr ";"
 var_decl := "let" ident ":" ty "=" expr ";"
 
-expr := factor | factor ("+" | "-") factor
-factor := integer_literal
+expr := func_call | integer_literal | ident
+func_call := ident func_args
+func_args := "(" (expr ",")* expr? ")"
 
 whitespace := " \t\r\n" | comment
 comment := "//" any* "\n"

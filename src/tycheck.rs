@@ -38,29 +38,18 @@ fn infer_and_check_function<'a>(func: &'a ast::Function<'a>) -> Result<ir::Funct
                 ty,
                 expr: infer_and_check_expr(expr)?,
             }),
+            ast::Stmt::Expr(expr) => unimplemented!(),
         })).collect::<Result<_, _>>()?,
     };
 
     Ok(ir::Function {name, body})
 }
 
-fn infer_and_check_expr(expr: &ast::Expr) -> Result<ir::Expr, Error> {
+fn infer_and_check_expr<'a>(expr: &'a ast::Expr<'a>) -> Result<ir::Expr<'a>, Error> {
     //TODO: Perform type checking
     Ok(match expr {
         &ast::Expr::IntegerLiteral(value) => ir::Expr::IntegerLiteral(value),
-        ast::Expr::Add(left, right) => ir::Expr::Call(ir::CallExpr {
-            func_name: "Add::add",
-            args: vec![
-                infer_and_check_expr(left)?,
-                infer_and_check_expr(right)?,
-            ],
-        }),
-        ast::Expr::Sub(left, right) => ir::Expr::Call(ir::CallExpr {
-            func_name: "Sub::sub",
-            args: vec![
-                infer_and_check_expr(left)?,
-                infer_and_check_expr(right)?,
-            ],
-        }),
+        ast::Expr::FuncCall(call) => unimplemented!(),
+        ast::Expr::Var(var_ident) => unimplemented!(),
     })
 }
