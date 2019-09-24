@@ -76,7 +76,15 @@ fn generate_static_lib_mod(
     prefix: &str,
     module_filename: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let header_path = &manifest_path.join(project_dir).join(header_filename);
+    let profile = profile().to_string();
+    let header_path = &manifest_path
+        .join(project_dir)
+        .join("target")
+        .join(&profile)
+        .join(header_filename);
+    if !header_path.exists() {
+        panic!("{} header has not been generated yet. Run `cargo build --manifest-path {}/Cargo.toml`", header_filename, project_dir);
+    }
 
     let lib_filename = &if windows() {
         format!("{}.lib", lib_name)
@@ -89,7 +97,7 @@ fn generate_static_lib_mod(
     let lib_path = &manifest_path
         .join(project_dir)
         .join("target")
-        .join(profile().to_string())
+        .join(&profile)
         .join(&lib_filename);
 
     if !lib_path.exists() {
