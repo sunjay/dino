@@ -117,16 +117,16 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 
 fn expr(input: Input) -> IResult<Expr> {
     alt((
-        map(func_call, Expr::FuncCall),
+        map(func_call, Expr::CallExpr),
         map(integer_literal, Expr::IntegerLiteral),
         map(ident, Expr::Var),
     ))(input)
 }
 
-fn func_call(input: Input) -> IResult<FuncCall> {
+fn func_call(input: Input) -> IResult<CallExpr> {
     map(
         tuple((ident, ws0, func_args)),
-        |(func_name, _, args)| FuncCall {func_name, args},
+        |(func_name, _, args)| CallExpr {func_name, args},
     )(input)
 }
 

@@ -25,7 +25,7 @@ macro_rules! primitives {
             fn new(decls: &mut DeclMap) -> Self {
                 Self {
                     $(
-                        $prim: decls.insert_ty($name)
+                        $prim: decls.insert_type($name)
                             .expect("bug: primitive type defined more than once"),
                     )*
                 }

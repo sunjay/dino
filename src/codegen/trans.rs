@@ -1,10 +1,11 @@
 //! Translates IR into generated code
 
-use crate::ir;
-
 use super::*;
 
 use snafu::Snafu;
+
+use crate::ir;
+use crate::resolve::TyId;
 
 /// Code generation errors
 #[derive(Debug, Snafu)]
@@ -59,6 +60,7 @@ fn gen_function_body(block: &ir::Block) -> Result<CFunctionBody, Error> {
 
     let stmts = stmts.iter().map(|stmt| Ok(match stmt {
         ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl)?),
+        ir::Stmt::Expr(expr) => unimplemented!(),
     })).collect::<Result<_, _>>()?;
 
     Ok(CFunctionBody {stmts})
@@ -91,9 +93,6 @@ fn gen_expr(expr: &ir::Expr) -> Result<CExpr, Error> {
     })
 }
 
-fn lookup_type(ty: &ir::Ident) -> Result<CType, Error> {
-    match *ty {
-        "int" => Ok(CType::DInt),
-        ty => Err(Error::UnknownType {ty: ty.to_string()}),
-    }
+fn lookup_type(ty: &TyId) -> Result<CType, Error> {
+    unimplemented!()
 }

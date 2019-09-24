@@ -58,13 +58,13 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug, Clone)]
 pub enum Expr<'a> {
-    FuncCall(FuncCall<'a>),
+    CallExpr(CallExpr<'a>),
     IntegerLiteral(i64),
     Var(Ident<'a>),
 }
 
 #[derive(Debug, Clone)]
-pub struct FuncCall<'a> {
+pub struct CallExpr<'a> {
     pub func_name: Ident<'a>,
     pub args: Vec<Expr<'a>>,
 }

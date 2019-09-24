@@ -8,6 +8,8 @@
 
 pub use crate::ast::Ident;
 
+use crate::resolve::TyId;
+
 #[derive(Debug)]
 pub struct Program<'a> {
     pub top_level_module: Module<'a>,
@@ -21,15 +23,6 @@ pub struct Module<'a> {
 #[derive(Debug)]
 pub enum Decl<'a> {
     Function(Function<'a>),
-}
-
-impl<'a> Decl<'a> {
-    pub fn name(&self) -> &Ident<'a> {
-        use Decl::*;
-        match self {
-            Function(func) => &func.name,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -46,6 +39,7 @@ pub struct Block<'a> {
 #[derive(Debug)]
 pub enum Stmt<'a> {
     VarDecl(VarDecl<'a>),
+    Expr(Expr<'a>),
 }
 
 #[derive(Debug)]
@@ -53,7 +47,7 @@ pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
     /// The type of the identifier
-    pub ty: Ident<'a>,
+    pub ty: TyId,
     /// The expression for the value to assign to the variable
     pub expr: Expr<'a>,
 }
