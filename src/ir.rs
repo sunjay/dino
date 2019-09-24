@@ -67,8 +67,9 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
-    IntegerLiteral(i64),
-    Call(CallExpr<'a>),
+    Call(CallExpr<'a>, TyId),
+    IntegerLiteral(i64, TyId),
+    Var(Ident<'a>, TyId),
 }
 
 #[derive(Debug)]

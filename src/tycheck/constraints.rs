@@ -192,9 +192,9 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
-            ast::Expr::CallExpr(call) => {
+            ast::Expr::Call(call) => {
                 self.append_call_expr(call, return_type, local_scope, decls, prims)
-                    .map(|call| tyir::Expr::CallExpr(call, return_type))
+                    .map(|call| tyir::Expr::Call(call, return_type))
             },
             &ast::Expr::IntegerLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal

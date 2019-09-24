@@ -72,13 +72,18 @@ pub struct VarDecl<'a> {
 impl<'a> VarDecl<'a> {
     /// Applies the given substitution to this variable decl and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::VarDecl<'a> {
-        unimplemented!()
+        let VarDecl {ident, ty_var, expr} = self;
+        ir::VarDecl {
+            ident,
+            ty: ty_var.apply_subst(subst),
+            expr: expr.apply_subst(subst),
+        }
     }
 }
 
 #[derive(Debug)]
 pub enum Expr<'a> {
-    CallExpr(CallExpr<'a>, TyVar),
+    Call(CallExpr<'a>, TyVar),
     IntegerLiteral(i64, TyVar),
     Var(Ident<'a>, TyVar),
 }
@@ -86,7 +91,18 @@ pub enum Expr<'a> {
 impl<'a> Expr<'a> {
     /// Applies the given substitution to this expression and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Expr<'a> {
-        unimplemented!()
+        use Expr::*;
+        match self {
+            Call(call, ty_var) => {
+                ir::Expr::Call(call.apply_subst(subst), ty_var.apply_subst(subst))
+            },
+            IntegerLiteral(value, ty_var) => {
+                ir::Expr::IntegerLiteral(value, ty_var.apply_subst(subst))
+            },
+            Var(var_name, ty_var) => {
+                ir::Expr::Var(var_name, ty_var.apply_subst(subst))
+            },
+        }
     }
 }
 
@@ -99,7 +115,11 @@ pub struct CallExpr<'a> {
 impl<'a> CallExpr<'a> {
     /// Applies the given substitution to this function call and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::CallExpr<'a> {
-        unimplemented!()
+        let CallExpr {func_name, args} = self;
+        ir::CallExpr {
+            func_name,
+            args: args.into_iter().map(|expr| expr.apply_subst(subst)).collect(),
+        }
     }
 }
 

@@ -118,7 +118,7 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 
 fn expr(input: Input) -> IResult<Expr> {
     alt((
-        map(func_call, Expr::CallExpr),
+        map(func_call, Expr::Call),
         map(integer_literal, Expr::IntegerLiteral),
         map(ident, Expr::Var),
     ))(input)
