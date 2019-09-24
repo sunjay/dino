@@ -31,9 +31,25 @@ pub enum Decl<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Function<'a> {
+    /// The name of the function
     pub name: Ident<'a>,
+    /// The type signature of the function
     pub sig: FuncSig<'a>,
+    /// The body of the function. Not used if `is_extern` is true.
     pub body: Block<'a>,
+    /// True if the function is meant to be linked in externally
+    pub is_extern: bool,
+}
+
+impl<'a> Function<'a> {
+    pub fn new_extern(name: &'a str, sig: FuncSig<'a>) -> Self {
+        Self {
+            name,
+            sig,
+            body: Block::default(),
+            is_extern: true,
+        }
+    }
 }
 
 /// The type signature of a function
@@ -49,9 +65,16 @@ pub struct FuncParam<'a> {
     pub ty: Ty<'a>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
+}
+
+impl<'a> Block<'a> {
+    pub fn is_empty(&self) -> bool {
+        let Block {stmts} = self;
+        stmts.is_empty()
+    }
 }
 
 #[derive(Debug, PartialEq)]

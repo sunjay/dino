@@ -23,6 +23,8 @@ fn infer_and_check_module<'a>(
     prims: &Primitives,
 ) -> Result<ir::Module<'a>, Error> {
     let decls = mod_decls.functions()
+        // No need to check external functions
+        .filter(|func| !func.is_extern)
         .map(|func| infer_and_check_func(func, mod_decls, prims).map(ir::Decl::Function))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ir::Module {decls})

@@ -50,12 +50,41 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
         .with_context(|| IOError {path: path.to_path_buf()})?;
     let program = ast::Program::parse(&input_program)
         .with_context(|| ParseError {path: path.to_path_buf()})?;
-    let decls = resolve::ProgramDecls::new(program)
+    let mut decls = resolve::ProgramDecls::new(program)
         .with_context(|| DuplicateDecl {path: path.to_path_buf()})?;
+    insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(&decls)
         .with_context(|| TypeError {path: path.to_path_buf()})?;
     let code = codegen::executable(&program_ir)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
 
     Ok(code)
+}
+
+fn insert_prelude(decls: &mut resolve::ProgramDecls) {
+    //TODO: Figure out how to do this properly without hard coding things
+    use crate::ast::*;
+
+    let decls = &mut decls.top_level_decls;
+
+    decls.insert_func(Function::new_extern("add_int", FuncSig {
+        return_type: Ty::Named("int"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("sub_int", FuncSig {
+        return_type: Ty::Named("int"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("print_int", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
 }

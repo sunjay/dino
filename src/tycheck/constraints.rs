@@ -73,7 +73,9 @@ impl ConstraintSet {
         //TODO: Figure out how to support nested scopes within a function (e.g. any curly braces)
         let mut local_scope = LocalScope::new();
 
-        let ast::Function {name, sig, body} = func;
+        let ast::Function {name, sig, body, is_extern} = func;
+        assert!(!is_extern, "bug: attempt to generate type constraints for an extern function");
+
         let ast::FuncSig {params, return_type} = sig;
         assert!(params.is_empty(), "TODO: Support function parameters");
         assert_eq!(return_type, &ast::Ty::Unit, "TODO: Only return type currently supported is '()'");
@@ -86,7 +88,7 @@ impl ConstraintSet {
     /// Attempts to solve the constraint set and return the solution as a substitution map
     pub fn solve(self) -> Result<TypeSubst, Error> {
         let subst = HashMap::new();
-        println!("{:?}", self);
+        dbg!(self);
         //TODO: All generated type variables must end up with a valid assignment
         //TODO: Test constraint cycles: (A = B, B = C, C = A) => (A = A)
         // e.g. let x = 2; // x: C, C in {int, real}

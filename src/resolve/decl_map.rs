@@ -70,6 +70,7 @@ impl<'a> DeclMap<'a> {
         let name = func.name;
         let func_entry = FunctionEntry {func};
 
+        //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
         if !self.functions.insert(func_entry) {
             return Err(DuplicateDecl {
                 duplicate: name.to_string(),

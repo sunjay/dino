@@ -69,6 +69,7 @@ fn function(input: Input) -> IResult<Function> {
         name,
         sig: FuncSig {return_type: Ty::Unit, params: Vec::new()}, //TODO
         body,
+        is_extern: false,
     })(input)
 }
 
