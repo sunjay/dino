@@ -11,15 +11,17 @@ use super::constraints::{TyVar, TypeSubst};
 #[derive(Debug)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
+    pub sig: ir::FuncSig<'a>,
     pub body: Block<'a>,
 }
 
 impl<'a> Function<'a> {
     /// Applies the given substitution to this function and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Function<'a> {
-        let Function {name, body} = self;
+        let Function {name, sig, body} = self;
         ir::Function {
             name,
+            sig,
             body: body.apply_subst(subst),
         }
     }

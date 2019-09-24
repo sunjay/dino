@@ -4,7 +4,7 @@ use snafu::{Snafu, OptionExt};
 use maplit::hashset;
 
 use crate::resolve::{DeclMap, Primitives, TyId};
-use crate::ast;
+use crate::{ast, ir};
 
 use super::tyir;
 
@@ -18,6 +18,16 @@ pub enum Error {
     #[snafu(display("cannot find type '{}' in this scope", name))]
     UnresolvedType {
         name: String,
+    },
+    #[snafu(display("cannot find function '{}' in this scope", name))]
+    UnresolvedFunction {
+        name: String,
+    },
+    #[snafu(display("function '{}' takes {} parameter(s) but {} parameter(s) were supplied", func_name, expected, actual))]
+    ArityMismatch {
+        func_name: String,
+        expected: usize,
+        actual: usize,
     },
 }
 
@@ -55,7 +65,7 @@ impl ConstraintSet {
     /// created are annotated inline into the returned `tyir::Function`
     pub fn generate<'a>(
         func: &'a ast::Function<'a>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
@@ -63,16 +73,26 @@ impl ConstraintSet {
         //TODO: Figure out how to support nested scopes within a function (e.g. any curly braces)
         let mut local_scope = LocalScope::new();
 
-        let ast::Function {name, body} = func;
+        let ast::Function {name, sig, body} = func;
+        let ast::FuncSig {params, return_type} = sig;
+        assert!(params.is_empty(), "TODO: Support function parameters");
+        assert_eq!(return_type, &ast::Ty::Unit, "TODO: Only return type currently supported is '()'");
+
+        let sig = resolve_sig(decls, prims, sig)?;
         let body = constraints.append_block(body, &mut local_scope, decls, prims)?;
-        Ok((constraints, tyir::Function {name, body}))
+        Ok((constraints, tyir::Function {name, sig, body}))
     }
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
     pub fn solve(self) -> Result<TypeSubst, Error> {
         let subst = HashMap::new();
         println!("{:?}", self);
-        //TODO
+        //TODO: All generated type variables must end up with a valid assignment
+        //TODO: Test constraint cycles: (A = B, B = C, C = A) => (A = A)
+        // e.g. let x = 2; // x: C, C in {int, real}
+        //      let y = x; // y: B, B = C
+        //      let z = y; // z: A, A = B
+        //      x = z;     //       C = A
         Ok(subst)
     }
 
@@ -134,7 +154,7 @@ impl ConstraintSet {
             //TODO: To support variable shadowing in this algorithm we just need to make sure that
             // statements are walked in order and that new variable declarations overwrite the
             // recorded types of previous declarations with a *fresh* variable.
-            panic!("Variable shadowing is not supported yet.");
+            panic!("TODO: Variable shadowing is not supported yet.");
         }
 
         // Generate a fresh variable for the var decl
@@ -162,7 +182,7 @@ impl ConstraintSet {
         })
     }
 
-    /// Appends constraints for the given expr
+    /// Appends constraints for the given expression
     fn append_expr<'a>(
         &mut self,
         expr: &'a ast::Expr<'a>,
@@ -172,22 +192,98 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
-            ast::Expr::CallExpr(call) => unimplemented!(),
+            ast::Expr::CallExpr(call) => {
+                self.append_call_expr(call, return_type, local_scope, decls, prims)
+                    .map(|call| tyir::Expr::CallExpr(call, return_type))
+            },
             &ast::Expr::IntegerLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.constraints.push(Constraint::TyVarOneOf {
                     ty_var: return_type,
                     valid_tys: hashset!{prims.int(), prims.real()},
                 });
+
                 Ok(tyir::Expr::IntegerLiteral(value, return_type))
             },
-            ast::Expr::Var(name) => {
+            &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
-                let var_ty_var = local_scope.get(name).copied()
-                    .with_context(|| UnresolvedName {name: name.to_string()})?;
+                let var_ty_var = local_scope.get(name).copied().context(UnresolvedName {name})?;
                 self.constraints.push(Constraint::TyVarEquals(var_ty_var, return_type));
+
                 Ok(tyir::Expr::Var(name, var_ty_var))
             },
         }
+    }
+
+    /// Appends constraints for the given function call
+    fn append_call_expr<'a>(
+        &mut self,
+        call: &'a ast::CallExpr<'a>,
+        return_type: TyVar,
+        local_scope: &mut LocalScope<'a>,
+        decls: &DeclMap,
+        prims: &Primitives,
+    ) -> Result<tyir::CallExpr<'a>, Error> {
+        let ast::CallExpr {func_name, args} = call;
+
+        let sig = decls.func_sig(func_name)
+            .context(UnresolvedFunction {name: *func_name})?;
+        // Return early if the number of arguments is wrong
+        if args.len() != sig.params.len() {
+            return Err(Error::ArityMismatch {
+                func_name: func_name.to_string(),
+                expected: sig.params.len(),
+                actual: args.len(),
+            });
+        }
+
+        // Assert that the return type of this expression is the same as the function return type
+        let ir::FuncSig {return_type: func_return_type, params} = resolve_sig(decls, prims, sig)?;
+        self.constraints.push(Constraint::TyVarOneOf {
+            ty_var: return_type,
+            valid_tys: hashset!{func_return_type},
+        });
+
+        let args = args.iter().zip(params).map(|(arg, param)| {
+            let arg_ty_var = self.fresh_type_var();
+
+            // Assert that each argument matches the corresponding parameter type
+            let ir::FuncParam {name: _, ty: param_ty} = param;
+            self.constraints.push(Constraint::TyVarOneOf {
+                ty_var: arg_ty_var,
+                valid_tys: hashset!{param_ty},
+            });
+
+            self.append_expr(arg, arg_ty_var, local_scope, decls, prims)
+        }).collect::<Result<Vec<_>, _>>()?;
+
+        Ok(tyir::CallExpr {
+            func_name,
+            args,
+        })
+    }
+}
+
+/// Resolves all of the types in a function signature
+fn resolve_sig<'a>(
+    decls: &'a DeclMap<'a>,
+    prims: &Primitives,
+    sig: &'a ast::FuncSig<'a>,
+) -> Result<ir::FuncSig<'a>, Error> {
+    let ast::FuncSig {return_type, params} = sig;
+    let return_type = lookup_type(decls, prims, return_type)?;
+    let params = params.iter().map(|param| {
+        let ast::FuncParam {name, ty} = param;
+        Ok(ir::FuncParam {name, ty: lookup_type(decls, prims, ty)?})
+    }).collect::<Result<Vec<_>, _>>()?;
+
+    Ok(ir::FuncSig {return_type, params})
+}
+
+/// Resolves a single type to either a declared type or a primitive
+fn lookup_type(decls: &DeclMap, prims: &Primitives, ty: &ast::Ty) -> Result<TyId, Error> {
+    match ty {
+        ast::Ty::Unit => Ok(prims.unit()),
+        ast::Ty::Named(ty) => decls.type_id(ty).context(UnresolvedType {name: *ty}),
     }
 }

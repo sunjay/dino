@@ -29,7 +29,9 @@ pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
     for decl in decls {
         match decl {
             //TODO: Validate that `main` takes zero arguments and has no return type
-            ir::Decl::Function(ir::Function {name, body}) if *name == "main" => {
+            ir::Decl::Function(ir::Function {name, sig, body}) if *name == "main" => {
+                //TODO: Assert that function signature is `() -> ()`
+
                 // Note that it is guaranteed that `entry_point` will only be assigned once since
                 // the IR assumes that all declaration names have been checked to be unique within
                 // a given module.

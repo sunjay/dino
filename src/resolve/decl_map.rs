@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{Function, Ident};
+use crate::ast::{Function, FuncSig, Ident};
 
 // Allows functions to be looked up by name without requiring us to use a HashMap and duplicating
 // the name in the key.
@@ -103,9 +103,9 @@ impl<'a> DeclMap<'a> {
         self.types.get(id)
     }
 
-    /// Returns a reference to the declaration corresponding to the given name, if any
-    pub fn function(&self, name: &Ident<'a>) -> Option<&Function<'a>> {
-        self.functions.get(name).map(|entry| &entry.func)
+    /// Returns the function signature corresponding to the given name, if any
+    pub fn func_sig(&self, name: &Ident<'a>) -> Option<&FuncSig<'a>> {
+        self.functions.get(name).map(|entry| &entry.func.sig)
     }
 
     /// Returns an iterator that goes through each declaration in the map

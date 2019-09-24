@@ -67,6 +67,7 @@ fn function(input: Input) -> IResult<Function> {
         block,
     )), |(_, _, name, _, _params, _, body)| Function {
         name,
+        sig: FuncSig {return_type: Ty::Unit, params: Vec::new()}, //TODO
         body,
     })(input)
 }

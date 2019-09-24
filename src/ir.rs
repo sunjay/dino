@@ -28,7 +28,20 @@ pub enum Decl<'a> {
 #[derive(Debug)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
+    pub sig: FuncSig<'a>,
     pub body: Block<'a>,
+}
+
+#[derive(Debug)]
+pub struct FuncSig<'a> {
+    pub return_type: TyId,
+    pub params: Vec<FuncParam<'a>>,
+}
+
+#[derive(Debug)]
+pub struct FuncParam<'a> {
+    pub name: Ident<'a>,
+    pub ty: TyId,
 }
 
 #[derive(Debug)]

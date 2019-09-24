@@ -6,7 +6,7 @@ mod parser;
 
 pub use parser::Error as ParseError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Program<'a> {
     pub top_level_module: Module<'a>,
 }
@@ -19,34 +19,48 @@ impl<'a> Program<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Module<'a> {
     pub decls: Vec<Decl<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Decl<'a> {
     Function(Function<'a>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
+    pub sig: FuncSig<'a>,
     pub body: Block<'a>,
 }
 
-#[derive(Debug)]
+/// The type signature of a function
+#[derive(Debug, PartialEq)]
+pub struct FuncSig<'a> {
+    pub return_type: Ty<'a>,
+    pub params: Vec<FuncParam<'a>>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FuncParam<'a> {
+    pub name: Ident<'a>,
+    pub ty: Ty<'a>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Stmt<'a> {
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
@@ -56,17 +70,23 @@ pub struct VarDecl<'a> {
     pub expr: Expr<'a>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
     CallExpr(CallExpr<'a>),
     IntegerLiteral(i64),
     Var(Ident<'a>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CallExpr<'a> {
     pub func_name: Ident<'a>,
     pub args: Vec<Expr<'a>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Ty<'a> {
+    Unit,
+    Named(Ident<'a>),
 }
 
 pub type Ident<'a> = &'a str;
