@@ -39,8 +39,8 @@ Literals:
 * byte string: `b"cool stuff"` (notice the `b` prefix for forward compat)
   * byte character: `b'c'`
 * list: `[a, b, c]` or `[x; len]`
-* hash map: `map!{b"key1": val1, b"key2": val2}`
-* hash set: `set!{val1, val2}`
+* hash map: `@{b"key1": val1, b"key2": val2}`
+* hash set: `@{val1, val2}`
 * tuple: `()`, `(val1, val2)`, `(val1, val2, val3)`
   * member access: `t.0`, `t.1 = val`
 
