@@ -1,4 +1,4 @@
-/// The disco integer type
+/// The dino integer type
 #[repr(transparent)]
 pub struct DInt(i64);
 

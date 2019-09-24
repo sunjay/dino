@@ -1,8 +1,8 @@
 [package]
-name = "disco"
+name = "dino"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
-description = "Compiler for the disco programming language"
+description = "Compiler for the dino programming language"
 edition = "2018"
 build = "build.rs"
 

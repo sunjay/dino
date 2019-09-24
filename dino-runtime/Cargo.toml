@@ -1,5 +1,5 @@
 [package]
-name = "disco-runtime"
+name = "dino-runtime"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
 edition = "2018"

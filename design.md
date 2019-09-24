@@ -1,4 +1,4 @@
-# Disco Language
+# dino Language
 
 * High-level (not a systems programming language)
 * Compiled
@@ -8,7 +8,7 @@
 
 ## Pipeline
 
-1. Disco Source Code
+1. dino Source Code
 2. AST (parsing)
 3. Declarations (name resolution)
 4. IR (type inference & checking)

@@ -8,7 +8,7 @@ use structopt::StructOpt;
 use terminator::Terminator;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "disco", about)]
+#[structopt(name = "dino", about)]
 struct CompilerOptions {
     /// The program to compile
     #[structopt(name = "input", parse(from_os_str))]
@@ -21,12 +21,12 @@ struct CompilerOptions {
 fn main() -> Result<(), Terminator> {
     let CompilerOptions {program_path, output_path} = CompilerOptions::from_args();
 
-    let code = disco::compile_executable(&program_path)?;
+    let code = dino::compile_executable(&program_path)?;
 
     // Check that the path and stem are valid
     let program_stem = match (program_path.file_stem(), program_path.extension()) {
-        (Some(stem), Some(ext)) if !stem.is_empty() && ext == "disco" => stem,
-        _ => Err("Invalid input path. Must use extension `disco`".to_string())?,
+        (Some(stem), Some(ext)) if !stem.is_empty() && ext == "dino" => stem,
+        _ => Err("Invalid input path. Must use extension `dino`".to_string())?,
     };
 
     // Default output path is the input path without its stem
@@ -41,8 +41,8 @@ fn main() -> Result<(), Terminator> {
     let tmp_dir = TempDir::new()?;
 
     // Write out the runtime and std libraries and associated header files
-    disco::runtime::write_runtime_files(tmp_dir.path())?;
-    disco::disco_std::write_std_files(tmp_dir.path())?;
+    dino::runtime::write_runtime_files(tmp_dir.path())?;
+    dino::dino_std::write_std_files(tmp_dir.path())?;
 
     let code_file_path = tmp_dir.path().join("main.c");
     // Drop the file as soon as possible so it finishes being written to
@@ -67,8 +67,8 @@ fn main() -> Result<(), Terminator> {
         .arg("-g")
         .arg(code_file_path)
         // Must link AFTER source code or else the linker will discard all the symbols
-        .arg(format!("-l{}", disco::runtime::RUNTIME_LIB_NAME))
-        .arg(format!("-l{}", disco::disco_std::DISCO_STD_LIB_NAME))
+        .arg(format!("-l{}", dino::runtime::RUNTIME_LIB_NAME))
+        .arg(format!("-l{}", dino::dino_std::DINO_STD_LIB_NAME))
         .arg(format!("-L{}", tmp_dir.path().display()))
         .arg("-o")
         .arg(output_path)

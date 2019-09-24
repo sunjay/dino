@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .with_crate(crate_dir)
         .with_language(cbindgen::Language::C)
         .generate()?
-        .write_to_file("disco-runtime.h");
+        .write_to_file("dino-runtime.h");
 
     Ok(())
 }

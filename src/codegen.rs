@@ -10,7 +10,7 @@ pub use trans::*;
 use std::fmt;
 
 use crate::runtime::RUNTIME_HEADER_FILENAME;
-use crate::disco_std::DISCO_STD_HEADER_FILENAME;
+use crate::dino_std::DINO_STD_HEADER_FILENAME;
 
 #[derive(Debug)]
 pub struct CExecutableProgram {
@@ -25,7 +25,7 @@ pub struct CExecutableProgram {
 impl fmt::Display for CExecutableProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "#include \"{}\"\n", RUNTIME_HEADER_FILENAME)?;
-        writeln!(f, "#include \"{}\"\n", DISCO_STD_HEADER_FILENAME)?;
+        writeln!(f, "#include \"{}\"\n", DINO_STD_HEADER_FILENAME)?;
 
         let Self {functions, entry_point} = self;
 

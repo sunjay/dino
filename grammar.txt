@@ -1,4 +1,4 @@
-// A high-level description of the disco language grammar using a syntax based
+// A high-level description of the dino language grammar using a syntax based
 // on EBNF.
 //
 // This file is meant to be an easier to look at version of the parser source

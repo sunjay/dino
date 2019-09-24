@@ -4,7 +4,7 @@ pub mod ir;
 pub mod resolve;
 pub mod tycheck;
 pub mod runtime;
-pub mod disco_std;
+pub mod dino_std;
 
 use std::fs;
 use std::io;

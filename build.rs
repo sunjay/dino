@@ -47,22 +47,22 @@ impl<'a> fmt::Display for StaticLibraryModule<'a> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let manifest_path = cargo::manifest::dir();
-    // Requires that the disco-runtime crate already be built
+    // Requires that the dino-runtime crate already be built
     generate_static_lib_mod(
         &manifest_path,
-        "disco-runtime",
-        "disco-runtime.h",
-        "disco_runtime",
+        "dino-runtime",
+        "dino-runtime.h",
+        "dino_runtime",
         "RUNTIME",
         "runtime.rs",
     )?;
     generate_static_lib_mod(
         &manifest_path,
-        "disco-std",
-        "disco-std.h",
-        "disco_std",
-        "DISCO_STD",
-        "disco_std.rs",
+        "dino-std",
+        "dino-std.h",
+        "dino_std",
+        "DINO_STD",
+        "dino_std.rs",
     )?;
 
     Ok(())
