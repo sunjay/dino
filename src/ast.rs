@@ -29,15 +29,6 @@ pub enum Decl<'a> {
     Function(Function<'a>),
 }
 
-impl<'a> Decl<'a> {
-    pub fn name(&self) -> &Ident<'a> {
-        use Decl::*;
-        match self {
-            Function(func) => &func.name,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
