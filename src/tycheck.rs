@@ -5,6 +5,8 @@ mod tyir;
 
 pub use constraints::Error;
 
+use rayon::prelude::*;
+
 use crate::{ast, ir};
 use crate::resolve::{ProgramDecls, DeclMap, Primitives};
 
@@ -22,7 +24,9 @@ fn infer_and_check_module<'a>(
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
 ) -> Result<ir::Module<'a>, Error> {
+    // Able to use par_bridge here because functions can be type checked in any order
     let decls = mod_decls.functions()
+        .par_bridge()
         // No need to check external functions
         .filter(|func| !func.is_extern)
         .map(|func| infer_and_check_func(func, mod_decls, prims).map(ir::Decl::Function))
@@ -35,7 +39,7 @@ fn infer_and_check_func<'a>(
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
 ) -> Result<ir::Function<'a>, Error> {
-    // A copy of the function's AST with any generated type variables placed inline
+    // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
     let (constraints, ty_ir_func) = ConstraintSet::generate(func, mod_decls, prims)?;
     let solution = constraints.solve()?;
     Ok(ty_ir_func.apply_subst(&solution))

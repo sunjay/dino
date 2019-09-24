@@ -189,7 +189,7 @@ impl ConstraintSet {
         &mut self,
         expr: &'a ast::Expr<'a>,
         return_type: TyVar,
-        local_scope: &mut LocalScope<'a>,
+        local_scope: &LocalScope<'a>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
@@ -222,7 +222,7 @@ impl ConstraintSet {
         &mut self,
         call: &'a ast::CallExpr<'a>,
         return_type: TyVar,
-        local_scope: &mut LocalScope<'a>,
+        local_scope: &LocalScope<'a>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::CallExpr<'a>, Error> {

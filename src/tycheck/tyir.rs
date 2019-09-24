@@ -1,6 +1,5 @@
-//! An intermediate representation used during type checking to
-//! provide a way to store fresh type variables and type IDs directly
-//! without having to invent a way to uniquely address AST nodes.
+//! An intermediate representation used during type checking to provide a way to store fresh type
+//! variables and type IDs directly without having to invent a way to uniquely address AST nodes.
 
 use crate::ir;
 use crate::ast::Ident;
