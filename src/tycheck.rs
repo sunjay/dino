@@ -34,7 +34,7 @@ fn infer_and_check_func<'a>(
     prims: &Primitives,
 ) -> Result<ir::Function<'a>, Error> {
     // A copy of the function's AST with any generated type variables placed inline
-    let (constraints, ty_ir_func) = ConstraintSet::generate(func, mod_decls, prims);
+    let (constraints, ty_ir_func) = ConstraintSet::generate(func, mod_decls, prims)?;
     let solution = constraints.solve()?;
     Ok(ty_ir_func.apply_subst(&solution))
 }

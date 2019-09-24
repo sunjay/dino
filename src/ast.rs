@@ -50,7 +50,7 @@ pub enum Stmt<'a> {
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
-    /// The type of the identifier
+    /// The type of the variable
     pub ty: Ident<'a>,
     /// The expression for the value to assign to the variable
     pub expr: Expr<'a>,

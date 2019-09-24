@@ -61,8 +61,8 @@ impl<'a> Stmt<'a> {
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
-    /// The type of the identifier
-    pub ty: Ty,
+    /// The type variable of this variable declaration
+    pub ty_var: TyVar,
     /// The expression for the value to assign to the variable
     pub expr: Expr<'a>,
 }
@@ -76,9 +76,9 @@ impl<'a> VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
-    CallExpr(CallExpr<'a>),
-    IntegerLiteral(i64),
-    Var(Ident<'a>),
+    CallExpr(CallExpr<'a>, TyVar),
+    IntegerLiteral(i64, TyVar),
+    Var(Ident<'a>, TyVar),
 }
 
 impl<'a> Expr<'a> {
@@ -101,21 +101,10 @@ impl<'a> CallExpr<'a> {
     }
 }
 
-#[derive(Debug)]
-pub enum Ty {
-    TyId(TyId),
-    TyVar(TyVar),
-}
-
-impl Ty {
+impl TyVar {
     /// Applies the given substitution to this type and returns the corresponding type ID
     pub fn apply_subst(self, subst: &TypeSubst) -> TyId {
-        use Ty::*;
-        match self {
-            TyId(id) => id,
-            TyVar(var) => subst.get(&var)
-                .copied()
-                .expect("bug: substitution did not contain all type variables"),
-        }
+        subst.get(&self).copied()
+            .expect("bug: substitution did not contain all type variables")
     }
 }

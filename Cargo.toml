@@ -12,6 +12,7 @@ nom = "5.0"
 snafu = "0.5"
 structopt = "0.3"
 terminator = "0.1"
+maplit = "1.0"
 
 [build-dependencies]
 build-helper = "0.1"
