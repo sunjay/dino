@@ -1,3 +1,4 @@
 fn main() {
+    // A simple variable
     let cool_stuff: int = -34;
 }

@@ -4,9 +4,9 @@ use nom::{
     branch::alt,
     character::complete::{char, digit1},
     combinator::{all_consuming, map, map_res, recognize, opt},
-    bytes::complete::{tag, take_while1, take_while},
+    bytes::complete::{tag, take_while1, take_while, take_till},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::{many0, separated_list},
+    multi::{many0, many1, separated_list},
 };
 
 use super::*;
@@ -47,7 +47,7 @@ pub fn parse_module(input: &str) -> Result<Module, Error> {
 
 fn module(input: Input) -> IResult<Module> {
     map(
-        preceded(ws0, many0(terminated(decl, ws0))),
+        preceded(wsc0, many0(terminated(decl, wsc0))),
         |decls| Module {decls},
     )(input)
 }
@@ -59,11 +59,11 @@ fn decl(input: Input) -> IResult<Decl> {
 fn function(input: Input) -> IResult<Function> {
     map(tuple((
         tag("fn"),
-        ws1,
+        wsc1,
         ident,
-        ws0,
+        wsc0,
         function_params,
-        ws0,
+        wsc0,
         block,
     )), |(_, _, name, _, _params, _, body)| Function {
         name,
@@ -82,7 +82,7 @@ fn block(input: Input) -> IResult<Block> {
     map(
         delimited(
             char('{'),
-            preceded(ws0, many0(terminated(stmt, ws0))),
+            preceded(wsc0, many0(terminated(stmt, wsc0))),
             char('}'),
         ),
         |stmts| Block {stmts},
@@ -92,7 +92,7 @@ fn block(input: Input) -> IResult<Block> {
 fn stmt(input: Input) -> IResult<Stmt> {
     alt((
         map(var_decl, Stmt::VarDecl),
-        map(tuple((expr, ws0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
+        map(tuple((expr, wsc0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
     ))(input)
 }
 
@@ -100,19 +100,19 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
     map(
         tuple((
             tag("let"),
-            ws1,
+            wsc1,
             ident,
-            ws0,
+            wsc0,
             opt(tuple((
                 char(':'),
-                ws0,
+                wsc0,
                 ident,
-                ws0,
+                wsc0,
             ))),
             char('='),
-            ws0,
+            wsc0,
             expr,
-            ws0,
+            wsc0,
             char(';'),
         )),
         |(_, _, ident, _, ty, _, _, expr, _, _)| VarDecl {
@@ -133,7 +133,7 @@ fn expr(input: Input) -> IResult<Expr> {
 
 fn func_call(input: Input) -> IResult<CallExpr> {
     map(
-        tuple((ident, ws0, func_args)),
+        tuple((ident, wsc0, func_args)),
         |(func_name, _, args)| CallExpr {func_name, args},
     )(input)
 }
@@ -144,7 +144,7 @@ fn func_args(input: Input) -> IResult<Vec<Expr>> {
 
 fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
     where F: Fn(Input<'r>) -> IResult<T> {
-    separated_list(tuple((ws0, char(','), ws0)), parser)
+    separated_list(tuple((wsc0, char(','), wsc0)), parser)
 }
 
 fn ident(input: Input) -> IResult<&str> {
@@ -172,16 +172,32 @@ fn integer_literal(input: Input) -> IResult<i64> {
     )(input)
 }
 
-/// Parses at least one whitespace character
-fn ws1(input: Input) -> IResult<()> {
-    //TODO: Support comments
-    map(take_while1(|c: char| c.is_whitespace()), |_| ())(input)
+/// Parses at least one whitespace character or comment
+fn wsc1(input: Input) -> IResult<()> {
+    map(many1(alt((comment, ws::ws1))), |_| ())(input)
 }
 
-/// Parses any amount of whitespace
-fn ws0(input: Input) -> IResult<()> {
-    //TODO: Support comments
-    map(take_while(|c: char| c.is_whitespace()), |_| ())(input)
+/// Parses any amount of whitespace or comment
+fn wsc0(input: Input) -> IResult<()> {
+    map(many0(alt((comment, ws::ws1))), |_| ())(input)
+}
+
+/// Parses a comment
+fn comment(input: Input) -> IResult<()> {
+    map(
+        tuple((tag("//"), take_till(|c| c == '\n'), char('\n'))),
+        |_| (),
+    )(input)
+}
+
+// Keeping in a separate module so it's easier to use wsc0 and wsc1 instead of these
+mod ws {
+    use super::*;
+
+    /// Parses at least one whitespace character
+    pub fn ws1(input: Input) -> IResult<()> {
+        map(take_while1(|c: char| c.is_whitespace()), |_| ())(input)
+    }
 }
 
 #[cfg(test)]
