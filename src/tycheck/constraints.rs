@@ -67,15 +67,17 @@ impl ConstraintSet {
     }
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
-    pub fn solve(self) -> Result<TypeSubst, Error> {
+    pub fn solve(
+        self,
+        resolve_ambiguity: impl Fn(&HashSet<TyId>) -> Option<TyId> + Send + Sync,
+    ) -> Result<TypeSubst, Error> {
         let Self {ty_var_valid_types, ty_var_equals, next_var} = self;
 
         let mut valid_types = collect_valid_types(ty_var_valid_types);
         apply_eq_constraints(&ty_var_equals, &mut valid_types);
 
         //TODO: Resolve ambiguity {int, real} -> int, etc.
-        build_substitution(valid_types, (0..next_var).map(TyVar),
-            |_| None)
+        build_substitution(valid_types, (0..next_var).map(TyVar), resolve_ambiguity)
     }
 
     /// Generates a fresh type variable and returns it
@@ -142,12 +144,14 @@ impl ConstraintSet {
         // Generate a fresh variable for the var decl
         let var_decl_ty_var = self.fresh_type_var();
 
-        // The type variable should match the annotated type
-        let var_decl_ty = decls.type_id(ty).context(UnresolvedType {name: *ty})?;
-        self.ty_var_valid_types.push(TyVarValidTypes {
-            ty_var: var_decl_ty_var,
-            valid_tys: hashset!{var_decl_ty},
-        });
+        // The type variable should match the annotated type (if any)
+        if let Some(ty) = ty {
+            let var_decl_ty = decls.type_id(ty).context(UnresolvedType {name: *ty})?;
+            self.ty_var_valid_types.push(TyVarValidTypes {
+                ty_var: var_decl_ty_var,
+                valid_tys: hashset!{var_decl_ty},
+            });
+        }
 
         // Must append expr BEFORE updating local scope with the new type variable or else variable
         // shadowing will not work. Semantically, this variable does not come into scope until

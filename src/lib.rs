@@ -9,10 +9,13 @@ pub mod dino_std;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::collections::HashSet;
 
+use maplit::hashset;
 use snafu::{Snafu, ResultExt};
 
 use crate::codegen::CExecutableProgram;
+use crate::resolve::{TyId, Primitives};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -53,12 +56,22 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     let mut decls = resolve::ProgramDecls::new(program)
         .with_context(|| DuplicateDecl {path: path.to_path_buf()})?;
     insert_prelude(&mut decls);
-    let program_ir = tycheck::infer_and_check(&decls)
+    let program_ir = tycheck::infer_and_check(&decls, |tys| resolve_ambiguity(tys, &decls.prims))
         .with_context(|| TypeError {path: path.to_path_buf()})?;
     let code = codegen::executable(&program_ir)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
 
     Ok(code)
+}
+
+/// Resolves ambiguous type checking situations where possible
+fn resolve_ambiguity(tys: &HashSet<TyId>, prims: &Primitives) -> Option<TyId> {
+    // Since integer literals can be {int, real}, resolve to {int} where possible
+    if *tys == hashset!{prims.int(), prims.real()} {
+        Some(prims.int())
+    } else {
+        None
+    }
 }
 
 fn insert_prelude(decls: &mut resolve::ProgramDecls) {

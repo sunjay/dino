@@ -13,7 +13,7 @@ function := "fn" ident "(" ")" block
 block := "{" stmt* "}"
 
 stmt := var_decl | expr ";"
-var_decl := "let" ident ":" ty "=" expr ";"
+var_decl := "let" ident (":" ty)? "=" expr ";"
 
 expr := func_call | integer_literal | ident
 func_call := ident func_args

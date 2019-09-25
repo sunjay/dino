@@ -103,17 +103,23 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
             ws1,
             ident,
             ws0,
-            char(':'),
-            ws0,
-            ident,
-            ws0,
+            opt(tuple((
+                char(':'),
+                ws0,
+                ident,
+                ws0,
+            ))),
             char('='),
             ws0,
             expr,
             ws0,
             char(';'),
         )),
-        |(_, _, ident, _, _, _, ty, _, _, _, expr, _, _)| VarDecl {ident, ty, expr},
+        |(_, _, ident, _, ty, _, _, expr, _, _)| VarDecl {
+            ident,
+            ty: ty.map(|(_, _, ty, _)| ty),
+            expr,
+        },
     )(input)
 }
 
