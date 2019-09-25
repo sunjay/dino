@@ -87,14 +87,90 @@ impl ConstraintSet {
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
     pub fn solve(self) -> Result<TypeSubst, Error> {
-        let subst = HashMap::new();
-        dbg!(self);
+        // This algorithm has 3 steps and makes two passes over the constraints:
+        // 1. Go through and narrow the set of valid types for each type variable (TyVarOneOf)
+        //    This results in a map of possible types for each type variable.
+        // 2. For each A = B (TyVarEquals) constraint, update the set of possible types for both
+        //    A and B to intersect(types for A, types for B). This works transitively for any set
+        //    of equals constraints because the set intersection operator is both commutative and
+        //    transitive. So A n B == B n A and (A n B) n C == A n (B n C)
+        // 3. Create the final substitution by narrowing each set of types to a single type
+        //
+        // The algorithm produces an error if more than one type applies to a given variable
+        // (ambiguous) or if no types apply (invalid) to a given variable
+        //
+        // We need two separate passes so that the intersections in step 2 accurately represent
+        // the intersection between the sets of types for both type variables. If we tried to
+        // process the constraints serially, we may end up adding types to a set where those types
+        // would have ended up being filtered out by an earlier intersection.
+
+        //TODO: We could avoid making two passes by storing two sets of constraints: one for each
+        // type of constraint.
+
         //TODO: All generated type variables must end up with a valid assignment
         //TODO: Test constraint cycles: (A = B, B = C, C = A) => (A = A)
         // e.g. let x = 2; // x: C, C in {int, real}
         //      let y = x; // y: B, B = C
         //      let z = y; // z: A, A = B
         //      x = z;     //       C = A
+        dbg!(&self);
+
+        // A map from type variable to the set of possible types it can be
+        //
+        // Any type variable without an entry in this map is completely unconstrained
+        let mut possible_types = HashMap::new();
+
+        // Go through and populate the map using the constraints on which types are valid for a
+        // given variable
+        for constraint in &self.constraints {
+            match constraint {
+                Constraint::TyVarOneOf {ty_var, valid_tys} => {
+                    match possible_types.get_mut(ty_var) {
+                        None => {
+                            //TODO: This clone can be removed if we can take the constraints by value
+                            possible_types.insert(*ty_var, valid_tys.clone());
+                        },
+                        Some(ty_var_types) => {
+                            *ty_var_types = valid_tys.intersection(ty_var_types)
+                                .copied()
+                                .collect();
+                        },
+                    }
+                },
+                _ => {},
+            }
+        }
+
+        // TODO: This is wrong
+        for constraint in &self.constraints {
+            match constraint {
+                // We can immediately ignore the case where the left and right are equal since we
+                // know that constraint to be trivially true by the reflexive property
+                &Constraint::TyVarEquals(left, right) => if left != right {
+                    let left_types = possible_types.get(&left);
+                    let right_types = possible_types.get(&right);
+                    let common_types = match (left_types, right_types) {
+                        // Either the left or the right is completely unconstrained
+                        (Some(common_types), None) | (None, Some(common_types)) => {
+                            common_types.clone()
+                        },
+                        // Both the left and the right is constrained, so we take the common types
+                        // between them
+                        (Some(left_types), Some(right_types)) => {
+                            left_types.intersection(right_types).copied().collect()
+                        },
+                    };
+
+                    possible_types.insert(left, common_types.clone());
+                    possible_types.insert(right, common_types);
+                },
+                _ => {},
+            }
+        }
+
+        dbg!(&possible_types);
+        let subst = HashMap::new();
+
         Ok(subst)
     }
 
