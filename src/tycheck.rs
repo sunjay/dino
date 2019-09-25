@@ -1,16 +1,39 @@
 //! Type inference and checking.
 
 mod constraints;
+mod solve;
 mod tyir;
 
-pub use constraints::Error;
-
+use snafu::Snafu;
 use rayon::prelude::*;
 
 use crate::{ast, ir};
 use crate::resolve::{ProgramDecls, DeclMap, Primitives};
 
 use constraints::ConstraintSet;
+
+/// Type inference and type checking errors
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("cannot find value '{}' in this scope", name))]
+    UnresolvedName {
+        name: String,
+    },
+    #[snafu(display("cannot find type '{}' in this scope", name))]
+    UnresolvedType {
+        name: String,
+    },
+    #[snafu(display("cannot find function '{}' in this scope", name))]
+    UnresolvedFunction {
+        name: String,
+    },
+    #[snafu(display("function '{}' takes {} parameter(s) but {} parameter(s) were supplied", func_name, expected, actual))]
+    ArityMismatch {
+        func_name: String,
+        expected: usize,
+        actual: usize,
+    },
+}
 
 pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {
     let ProgramDecls {top_level_decls, prims} = decls;

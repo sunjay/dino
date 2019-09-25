@@ -5,7 +5,8 @@ use crate::ir;
 use crate::ast::Ident;
 use crate::resolve::TyId;
 
-use super::constraints::{TyVar, TypeSubst};
+use super::constraints::TyVar;
+use super::solve::TypeSubst;
 
 #[derive(Debug)]
 pub struct Function<'a> {
