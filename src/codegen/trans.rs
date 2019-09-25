@@ -5,32 +5,34 @@ use super::*;
 use snafu::Snafu;
 
 use crate::ir;
-use crate::resolve::TyId;
+use crate::resolve::{TyId, ProgramDecls, DeclMap};
 
 /// Code generation errors
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("`main` function not found"))]
     NoEntryPoint,
-    #[snafu(display("cannot find type `{}` in this scope", ty))]
-    UnknownType {
-        ty: String,
-    },
+    #[snafu(display("`main` function has wrong type"))]
+    InvalidEntryPointType,
 }
 
 /// Generates an executable program from the given IR
-pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
+pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CExecutableProgram, Error> {
     let ir::Program {top_level_module} = prog;
     let ir::Module {decls} = top_level_module;
+
+    let ProgramDecls {top_level_decls: mod_scope, prims} = program_scope;
 
     let mut entry_point = None;
     let mut functions = Vec::new();
 
     for decl in decls {
         match decl {
-            //TODO: Validate that `main` takes zero arguments and has no return type
             ir::Decl::Function(ir::Function {name, sig, body}) if *name == "main" => {
-                //TODO: Assert that function signature is `() -> ()`
+                // The main function must have no return type and no arguments
+                if sig.return_type != prims.unit() || !sig.params.is_empty() {
+                    return Err(Error::InvalidEntryPointType);
+                }
 
                 // Note that it is guaranteed that `entry_point` will only be assigned once since
                 // the IR assumes that all declaration names have been checked to be unique within
@@ -38,10 +40,10 @@ pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
                 debug_assert!(entry_point.is_none(), "bug: allowed multiple entry points");
 
                 entry_point = Some(CEntryPoint {
-                    body: gen_function_body(body)?,
+                    body: gen_function_body(body, mod_scope)?,
                 });
             },
-            ir::Decl::Function(func) => functions.push(gen_function(func)?),
+            ir::Decl::Function(func) => functions.push(gen_function(func, mod_scope)?),
         }
     }
 
@@ -53,48 +55,55 @@ pub fn executable(prog: &ir::Program) -> Result<CExecutableProgram, Error> {
     Ok(CExecutableProgram {functions, entry_point})
 }
 
-fn gen_function(_func: &ir::Function) -> Result<CFunction, Error> {
+fn gen_function(
+    func: &ir::Function,
+    mod_scope: &DeclMap,
+) -> Result<CFunction, Error> {
     unimplemented!() //TODO
 }
 
-fn gen_function_body(block: &ir::Block) -> Result<CFunctionBody, Error> {
+fn gen_function_body(
+    block: &ir::Block,
+    mod_scope: &DeclMap,
+) -> Result<CFunctionBody, Error> {
     let ir::Block {stmts} = block;
 
     let stmts = stmts.iter().map(|stmt| Ok(match stmt {
-        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl)?),
-        ir::Stmt::Expr(expr) => unimplemented!(),
+        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, mod_scope)?),
+        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, mod_scope)?),
     })).collect::<Result<_, _>>()?;
 
     Ok(CFunctionBody {stmts})
 }
 
-fn gen_var_decl(var_decl: &ir::VarDecl) -> Result<CVarDecl, Error> {
+fn gen_var_decl(
+    var_decl: &ir::VarDecl,
+    mod_scope: &DeclMap,
+) -> Result<CVarDecl, Error> {
     let ir::VarDecl {ident, ty, expr} = var_decl;
 
     //TODO: Support variable shadowing by mangling name appropriately and then re-assigning everywhere
     Ok(CVarDecl {
         mangled_name: ident.to_string(),
-        ty: lookup_type(ty)?,
-        init_expr: CInitializerExpr::Expr(gen_expr(expr)?)
+        ty: lookup_type(ty, mod_scope),
+        init_expr: CInitializerExpr::Expr(gen_expr(expr, mod_scope)?)
     })
 }
 
-fn gen_expr(expr: &ir::Expr) -> Result<CExpr, Error> {
+fn gen_expr(
+    expr: &ir::Expr,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
     //TODO: Determine function names to call by dispatching on the type
     Ok(match expr {
+        ir::Expr::Call(call, ty) => unimplemented!(),
         &ir::Expr::IntegerLiteral(value, ty) => CExpr::IntegerLiteral(value),
-        ir::Expr::Call(ir::CallExpr {func_name: "Add::add", args}, ty) => CExpr::Call(CCallExpr {
-            func_name: "__dino__DInt__Add__add".to_string(),
-            args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
-        }),
-        ir::Expr::Call(ir::CallExpr {func_name: "Sub::sub", args}, ty) => CExpr::Call(CCallExpr {
-            func_name: "__dino__DInt__Sub__sub".to_string(),
-            args: vec![gen_expr(&args[0])?, gen_expr(&args[1])?],
-        }),
-        _ => unimplemented!(),
+        &ir::Expr::Var(name, ty) => unimplemented!(),
     })
 }
 
-fn lookup_type(ty: &TyId) -> Result<CType, Error> {
-    unimplemented!()
+fn lookup_type(ty: &TyId, mod_scope: &DeclMap) -> String {
+    mod_scope.type_extern_name(ty)
+        .expect("bug: unknown type was allowed to get through to codegen")
+        .to_string()
 }

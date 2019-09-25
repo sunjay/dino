@@ -40,6 +40,16 @@ impl<'a> PartialEq<str> for FunctionEntry<'a> {
 
 impl<'a> Eq for FunctionEntry<'a> {}
 
+/// Stores information about a type
+#[derive(Debug)]
+struct TypeEntry<'a> {
+    /// The name of the type to be used in the AST, etc.
+    ty_name: Ident<'a>,
+    /// The extern name of the type (for code generation)
+    //TODO: Not all types will have an extern name once we support structs/enums
+    extern_name: String,
+}
+
 #[derive(Debug)]
 pub struct DuplicateDecl {
     duplicate: String,
@@ -60,7 +70,7 @@ pub struct TyId(usize);
 #[derive(Debug, Default)]
 pub struct DeclMap<'a> {
     functions: HashSet<FunctionEntry<'a>>,
-    types: Vec<Ident<'a>>,
+    types: Vec<TypeEntry<'a>>,
     type_ids: HashMap<Ident<'a>, TyId>,
 }
 
@@ -81,15 +91,19 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Inserts a new type and returns its type ID
-    pub fn insert_type(&mut self, ty: Ident<'a>) -> Result<TyId, DuplicateDecl> {
+    pub fn insert_type(
+        &mut self,
+        ty_name: Ident<'a>,
+        extern_name: impl Into<String>,
+    ) -> Result<TyId, DuplicateDecl> {
         let id = TyId(self.types.len());
-        if self.type_ids.insert(ty, id).is_some() {
+        if self.type_ids.insert(ty_name, id).is_some() {
             return Err(DuplicateDecl {
-                duplicate: ty.to_string(),
+                duplicate: ty_name.to_string(),
             });
         }
 
-        self.types.push(ty);
+        self.types.push(TypeEntry {ty_name, extern_name: extern_name.into()});
         Ok(id)
     }
 
@@ -101,7 +115,13 @@ impl<'a> DeclMap<'a> {
     /// Returns the name of the given type ID
     pub fn type_name(&self, id: &TyId) -> Option<&Ident<'a>> {
         let &TyId(id) = id;
-        self.types.get(id)
+        self.types.get(id).map(|ty_entry| &ty_entry.ty_name)
+    }
+
+    /// Returns the extern name of the given type ID
+    pub fn type_extern_name(&'a self, id: &TyId) -> Option<&'a str> {
+        let &TyId(id) = id;
+        self.types.get(id).map(|ty_entry| &*ty_entry.extern_name)
     }
 
     /// Returns the function signature corresponding to the given name, if any

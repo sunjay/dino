@@ -1,4 +1,6 @@
 /// The dino integer type
+///
+/// An integer type that is (at least) 64-bits wide.
 #[repr(transparent)]
 pub struct DInt(i64);
 

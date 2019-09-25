@@ -10,7 +10,7 @@ macro_rules! primitives {
     (
         $(#[$attr:meta])*
         $vis:vis struct $struct_name:ident {
-            $($prim:ident => $name:literal),* $(,)?
+            $($prim:ident => $name:literal => $extern_name:literal),* $(,)?
         }
     ) => {
         $(#[$attr])*
@@ -25,7 +25,7 @@ macro_rules! primitives {
             fn new(decls: &mut DeclMap) -> Self {
                 Self {
                     $(
-                        $prim: decls.insert_type($name)
+                        $prim: decls.insert_type($name, $extern_name)
                             .expect("bug: primitive type defined more than once"),
                     )*
                 }
@@ -44,11 +44,12 @@ primitives! {
     /// The core primitives of the compiler
     #[derive(Debug)]
     pub struct Primitives {
-        // The unit type has no name
-        unit => "",
-        bool => "bool",
-        int => "int",
-        real => "real",
+        // The unit type has no name and we should never generate any machine code for it
+        // (hence the empty extern name)
+        unit => "" => "",
+        bool => "bool" => "DBool",
+        int => "int" => "DInt",
+        real => "real" => "DReal",
     }
 }
 

@@ -47,20 +47,6 @@ impl fmt::Display for CExecutableProgram {
     }
 }
 
-#[derive(Debug)]
-pub enum CType {
-    /// An integer that is (at least) 64-bits wide.
-    DInt,
-}
-
-impl fmt::Display for CType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            CType::DInt => "DInt",
-        })
-    }
-}
-
 /// Special wrapper for the entry point ("main") function. Deals with properly returning an integer
 #[derive(Debug)]
 pub struct CEntryPoint {
@@ -103,7 +89,7 @@ pub struct CFunctionSignature {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type returned from the function
-    pub return_type: CType,
+    pub return_type: String,
 }
 
 impl fmt::Display for CFunctionSignature {
@@ -175,7 +161,7 @@ pub struct CVarDecl {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type of the variable
-    pub ty: CType,
+    pub ty: String,
     /// The initializer expression for this variable
     pub init_expr: CInitializerExpr,
 }

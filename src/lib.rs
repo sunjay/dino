@@ -58,7 +58,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(&decls, |tys| resolve_ambiguity(tys, &decls.prims))
         .with_context(|| TypeError {path: path.to_path_buf()})?;
-    let code = codegen::executable(&program_ir)
+    let code = codegen::executable(&program_ir, &decls)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
 
     Ok(code)
