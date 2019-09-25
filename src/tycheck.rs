@@ -33,6 +33,14 @@ pub enum Error {
         expected: usize,
         actual: usize,
     },
+    #[snafu(display("cannot infer type, type annotations needed"))]
+    AmbiguousType {
+        //TODO: Add span info
+    },
+    #[snafu(display("mismatched types"))]
+    MismatchedTypes {
+        //TODO: Add type and span info
+    },
 }
 
 pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {

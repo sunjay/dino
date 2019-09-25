@@ -6,7 +6,14 @@ use maplit::hashset;
 use crate::resolve::{DeclMap, Primitives, TyId};
 use crate::{ast, ir};
 
-use super::{tyir, solve::TypeSubst, Error, UnresolvedName, UnresolvedType, UnresolvedFunction};
+use super::{
+    Error,
+    UnresolvedName,
+    UnresolvedType,
+    UnresolvedFunction,
+    tyir,
+    solve::{TypeSubst, collect_valid_types, apply_eq_constraints, build_substitution},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TyVar(usize);
@@ -14,23 +21,23 @@ pub struct TyVar(usize);
 /// A map of variable names to their type variables
 type LocalScope<'a> = HashMap<ast::Ident<'a>, TyVar>;
 
+/// Asserts that a given type variable must be one of the given types
 #[derive(Debug)]
-pub enum Constraint {
-    /// Asserts that a given type variable must be one of the given types
-    TyVarOneOf {
-        /// The type variable being constrained
-        ty_var: TyVar,
-        /// The set of types valid for this variable
-        valid_tys: HashSet<TyId>,
-    },
-
-    /// Asserts that the given type variables must correspond to the same set of types
-    TyVarEquals(TyVar, TyVar),
+pub struct TyVarValidTypes {
+    /// The type variable being constrained
+    pub ty_var: TyVar,
+    /// The set of types valid for this variable
+    pub valid_tys: HashSet<TyId>,
 }
+
+/// Asserts that the given type variables must correspond to the same set of types
+#[derive(Debug)]
+pub struct TyVarEquals(pub TyVar, pub TyVar);
 
 #[derive(Debug, Default)]
 pub struct ConstraintSet {
-    constraints: Vec<Constraint>,
+    ty_var_valid_types: Vec<TyVarValidTypes>,
+    ty_var_equals: Vec<TyVarEquals>,
     next_var: usize,
 }
 
@@ -61,7 +68,14 @@ impl ConstraintSet {
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
     pub fn solve(self) -> Result<TypeSubst, Error> {
-        TypeSubst::solve(self.constraints, (0..self.next_var).map(TyVar))
+        let Self {ty_var_valid_types, ty_var_equals, next_var} = self;
+
+        let mut valid_types = collect_valid_types(ty_var_valid_types);
+        apply_eq_constraints(&ty_var_equals, &mut valid_types);
+
+        //TODO: Resolve ambiguity {int, real} -> int, etc.
+        build_substitution(valid_types, (0..next_var).map(TyVar),
+            |_| None)
     }
 
     /// Generates a fresh type variable and returns it
@@ -130,7 +144,7 @@ impl ConstraintSet {
 
         // The type variable should match the annotated type
         let var_decl_ty = decls.type_id(ty).context(UnresolvedType {name: *ty})?;
-        self.constraints.push(Constraint::TyVarOneOf {
+        self.ty_var_valid_types.push(TyVarValidTypes {
             ty_var: var_decl_ty_var,
             valid_tys: hashset!{var_decl_ty},
         });
@@ -166,7 +180,7 @@ impl ConstraintSet {
             },
             &ast::Expr::IntegerLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.constraints.push(Constraint::TyVarOneOf {
+                self.ty_var_valid_types.push(TyVarValidTypes {
                     ty_var: return_type,
                     valid_tys: hashset!{prims.int(), prims.real()},
                 });
@@ -176,7 +190,9 @@ impl ConstraintSet {
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
                 let var_ty_var = local_scope.get(name).copied().context(UnresolvedName {name})?;
-                self.constraints.push(Constraint::TyVarEquals(var_ty_var, return_type));
+                self.ty_var_equals.push(
+                    TyVarEquals(var_ty_var, return_type)
+                );
 
                 Ok(tyir::Expr::Var(name, var_ty_var))
             },
@@ -207,7 +223,7 @@ impl ConstraintSet {
 
         // Assert that the return type of this expression is the same as the function return type
         let ir::FuncSig {return_type: func_return_type, params} = resolve_sig(decls, prims, sig)?;
-        self.constraints.push(Constraint::TyVarOneOf {
+        self.ty_var_valid_types.push(TyVarValidTypes {
             ty_var: return_type,
             valid_tys: hashset!{func_return_type},
         });
@@ -217,7 +233,7 @@ impl ConstraintSet {
 
             // Assert that each argument matches the corresponding parameter type
             let ir::FuncParam {name: _, ty: param_ty} = param;
-            self.constraints.push(Constraint::TyVarOneOf {
+            self.ty_var_valid_types.push(TyVarValidTypes {
                 ty_var: arg_ty_var,
                 valid_tys: hashset!{param_ty},
             });
