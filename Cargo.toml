@@ -14,6 +14,7 @@ structopt = "0.3"
 terminator = "0.1"
 maplit = "1.0"
 rayon = "1.2"
+rand = { version = "0.7", features = ["small_rng"] }
 
 [build-dependencies]
 build-helper = "0.1"

@@ -129,6 +129,11 @@ impl<'a> DeclMap<'a> {
         self.functions.get(name).map(|entry| &entry.func.sig)
     }
 
+    /// Returns true if the function is an extern function
+    pub fn is_func_extern(&self, name: &Ident<'a>) -> Option<bool> {
+        self.functions.get(name).map(|entry| &entry.func.is_extern).copied()
+    }
+
     /// Returns an iterator that goes through each declaration in the map
     pub fn functions(&self) -> impl Iterator<Item=&Function<'a>> {
         self.functions.iter().map(|entry| &entry.func)

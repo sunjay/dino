@@ -1,4 +1,4 @@
 fn main() {
-    let value: int = add_int(-34, 43);
+    let value = add_int(-34, 43);
     print_int(value);
 }

@@ -2,10 +2,51 @@
 
 use super::*;
 
+use std::collections::HashMap;
+
 use snafu::Snafu;
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use crate::ir;
 use crate::resolve::{TyId, ProgramDecls, DeclMap};
+
+/// Represents a single level of local scope and maps the names of variables to their mangled
+/// equivalent
+struct NameMangler {
+    rng: SmallRng,
+    mangled_names: HashMap<String, String>,
+}
+
+impl NameMangler {
+    pub fn new() -> Self {
+        Self {
+            // Want names to be deterministic across builds
+            rng: SmallRng::seed_from_u64(2194920),
+            mangled_names: HashMap::new(),
+        }
+    }
+
+    /// Mangles the given name, overwriting any mangled name previously stored for the same name
+    pub fn mangle_name(&mut self, name: &str) -> &str {
+        // Append some random bytes to the end of the name to differentiate this name from any
+        // other shadowed variables with the same name
+        //TODO: Base the random characters off of the name so they aren't the same in every function
+        let mut mangled_name = name.to_string();
+        mangled_name.reserve_exact(9);
+        mangled_name.push('_');
+        for _ in 0..8 {
+            mangled_name.push(self.rng.gen_range(b'a', b'z') as char);
+        }
+
+        self.mangled_names.insert(name.to_string(), mangled_name);
+        self.get(name)
+    }
+
+    /// Returns the mangled name of the given name or panics
+    pub fn get(&self, name: &str) -> &str {
+        self.mangled_names.get(name).expect("bug: unresolved name was allowed to get to codegen")
+    }
+}
 
 /// Code generation errors
 #[derive(Debug, Snafu)]
@@ -68,9 +109,11 @@ fn gen_function_body(
 ) -> Result<CFunctionBody, Error> {
     let ir::Block {stmts} = block;
 
+    let mut mangler = NameMangler::new();
+    // Statements must be traversed in order for this name mangling mechanism to work
     let stmts = stmts.iter().map(|stmt| Ok(match stmt {
-        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, mod_scope)?),
-        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, mod_scope)?),
+        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, &mut mangler, mod_scope)?),
+        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, &mangler, mod_scope)?),
     })).collect::<Result<_, _>>()?;
 
     Ok(CFunctionBody {stmts})
@@ -78,27 +121,47 @@ fn gen_function_body(
 
 fn gen_var_decl(
     var_decl: &ir::VarDecl,
+    mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CVarDecl, Error> {
     let ir::VarDecl {ident, ty, expr} = var_decl;
 
-    //TODO: Support variable shadowing by mangling name appropriately and then re-assigning everywhere
     Ok(CVarDecl {
-        mangled_name: ident.to_string(),
+        mangled_name: mangler.mangle_name(ident).to_string(),
         ty: lookup_type(ty, mod_scope),
-        init_expr: CInitializerExpr::Expr(gen_expr(expr, mod_scope)?)
+        init_expr: CInitializerExpr::Expr(gen_expr(expr, mangler, mod_scope)?)
     })
 }
 
 fn gen_expr(
     expr: &ir::Expr,
+    mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    //TODO: Determine function names to call by dispatching on the type
     Ok(match expr {
-        ir::Expr::Call(call, ty) => unimplemented!(),
-        &ir::Expr::IntegerLiteral(value, ty) => CExpr::IntegerLiteral(value),
-        &ir::Expr::Var(name, ty) => unimplemented!(),
+        ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, mangler, mod_scope)?),
+        &ir::Expr::IntegerLiteral(value, _) => CExpr::IntegerLiteral(value),
+        &ir::Expr::Var(name, _) => CExpr::Var(mangler.get(name).to_string()),
+    })
+}
+
+fn gen_call_expr(
+    expr: &ir::CallExpr,
+    mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CCallExpr, Error> {
+    let ir::CallExpr {func_name, args} = expr;
+
+    assert!(
+        mod_scope.is_func_extern(func_name).expect("bug: unknown function went through to codegen"),
+        "Only extern functions are currently supported",
+    );
+
+    Ok(CCallExpr {
+        func_name: func_name.to_string(),
+        args: args.iter()
+            .map(|expr| gen_expr(expr, mangler, mod_scope))
+            .collect::<Result<Vec<_>, _>>()?,
     })
 }
 
