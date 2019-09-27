@@ -10,7 +10,8 @@ use snafu::Snafu;
 use rayon::prelude::*;
 
 use crate::{ast, ir};
-use crate::resolve::{ProgramDecls, DeclMap, Primitives, TyId};
+use crate::resolve::{ProgramDecls, DeclMap, TyId};
+use crate::primitives::Primitives;
 
 use constraints::ConstraintSet;
 

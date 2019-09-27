@@ -3,7 +3,8 @@ use std::collections::{HashSet, HashMap};
 use snafu::OptionExt;
 use maplit::hashset;
 
-use crate::resolve::{DeclMap, Primitives, TyId};
+use crate::resolve::{DeclMap, TyId};
+use crate::primitives::Primitives;
 use crate::{ast, ir};
 
 use super::{

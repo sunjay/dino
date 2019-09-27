@@ -2,6 +2,7 @@ pub mod ast;
 pub mod codegen;
 pub mod ir;
 pub mod resolve;
+pub mod primitives;
 pub mod tycheck;
 pub mod runtime;
 pub mod dino_std;
@@ -15,7 +16,8 @@ use maplit::hashset;
 use snafu::{Snafu, ResultExt};
 
 use crate::codegen::CExecutableProgram;
-use crate::resolve::{TyId, Primitives};
+use crate::resolve::TyId;
+use crate::primitives::Primitives;
 
 #[derive(Debug, Snafu)]
 pub enum Error {

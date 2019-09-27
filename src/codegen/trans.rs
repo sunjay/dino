@@ -8,7 +8,7 @@ use snafu::Snafu;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use crate::ir;
-use crate::resolve::{TyId, ProgramDecls, DeclMap};
+use crate::resolve::{TyId, ProgramDecls, DeclMap, ExternType};
 
 /// Represents a single level of local scope and maps the names of variables to their mangled
 /// equivalent
@@ -128,7 +128,7 @@ fn gen_var_decl(
 
     Ok(CVarDecl {
         mangled_name: mangler.mangle_name(ident).to_string(),
-        ty: lookup_type(ty, mod_scope),
+        ty: lookup_type(ty, mod_scope).extern_name.clone(),
         init_expr: CInitializerExpr::Expr(gen_expr(expr, mangler, mod_scope)?)
     })
 }
@@ -140,7 +140,7 @@ fn gen_expr(
 ) -> Result<CExpr, Error> {
     Ok(match expr {
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, mangler, mod_scope)?),
-        &ir::Expr::IntegerLiteral(value, _) => CExpr::IntegerLiteral(value),
+        &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::Var(name, _) => CExpr::Var(mangler.get(name).to_string()),
     })
 }
@@ -165,8 +165,23 @@ fn gen_call_expr(
     })
 }
 
-fn lookup_type(ty: &TyId, mod_scope: &DeclMap) -> String {
-    mod_scope.type_extern_name(ty)
+fn gen_int_literal(
+    value: i64,
+    ty: TyId,
+    _mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let extern_type = lookup_type(&ty, mod_scope);
+    Ok(CExpr::Call(CCallExpr {
+        func_name: extern_type.int_literal_constructor
+            .as_ref()
+            .expect("bug: no integer literal constructor defined for type that type checked to int")
+            .clone(),
+        args: vec![CExpr::IntegerLiteral(value)],
+    }))
+}
+
+fn lookup_type<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> &'a ExternType {
+    mod_scope.type_extern_info(ty)
         .expect("bug: unknown type was allowed to get through to codegen")
-        .to_string()
 }

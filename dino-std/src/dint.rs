@@ -4,6 +4,12 @@
 #[repr(transparent)]
 pub struct DInt(i64);
 
+/// Creates a new DInt from an integer literal
+#[no_mangle]
+pub extern fn __dino__DInt_from_int_literal(value: i64) -> DInt {
+    DInt(value)
+}
+
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
 pub extern fn add_int(x: DInt, y: DInt) -> DInt {
