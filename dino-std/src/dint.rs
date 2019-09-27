@@ -26,6 +26,6 @@ pub extern fn sub_int(x: DInt, y: DInt) -> DInt {
 #[no_mangle]
 pub extern fn print_int(x: DInt) {
     unsafe {
-        super::printf(b"%lld\n" as *const u8, x.0);
+        super::printf(b"%lld\n\0" as *const u8, x.0);
     }
 }
