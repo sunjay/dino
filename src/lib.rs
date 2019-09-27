@@ -123,4 +123,53 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "value", ty: Ty::Named("real")},
         ],
     })).unwrap();
+
+    decls.insert_func(Function::new_extern("add_complex", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("complex")},
+            FuncParam {name: "right", ty: Ty::Named("complex")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("add_real_complex", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("real")},
+            FuncParam {name: "right", ty: Ty::Named("complex")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("add_complex_real", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("complex")},
+            FuncParam {name: "right", ty: Ty::Named("real")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("sub_complex", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("complex")},
+            FuncParam {name: "right", ty: Ty::Named("complex")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("sub_real_complex", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("real")},
+            FuncParam {name: "right", ty: Ty::Named("complex")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("sub_complex_real", FuncSig {
+        return_type: Ty::Named("complex"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("complex")},
+            FuncParam {name: "right", ty: Ty::Named("real")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("print_complex", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("complex")},
+        ],
+    })).unwrap();
 }

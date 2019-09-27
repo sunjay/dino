@@ -130,7 +130,7 @@ fn expr(input: Input) -> IResult<Expr> {
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
-        map(real_literal, Expr::RealLiteral),
+        real_or_complex_literal,
         map(ident, Expr::Var),
     ))(input)
 }
@@ -169,7 +169,7 @@ fn integer_literal(input: Input) -> IResult<i64> {
             opt(alt((char('+'), char('-')))),
             digit1,
             // Cannot end in something that would result in a real number literal
-            not(one_of(".eE")),
+            not(one_of(".eEjiJI")),
         ))),
         |val: Input| match val.parse_to() {
             Some(n) => Ok(n),
@@ -178,8 +178,15 @@ fn integer_literal(input: Input) -> IResult<i64> {
     )(input)
 }
 
-fn real_literal(input: Input) -> IResult<f64> {
-    double(input)
+fn real_or_complex_literal(input: Input) -> IResult<Expr> {
+    map(
+        tuple((double, opt(alt((char('j'), char('J'), char('i'), char('I')))))),
+        |(value, complex)| if complex.is_some() {
+            Expr::ComplexLiteral(value)
+        } else {
+            Expr::RealLiteral(value)
+        }
+    )(input)
 }
 
 /// Parses at least one whitespace character or comment

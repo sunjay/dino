@@ -1,0 +1,17 @@
+fn main() {
+    // These variables are of type `complex`. The `j` suffix denotes the imaginary part of the
+    // number. Real number literals are automatically treated as complex.
+    let value = add_complex(-34.3, 43.8j);
+    // Integer literals can be of type `complex`. This is NOT an implicit conversion, we are
+    // simply allowing integers to type check to `complex` if they are used in a context where
+    // that's OK.
+    let value2 = sub_complex(value, 2);
+    print_complex(value2);
+
+    // Here we are annotating the type even though we don't have to
+    //
+    // We are also demonstrating that i can be used as the suffix for complex numbers if you prefer
+    // that to j
+    let value3: complex = add_complex(3i, value2);
+    print_complex(value3);
+}

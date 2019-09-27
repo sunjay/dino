@@ -201,6 +201,15 @@ impl ConstraintSet {
 
                 Ok(tyir::Expr::RealLiteral(value, return_type))
             },
+            &ast::Expr::ComplexLiteral(value) => {
+                // Assert that the literal is one of the expected types for this kind of literal
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: return_type,
+                    valid_tys: hashset!{prims.complex()},
+                });
+
+                Ok(tyir::Expr::ComplexLiteral(value, return_type))
+            },
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
                 let var_ty_var = local_scope.get(name).copied().context(UnresolvedName {name})?;

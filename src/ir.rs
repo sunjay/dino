@@ -70,6 +70,7 @@ pub enum Expr<'a> {
     Call(CallExpr<'a>, TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
+    ComplexLiteral(f64, TyId),
     Var(Ident<'a>, TyId),
 }
 

@@ -86,6 +86,7 @@ pub enum Expr<'a> {
     Call(CallExpr<'a>, TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
+    ComplexLiteral(f64, TyVar),
     Var(Ident<'a>, TyVar),
 }
 
@@ -102,6 +103,9 @@ impl<'a> Expr<'a> {
             },
             RealLiteral(value, ty_var) => {
                 ir::Expr::RealLiteral(value, ty_var.apply_subst(subst))
+            },
+            ComplexLiteral(value, ty_var) => {
+                ir::Expr::ComplexLiteral(value, ty_var.apply_subst(subst))
             },
             Var(var_name, ty_var) => {
                 ir::Expr::Var(var_name, ty_var.apply_subst(subst))
