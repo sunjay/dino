@@ -192,6 +192,7 @@ impl fmt::Display for CInitializerExpr {
 pub enum CExpr {
     Call(CCallExpr),
     IntegerLiteral(i64),
+    DoubleLiteral(f64),
     Var(String),
 }
 
@@ -203,6 +204,7 @@ impl fmt::Display for CExpr {
             // Since DInt is 64-bits, we need the LL suffix or the literal is not 64-bits wide.
             // https://en.cppreference.com/w/c/language/integer_constant
             IntegerLiteral(value) => write!(f, "{}LL", value),
+            DoubleLiteral(value) => write!(f, "{}", value),
             Var(name) => write!(f, "{}", name),
         }
     }

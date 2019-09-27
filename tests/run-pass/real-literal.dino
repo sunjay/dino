@@ -1,0 +1,8 @@
+fn main() {
+    // These variables are of type `real`
+    let value = add_real(-34.3, 43.8);
+    // Integer literals can be of type `real`. This is NOT an implicit conversion, we are simply
+    // allowing integers to type check to `real` if they are used in a context where that's OK.
+    let value2 = sub_real(value, 2);
+    print_real(value2);
+}

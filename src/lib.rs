@@ -102,4 +102,25 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "value", ty: Ty::Named("int")},
         ],
     })).unwrap();
+
+    decls.insert_func(Function::new_extern("add_real", FuncSig {
+        return_type: Ty::Named("real"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("real")},
+            FuncParam {name: "right", ty: Ty::Named("real")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("sub_real", FuncSig {
+        return_type: Ty::Named("real"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("real")},
+            FuncParam {name: "right", ty: Ty::Named("real")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("print_real", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("real")},
+        ],
+    })).unwrap();
 }

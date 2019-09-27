@@ -141,6 +141,7 @@ fn gen_expr(
     Ok(match expr {
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, mangler, mod_scope)?),
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
+        &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::Var(name, _) => CExpr::Var(mangler.get(name).to_string()),
     })
 }
@@ -178,6 +179,22 @@ fn gen_int_literal(
             .expect("bug: no integer literal constructor defined for type that type checked to int")
             .clone(),
         args: vec![CExpr::IntegerLiteral(value)],
+    }))
+}
+
+fn gen_real_literal(
+    value: f64,
+    ty: TyId,
+    _mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let extern_type = lookup_type(&ty, mod_scope);
+    Ok(CExpr::Call(CCallExpr {
+        func_name: extern_type.real_literal_constructor
+            .as_ref()
+            .expect("bug: no real literal constructor defined for type that type checked to real")
+            .clone(),
+        args: vec![CExpr::DoubleLiteral(value)],
     }))
 }
 

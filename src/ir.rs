@@ -69,6 +69,7 @@ pub struct VarDecl<'a> {
 pub enum Expr<'a> {
     Call(CallExpr<'a>, TyId),
     IntegerLiteral(i64, TyId),
+    RealLiteral(f64, TyId),
     Var(Ident<'a>, TyId),
 }
 

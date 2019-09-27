@@ -187,10 +187,19 @@ impl ConstraintSet {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.ty_var_valid_types.push(TyVarValidTypes {
                     ty_var: return_type,
-                    valid_tys: hashset!{prims.int(), prims.real()},
+                    valid_tys: hashset!{prims.int(), prims.real(), prims.complex()},
                 });
 
                 Ok(tyir::Expr::IntegerLiteral(value, return_type))
+            },
+            &ast::Expr::RealLiteral(value) => {
+                // Assert that the literal is one of the expected types for this kind of literal
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: return_type,
+                    valid_tys: hashset!{prims.real(), prims.complex()},
+                });
+
+                Ok(tyir::Expr::RealLiteral(value, return_type))
             },
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable

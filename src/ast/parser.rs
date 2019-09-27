@@ -2,8 +2,9 @@ use snafu::Snafu;
 use nom::{
     error::VerboseError,
     branch::alt,
-    character::complete::{char, digit1},
-    combinator::{all_consuming, map, map_res, recognize, opt},
+    number::complete::double,
+    character::complete::{char, digit1, one_of},
+    combinator::{all_consuming, map, map_res, recognize, opt, not},
     bytes::complete::{tag, take_while1, take_while, take_till},
     sequence::{tuple, pair, delimited, terminated, preceded},
     multi::{many0, many1, separated_list},
@@ -126,7 +127,10 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 fn expr(input: Input) -> IResult<Expr> {
     alt((
         map(func_call, Expr::Call),
+        // Integer literal must be parsed before real_literal because that parser also accepts all
+        // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
+        map(real_literal, Expr::RealLiteral),
         map(ident, Expr::Var),
     ))(input)
 }
@@ -164,12 +168,18 @@ fn integer_literal(input: Input) -> IResult<i64> {
         recognize(tuple((
             opt(alt((char('+'), char('-')))),
             digit1,
+            // Cannot end in something that would result in a real number literal
+            not(one_of(".eE")),
         ))),
         |val: Input| match val.parse_to() {
             Some(n) => Ok(n),
             None => Err(nom::Err::Error(VerboseError::from_error_kind(input, ErrorKind::ParseTo))),
         },
     )(input)
+}
+
+fn real_literal(input: Input) -> IResult<f64> {
+    double(input)
 }
 
 /// Parses at least one whitespace character or comment

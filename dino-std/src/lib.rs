@@ -1,8 +1,10 @@
 #![no_std]
 
 mod dint;
+mod dreal;
 
 pub use dint::*;
+pub use dreal::*;
 
 // Needed to define #[panic_handler]
 #[allow(unused_imports)]
