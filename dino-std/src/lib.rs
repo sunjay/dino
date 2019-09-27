@@ -2,9 +2,11 @@
 
 mod dint;
 mod dreal;
+mod dcomplex;
 
 pub use dint::*;
 pub use dreal::*;
+pub use dcomplex::*;
 
 // Needed to define #[panic_handler]
 #[allow(unused_imports)]
