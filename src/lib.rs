@@ -89,6 +89,35 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
         ],
     })).unwrap();
 
+    decls.insert_func(Function::new_extern("int_gt", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("int_gte", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("int_lt", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("int_lte", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+
     decls.insert_func(Function::new_extern("add_int", FuncSig {
         return_type: Ty::Named("int"),
         params: vec![

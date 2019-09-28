@@ -14,7 +14,7 @@ pub struct DComplex {
 pub extern fn __dino__DComplex_from_int_literal(value: i64) -> DComplex {
     DComplex {
         real: dreal::__dino__DReal_from_int_literal(value),
-        imag: dreal::__dino__DReal_from_real_literal(0.0),
+        imag: DReal::zero(),
     }
 }
 
@@ -23,7 +23,7 @@ pub extern fn __dino__DComplex_from_int_literal(value: i64) -> DComplex {
 pub extern fn __dino__DComplex_from_real_literal(value: f64) -> DComplex {
     DComplex {
         real: dreal::__dino__DReal_from_real_literal(value),
-        imag: dreal::__dino__DReal_from_real_literal(0.0),
+        imag: DReal::zero(),
     }
 }
 
@@ -31,7 +31,7 @@ pub extern fn __dino__DComplex_from_real_literal(value: f64) -> DComplex {
 #[no_mangle]
 pub extern fn __dino__DComplex_from_complex_literal(value: f64) -> DComplex {
     DComplex {
-        real: dreal::__dino__DReal_from_real_literal(0.0),
+        real: DReal::zero(),
         imag: dreal::__dino__DReal_from_real_literal(value),
     }
 }

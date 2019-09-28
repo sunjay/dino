@@ -2,6 +2,12 @@
 #[repr(transparent)]
 pub struct DBool(bool);
 
+impl From<bool> for DBool {
+    fn from(x: bool) -> Self {
+        DBool(x)
+    }
+}
+
 /// Creates a new DBool from a boolean literal
 #[no_mangle]
 pub extern fn __dino__DBool_from_bool_literal(value: bool) -> DBool {

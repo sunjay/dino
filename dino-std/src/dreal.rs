@@ -4,6 +4,18 @@
 #[repr(transparent)]
 pub struct DReal(f64);
 
+impl From<f64> for DReal {
+    fn from(x: f64) -> Self {
+        DReal(x)
+    }
+}
+
+impl DReal {
+    pub fn zero() -> Self {
+        DReal(0.0)
+    }
+}
+
 /// Creates a new DReal from an integer literal
 #[no_mangle]
 pub extern fn __dino__DReal_from_int_literal(value: i64) -> DReal {
