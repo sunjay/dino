@@ -183,6 +183,7 @@ impl ConstraintSet {
                 self.append_call_expr(call, return_type, local_scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
+
             &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 let valid_tys = match type_hint {
@@ -195,6 +196,7 @@ impl ConstraintSet {
 
                 Ok(tyir::Expr::IntegerLiteral(value, return_type))
             },
+
             &ast::Expr::RealLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.ty_var_valid_types.push(TyVarValidTypes {
@@ -204,6 +206,7 @@ impl ConstraintSet {
 
                 Ok(tyir::Expr::RealLiteral(value, return_type))
             },
+
             &ast::Expr::ComplexLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.ty_var_valid_types.push(TyVarValidTypes {
@@ -213,6 +216,17 @@ impl ConstraintSet {
 
                 Ok(tyir::Expr::ComplexLiteral(value, return_type))
             },
+
+            &ast::Expr::BoolLiteral(value) => {
+                // Assert that the literal is one of the expected types for this kind of literal
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: return_type,
+                    valid_tys: hashset!{prims.bool()},
+                });
+
+                Ok(tyir::Expr::BoolLiteral(value, return_type))
+            },
+
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
                 let var_ty_var = local_scope.get(name).copied().context(UnresolvedName {name})?;

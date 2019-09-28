@@ -193,6 +193,7 @@ pub enum CExpr {
     Call(CCallExpr),
     IntegerLiteral(i64),
     DoubleLiteral(f64),
+    BoolLiteral(bool),
     Var(String),
 }
 
@@ -205,6 +206,7 @@ impl fmt::Display for CExpr {
             // https://en.cppreference.com/w/c/language/integer_constant
             IntegerLiteral(value) => write!(f, "{}LL", value),
             DoubleLiteral(value) => write!(f, "{}", value),
+            BoolLiteral(value) => write!(f, "{}", value),
             Var(name) => write!(f, "{}", name),
         }
     }

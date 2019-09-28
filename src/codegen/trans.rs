@@ -143,6 +143,7 @@ fn gen_expr(
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
+        &ir::Expr::BoolLiteral(value, ty) => gen_bool_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::Var(name, _) => CExpr::Var(mangler.get(name).to_string()),
     })
 }
@@ -212,6 +213,22 @@ fn gen_complex_literal(
             .expect("bug: no complex literal constructor defined for type that type checked to complex")
             .clone(),
         args: vec![CExpr::DoubleLiteral(value)],
+    }))
+}
+
+fn gen_bool_literal(
+    value: bool,
+    ty: TyId,
+    _mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let extern_type = lookup_type(&ty, mod_scope);
+    Ok(CExpr::Call(CCallExpr {
+        func_name: extern_type.bool_literal_constructor
+            .as_ref()
+            .expect("bug: no bool literal constructor defined for type that type checked to bool")
+            .clone(),
+        args: vec![CExpr::BoolLiteral(value)],
     }))
 }
 

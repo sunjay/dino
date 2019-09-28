@@ -82,6 +82,13 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
 
     let decls = &mut decls.top_level_decls;
 
+    decls.insert_func(Function::new_extern("print_bool", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("bool")},
+        ],
+    })).unwrap();
+
     decls.insert_func(Function::new_extern("add_int", FuncSig {
         return_type: Ty::Named("int"),
         params: vec![

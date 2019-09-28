@@ -1,9 +1,11 @@
 #![no_std]
 
+mod dbool;
 mod dint;
 mod dreal;
 mod dcomplex;
 
+pub use dbool::*;
 pub use dint::*;
 pub use dreal::*;
 pub use dcomplex::*;

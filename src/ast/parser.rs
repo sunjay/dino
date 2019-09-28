@@ -131,6 +131,7 @@ fn expr(input: Input) -> IResult<Expr> {
         // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
         real_or_complex_literal,
+        map(bool_literal, Expr::BoolLiteral),
         map(ident, Expr::Var),
     ))(input)
 }
@@ -194,6 +195,13 @@ fn real_or_complex_literal(input: Input) -> IResult<Expr> {
             Expr::RealLiteral(value)
         }
     )(input)
+}
+
+fn bool_literal(input: Input) -> IResult<bool> {
+    alt((
+        map(tag("true"), |_| true),
+        map(tag("false"), |_| false),
+    ))(input)
 }
 
 /// Parses at least one whitespace character or comment

@@ -99,6 +99,7 @@ pub enum Expr<'a> {
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),
+    BoolLiteral(bool),
     Var(Ident<'a>),
 }
 

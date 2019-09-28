@@ -1,0 +1,6 @@
+fn main() {
+    let x = true;
+    let y = false;
+    print_bool(x);
+    print_bool(y);
+}

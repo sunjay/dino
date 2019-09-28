@@ -71,6 +71,7 @@ pub enum Expr<'a> {
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
     ComplexLiteral(f64, TyId),
+    BoolLiteral(bool, TyId),
     Var(Ident<'a>, TyId),
 }
 
