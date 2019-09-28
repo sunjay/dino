@@ -1,0 +1,68 @@
+//! A dino program that reads a line of text as input, sorts it, and then outputs the
+//! sorted string.
+
+fn main() {
+    // Continue forever until the user quits the program with Ctrl-C
+    while true {
+        print_bstr(b"Enter some text: ");
+        let input = read_line();
+        let output = merge_sort(input);
+        print_bstr(output);
+    }
+}
+
+fn merge_sort(input: bstr) -> bstr {
+    let input_len = bstr_len(input);
+
+    // Base case: return a single character (or nothing)
+    if int_lte(input_len, 1) {
+        return input;
+    }
+
+    // Split the string and sort each half
+    let left = bstr_slice(input, 0, int_div(input_len, 2));
+    let right = bstr_slice(input, int_div(input_len, 2), input_len);
+
+    let sorted_left = merge_sort(left);
+    let sorted_right = merge_sort(right);
+
+    // Merge the two halves together to get a single sorted string
+    merge(sorted_left, sorted_right)
+}
+
+/// Merges two sorted strings into a single sorted string
+fn merge(left: bstr, right: bstr) -> bstr {
+    let left_len = bstr_len(left);
+    let right_len = bstr_len(right);
+
+    let left_i = 0;
+    let right_i = 0;
+
+    let output = b"";
+    // Continue until one of the strings runs out of characters
+    while bool_and(int_lt(left_i, left_len), int_lt(right_i, right_len)) {
+        let left_byte = bstr_get(left, left_i);
+        let right_byte = bstr_get(right, right_i);
+
+        if byte_lt(left_byte, right_byte) {
+            append_string_byte(output, left_byte);
+            left_i = add_int(left_i, 1);
+        } else { // byte_gte(left_byte, right_byte)
+            append_string_byte(output, right_byte);
+            right_i = add_int(right_i, 1);
+        }
+    }
+
+    // Append any remaining characters on to the string
+    // Only one of these loops will run
+    while int_lt(left_i, left_len) {
+        append_string_byte(output, bstr_get(left, left_i));
+        left_i = add_int(left_i, 1);
+    }
+    while int_lt(right_i, right_len) {
+        append_string_byte(output, bstr_get(right, right_i));
+        right_i = add_int(right_i, 1);
+    }
+
+    output
+}

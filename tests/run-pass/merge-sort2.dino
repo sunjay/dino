@@ -1,0 +1,68 @@
+//! A dino program that reads a line of text as input, sorts it, and then outputs the
+//! sorted string.
+
+fn main() {
+    // Continue forever until the user quits the program with Ctrl-C
+    while true {
+        print_bstr(b"Enter some text: ");
+        let input = read_line();
+        let output = merge_sort(input);
+        print_bstr(output);
+    }
+}
+
+fn merge_sort(input: bstr) -> bstr {
+    let input_len = bstr_len(input);
+
+    // Base case: return a single character (or nothing)
+    if input_len <= 1 {
+        return input;
+    }
+
+    // Split the string and sort each half
+    let left = input[0..(input_len / 2)];
+    let right = input[(input_len / 2)..input_len];
+
+    let sorted_left = merge_sort(left);
+    let sorted_right = merge_sort(right);
+
+    // Merge the two halves together to get a single sorted string
+    merge(sorted_left, sorted_right)
+}
+
+/// Merges two sorted strings into a single sorted string
+fn merge(left: bstr, right: bstr) -> bstr {
+    let left_len = bstr_len(left);
+    let right_len = bstr_len(right);
+
+    let left_i = 0;
+    let right_i = 0;
+
+    let output = b"";
+    // Continue until one of the strings runs out of characters
+    while left_i < left_len && right_i < right_len {
+        let left_byte = left[left_i];
+        let right_byte = right[right_i];
+
+        if left_byte < right_byte {
+            output += left_byte
+            left_i += 1;
+        } else { // left_byte >= right_byte
+            output += right_byte;
+            right_i += 1;
+        }
+    }
+
+    // Append any remaining characters on to the string
+    // Only one of these loops will run
+    while left_i < left_len {
+        output += left[left_i];
+        left_i += 1;
+    }
+    while right_i < right_len {
+        output += right[right_i];
+        right_i += 1;
+    }
+
+    output
+}
