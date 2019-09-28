@@ -1,0 +1,35 @@
+fn main() {
+    let cool_stuff: int = 8;
+    let other_value = add_int(95, cool_stuff);
+
+    check_value(other_value, true);
+    check_value(other_value, false);
+}
+
+// Function declarations can occur in any order.
+// There is no need for declaration before use.
+// The `-> ()` is also optional since a function's default return type is ()
+fn check_value(x: int, should_be_bigger: bool) -> () {
+    if should_be_bigger {
+        print_int(x);
+        check_bigger(x);
+    } else {
+        check_smaller(x);
+    }
+}
+
+fn check_bigger(y: int) {
+    if int_gt(y, 100int) {
+        print_bool(true);
+    } else {
+        print_bool(false);
+    }
+}
+
+fn check_smaller(y: int) {
+    if int_lt(y, 10) {
+        print_bool(true);
+    } else {
+        print_bool(false);
+    }
+}

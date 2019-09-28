@@ -59,7 +59,7 @@ pub struct FuncSig<'a> {
     pub params: Vec<FuncParam<'a>>
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FuncParam<'a> {
     pub name: Ident<'a>,
     pub ty: Ty<'a>,
@@ -89,7 +89,7 @@ pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
     /// The type of the variable (or None if the type is to be inferred)
-    pub ty: Option<Ident<'a>>,
+    pub ty: Option<Ty<'a>>,
     /// The expression for the value to assign to the variable
     pub expr: Expr<'a>,
 }
@@ -128,7 +128,7 @@ pub struct CallExpr<'a> {
     pub args: Vec<Expr<'a>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Ty<'a> {
     Unit,
     Named(Ident<'a>),

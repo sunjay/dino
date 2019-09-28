@@ -71,7 +71,9 @@ pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CE
 
     for decl in decls {
         match decl {
-            ir::Decl::Function(ir::Function {name, sig, body}) if *name == "main" => {
+            // A "main" function in the top level declarations of a program must be the entry point
+            ir::Decl::Function(func) if func.name == "main" => {
+                let ir::Function {sig, ..} = func;
                 // The main function must have no return type and no arguments
                 if sig.return_type != prims.unit() || !sig.params.is_empty() {
                     return Err(Error::InvalidEntryPointType);
@@ -82,14 +84,11 @@ pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CE
                 // a given module.
                 debug_assert!(entry_point.is_none(), "bug: allowed multiple entry points");
 
-                // Each function body should have a single name mangler
-                let mut mangler = NameMangler::new();
-                entry_point = Some(CEntryPoint {
-                    body: CFunctionBody {
-                        stmts: gen_block(body, &mut mangler, mod_scope)?,
-                    },
-                });
+                // Take the generated body and put it in the right struct
+                let CFunction {sig: _, body} = gen_function(func, mod_scope)?;
+                entry_point = Some(CEntryPoint {body});
             },
+
             ir::Decl::Function(func) => functions.push(gen_function(func, mod_scope)?),
         }
     }
@@ -106,22 +105,43 @@ fn gen_function(
     func: &ir::Function,
     mod_scope: &DeclMap,
 ) -> Result<CFunction, Error> {
-    unimplemented!() //TODO
+    let ir::Function {name, sig, body} = func;
+
+    // Each function body should have a single name mangler
+    let mut mangler = NameMangler::new();
+
+    let ir::FuncSig {return_type, params} = sig;
+    // Add each parameter to the mangler so it can be used from within the function body
+    let cparams = params.iter().map(|ir::FuncParam {name, ty}| CFunctionParam {
+        mangled_name: mangler.mangle_name(name).to_string(),
+        ty: lookup_type_name(ty, mod_scope),
+    }).collect();
+
+    let sig = CFunctionSignature {
+        //TODO: Mangle function names
+        mangled_name: name.to_string(),
+        return_type: lookup_type_name(return_type, mod_scope),
+        params: cparams,
+    };
+
+    let body = gen_block(body, &mut mangler, mod_scope)?;
+
+    Ok(CFunction {sig, body})
 }
 
 fn gen_block(
     block: &ir::Block,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
-) -> Result<Vec<CStmt>, Error> {
+) -> Result<CStmts, Error> {
     let ir::Block {stmts} = block;
 
     // Statements must be traversed in order for our name mangling mechanism to work
-    stmts.iter().map(|stmt| Ok(match stmt {
+    Ok(CStmts(stmts.iter().map(|stmt| Ok(match stmt {
         ir::Stmt::Cond(cond) => CStmt::Cond(gen_cond_stmt(cond, mangler, mod_scope)?),
         ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, mangler, mod_scope)?),
         ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, mangler, mod_scope)?),
-    })).collect()
+    })).collect::<Result<Vec<_>, _>>()?))
 }
 
 fn gen_cond_stmt(
@@ -155,7 +175,7 @@ fn gen_var_decl(
 
     Ok(CVarDecl {
         mangled_name: mangler.mangle_name(ident).to_string(),
-        ty: lookup_type(ty, mod_scope).extern_name.clone(),
+        ty: lookup_type_name(ty, mod_scope),
         init_expr: CInitializerExpr::Expr(gen_expr(expr, mangler, mod_scope)?)
     })
 }
@@ -185,13 +205,9 @@ fn gen_call_expr(
 ) -> Result<CCallExpr, Error> {
     let ir::CallExpr {func_name, args} = expr;
 
-    assert!(
-        mod_scope.is_func_extern(func_name).expect("bug: unknown function went through to codegen"),
-        "Only extern functions are currently supported",
-    );
-
     Ok(CCallExpr {
-        func_name: func_name.to_string(),
+        //TODO: Mangle function names
+        mangled_func_name: func_name.to_string(),
         args: args.iter()
             .map(|expr| gen_expr(expr, mangler, mod_scope))
             .collect::<Result<Vec<_>, _>>()?,
@@ -206,7 +222,8 @@ fn gen_int_literal(
 ) -> Result<CExpr, Error> {
     let extern_type = lookup_type(&ty, mod_scope);
     Ok(CExpr::Call(CCallExpr {
-        func_name: extern_type.int_literal_constructor
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.int_literal_constructor
             .as_ref()
             .expect("bug: no integer literal constructor defined for type that type checked to int")
             .clone(),
@@ -222,7 +239,8 @@ fn gen_real_literal(
 ) -> Result<CExpr, Error> {
     let extern_type = lookup_type(&ty, mod_scope);
     Ok(CExpr::Call(CCallExpr {
-        func_name: extern_type.real_literal_constructor
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.real_literal_constructor
             .as_ref()
             .expect("bug: no real literal constructor defined for type that type checked to real")
             .clone(),
@@ -238,7 +256,8 @@ fn gen_complex_literal(
 ) -> Result<CExpr, Error> {
     let extern_type = lookup_type(&ty, mod_scope);
     Ok(CExpr::Call(CCallExpr {
-        func_name: extern_type.complex_literal_constructor
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.complex_literal_constructor
             .as_ref()
             .expect("bug: no complex literal constructor defined for type that type checked to complex")
             .clone(),
@@ -254,12 +273,17 @@ fn gen_bool_literal(
 ) -> Result<CExpr, Error> {
     let extern_type = lookup_type(&ty, mod_scope);
     Ok(CExpr::Call(CCallExpr {
-        func_name: extern_type.bool_literal_constructor
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.bool_literal_constructor
             .as_ref()
             .expect("bug: no bool literal constructor defined for type that type checked to bool")
             .clone(),
         args: vec![CExpr::BoolLiteral(value)],
     }))
+}
+
+fn lookup_type_name<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> String {
+    lookup_type(ty, mod_scope).extern_name.clone()
 }
 
 fn lookup_type<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> &'a ExternType {

@@ -92,26 +92,8 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
-
-        let mut scope = Scope::default();
-
-        let ast::Function {name, sig, body, is_extern} = func;
-        assert!(!is_extern, "bug: attempt to generate type constraints for an extern function");
-
-        let ast::FuncSig {params, return_type: func_return_type} = sig;
-        assert!(params.is_empty(), "TODO: Support function parameters");
-        assert_eq!(func_return_type, &ast::Ty::Unit, "TODO: Only return type currently supported is '()'");
-
-        let return_type = constraints.fresh_type_var();
-        let sig = resolve_sig(decls, prims, sig)?;
-        let ir::FuncSig {return_type: func_return_type, ref params} = sig;
-        constraints.ty_var_valid_types.push(TyVarValidTypes {
-            ty_var: return_type,
-            valid_tys: hashset!{func_return_type},
-        });
-
-        let body = constraints.append_block(body, return_type, &mut scope, decls, prims)?;
-        Ok((constraints, tyir::Function {name, sig, body}))
+        let func = constraints.append_func(func, decls, prims)?;
+        Ok((constraints, func))
     }
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
@@ -133,6 +115,44 @@ impl ConstraintSet {
         self.next_var += 1;
         var
     }
+
+    /// Appends constrains for the given function
+    fn append_func<'a>(
+        &mut self,
+        func: &'a ast::Function<'a>,
+        decls: &'a DeclMap<'a>,
+        prims: &Primitives,
+    ) -> Result<tyir::Function<'a>, Error> {
+        let mut scope = Scope::default();
+
+        let ast::Function {name, sig, body, is_extern} = func;
+        assert!(!is_extern, "bug: attempt to type check an extern function");
+
+        let sig = resolve_sig(decls, prims, sig)?;
+        let ir::FuncSig {return_type: func_return_type, ref params} = sig;
+
+        // Assert that the function body block returns the expected type
+        let return_type = self.fresh_type_var();
+        self.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: return_type,
+            valid_tys: hashset!{func_return_type},
+        });
+
+        // Add each parameter as a local variable in the function scope
+        for &ir::FuncParam {name, ty} in params {
+            // Each parameter (and all its uses) must type check to the declared type
+            let param_ty_var = self.fresh_type_var();
+            self.ty_var_valid_types.push(TyVarValidTypes {
+                ty_var: param_ty_var,
+                valid_tys: hashset!{ty},
+            });
+            scope.add_variable(name, param_ty_var);
+        }
+
+        let body = self.append_block(body, return_type, &mut scope, decls, prims)?;
+        Ok(tyir::Function {name, sig, body})
+    }
+
 
     /// Appends constraints for the given block
     ///
@@ -191,6 +211,7 @@ impl ConstraintSet {
             //TODO: To support variable shadowing in this algorithm we just need to make sure that
             // statements are walked in order and that new variable declarations overwrite the
             // recorded types of previous declarations with a *fresh* variable.
+            // Need to be a bit careful to make sure this works with nested scopes.
             panic!("TODO: Variable shadowing is not supported yet.");
         }
 
@@ -199,7 +220,7 @@ impl ConstraintSet {
 
         // The type variable should match the annotated type (if any)
         if let Some(ty) = ty {
-            let var_decl_ty = decls.type_id(ty).context(UnresolvedType {name: *ty})?;
+            let var_decl_ty = lookup_type(decls, prims, ty)?;
             self.ty_var_valid_types.push(TyVarValidTypes {
                 ty_var: var_decl_ty_var,
                 valid_tys: hashset!{var_decl_ty},

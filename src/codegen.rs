@@ -53,7 +53,7 @@ impl fmt::Display for CExecutableProgram {
 /// Special wrapper for the entry point ("main") function. Deals with properly returning an integer
 #[derive(Debug)]
 pub struct CEntryPoint {
-    pub body: CFunctionBody,
+    pub body: CStmts,
 }
 
 impl fmt::Display for CEntryPoint {
@@ -72,7 +72,7 @@ impl fmt::Display for CEntryPoint {
 #[derive(Debug)]
 pub struct CFunction {
     pub sig: CFunctionSignature,
-    pub body: CFunctionBody,
+    pub body: CStmts,
 }
 
 impl fmt::Display for CFunction {
@@ -93,42 +93,52 @@ pub struct CFunctionSignature {
     pub mangled_name: String,
     /// The type returned from the function
     pub return_type: String,
+    /// The parameters of the function
+    pub params: Vec<CFunctionParam>,
 }
 
 impl fmt::Display for CFunctionSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {mangled_name, return_type} = self;
+        let Self {mangled_name, params, return_type} = self;
 
-        write!(f, "{} {}(", return_type, mangled_name)?;
+        //TODO: Use a better calling convention that allows every function to return void and uses
+        // out pointers instead
+        let return_type = if return_type.is_empty() { "void" } else { &return_type };
 
-        //TODO: Write out parameter types AND parameter names
-        // if param_types.is_empty() {
-        //     // Empty parentheses in C imply any number of arguments being allowed. Using `void`
-        //     // is more explicit.
-        //     write!(f, "void")?;
-        // } else {
-        //     // Need to avoid trailing commas
-        //     write!(f, "{}", param_types[0])?;
-        //
-        //     for param_ty in &param_types[1..] {
-        //         write!(f, ", {}", param_ty)?;
-        //     }
-        // }
-
-        write!(f, ")")?;
+        // Empty parentheses in C imply any number of arguments being allowed.
+        // Using `void` is more explicit
+        let params = Commas {values: params, empty: "void"};
+        write!(f, "{} {}({})", return_type, mangled_name, params)?;
 
         Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct CFunctionBody {
-    pub stmts: Vec<CStmt>,
+pub struct CFunctionParam {
+    /// The mangled name of the function parameter.
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub mangled_name: String,
+    /// The type of the function parameter
+    pub ty: String,
 }
 
-impl fmt::Display for CFunctionBody {
+impl fmt::Display for CFunctionParam {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {stmts} = self;
+        let Self {mangled_name, ty} = self;
+        writeln!(f, "{} {}", ty, mangled_name)
+    }
+}
+
+/// A list of C statements
+#[derive(Debug)]
+pub struct CStmts(pub Vec<CStmt>);
+
+impl fmt::Display for CStmts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CStmts(stmts) = self;
 
         for stmt in stmts {
             writeln!(f, "{}", stmt)?;
@@ -221,9 +231,9 @@ impl fmt::Display for CExpr {
 pub struct CCond {
     /// A list of (condition, body) that corresponds to:
     /// if cond1 { body1 } else if cond2 { body2 } ...
-    pub conds: Vec<(CExpr, Vec<CStmt>)>,
+    pub conds: Vec<(CExpr, CStmts)>,
     /// The `else` clause (if any)
-    pub else_body: Option<Vec<CStmt>>,
+    pub else_body: Option<CStmts>,
 }
 
 impl fmt::Display for CCond {
@@ -236,17 +246,13 @@ impl fmt::Display for CCond {
             }
 
             writeln!(f, "if ({}) {{", cond)?;
-            for stmt in body {
-                writeln!(f, "{}", stmt)?;
-            }
+            writeln!(f, "{}", body)?;
             writeln!(f, "}}")?;
         }
 
         if let Some(else_body) = else_body {
             writeln!(f, "else {{")?;
-            for stmt in else_body {
-                writeln!(f, "{}", stmt)?;
-            }
+            writeln!(f, "{}", else_body)?;
             writeln!(f, "}}")?;
         }
 
@@ -256,16 +262,19 @@ impl fmt::Display for CCond {
 
 #[derive(Debug)]
 pub struct CCallExpr {
-    /// The name of the function to call
-    pub func_name: String,
+    /// The mangled name of the function to call
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub mangled_func_name: String,
     /// The argument expressions to pass to the function
     pub args: Vec<CExpr>,
 }
 
 impl fmt::Display for CCallExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {func_name, args} = self;
-        write!(f, "{}({})", func_name, Commas {values: args, empty: ""})?;
+        let Self {mangled_func_name, args} = self;
+        write!(f, "{}({})", mangled_func_name, Commas {values: args, empty: ""})?;
         Ok(())
     }
 }

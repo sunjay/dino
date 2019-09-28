@@ -66,19 +66,30 @@ fn function(input: Input) -> IResult<Function> {
         ident,
         wsc0,
         function_params,
+        opt(tuple((wsc0, tag("->"), wsc0, ty))),
         wsc0,
         block,
-    )), |(_, _, name, _, _params, _, body)| Function {
+    )), |(_, _, name, _, params, return_ty, _, body)| Function {
         name,
-        sig: FuncSig {return_type: Ty::Unit, params: Vec::new()}, //TODO
+        sig: FuncSig {
+            // The default return type is unit
+            return_type: return_ty.map(|(_, _, _, ty)| ty).unwrap_or(Ty::Unit),
+            params,
+        },
         body,
         is_extern: false,
     })(input)
 }
 
-fn function_params(input: Input) -> IResult<()> {
-    //TODO: Actually parse params
-    delimited(char('('), |inp| Ok((inp, ())), char(')'))(input)
+fn function_params(input: Input) -> IResult<Vec<FuncParam>> {
+    delimited(
+        char('('),
+        comma_separated(map(
+            tuple((ident, wsc0, char(':'), wsc0, ty)),
+            |(name, _, _, _, ty)| FuncParam {name, ty},
+        )),
+        char(')'),
+    )(input)
 }
 
 fn block(input: Input) -> IResult<Block> {
@@ -110,7 +121,7 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
             opt(tuple((
                 char(':'),
                 wsc0,
-                ident,
+                ty,
                 wsc0,
             ))),
             char('='),
@@ -173,6 +184,13 @@ fn func_args(input: Input) -> IResult<Vec<Expr>> {
 fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
     where F: Fn(Input<'r>) -> IResult<T> {
     separated_list(tuple((wsc0, char(','), wsc0)), parser)
+}
+
+fn ty(input: Input) -> IResult<Ty> {
+    alt((
+        map(tag("()"), |_| Ty::Unit),
+        map(ident, |name| Ty::Named(name)),
+    ))(input)
 }
 
 fn ident(input: Input) -> IResult<&str> {
