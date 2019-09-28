@@ -3,6 +3,9 @@
 //! The "C" in the types either stands for "C" or for "codegen". The idea behind this module is to
 //! only use a very general subset of C that could allow us to potentially switch to a different
 //! code generation representation.
+//!
+//! All types here should directly map to concepts expressible in C. This is the last step in code
+//! generation and no further processing should be required in order to convert these types to C.
 
 mod trans;
 pub use trans::*;
@@ -137,6 +140,7 @@ impl fmt::Display for CFunctionBody {
 
 #[derive(Debug)]
 pub enum CStmt {
+    Cond(CCond),
     VarDecl(CVarDecl),
     /// An expression followed by a semi-colon is a statement
     Expr(CExpr),
@@ -146,6 +150,7 @@ impl fmt::Display for CStmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use CStmt::*;
         match self {
+            Cond(cond) => write!(f, "{}", cond),
             VarDecl(var_decl) => write!(f, "{}", var_decl),
             Expr(expr) => write!(f, "{};", expr),
         }
@@ -209,6 +214,43 @@ impl fmt::Display for CExpr {
             BoolLiteral(value) => write!(f, "{}", value),
             Var(name) => write!(f, "{}", name),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct CCond {
+    /// A list of (condition, body) that corresponds to:
+    /// if cond1 { body1 } else if cond2 { body2 } ...
+    pub conds: Vec<(CExpr, Vec<CStmt>)>,
+    /// The `else` clause (if any)
+    pub else_body: Option<Vec<CStmt>>,
+}
+
+impl fmt::Display for CCond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {conds, else_body} = self;
+
+        for (i, (cond, body)) in conds.iter().enumerate() {
+            if i != 0 {
+                write!(f, " else ")?;
+            }
+
+            writeln!(f, "if ({}) {{", cond)?;
+            for stmt in body {
+                writeln!(f, "{}", stmt)?;
+            }
+            writeln!(f, "}}")?;
+        }
+
+        if let Some(else_body) = else_body {
+            writeln!(f, "else {{")?;
+            for stmt in else_body {
+                writeln!(f, "{}", stmt)?;
+            }
+            writeln!(f, "}}")?;
+        }
+
+        Ok(())
     }
 }
 

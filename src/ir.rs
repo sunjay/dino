@@ -51,6 +51,7 @@ pub struct Block<'a> {
 
 #[derive(Debug)]
 pub enum Stmt<'a> {
+    Cond(Cond<'a>),
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
 }
@@ -67,12 +68,22 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Cond(Cond<'a>, TyId),
     Call(CallExpr<'a>, TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
     ComplexLiteral(f64, TyId),
     BoolLiteral(bool, TyId),
     Var(Ident<'a>, TyId),
+}
+
+#[derive(Debug)]
+pub struct Cond<'a> {
+    /// A list of (condition, body) that corresponds to:
+    /// if cond1 { body1 } else if cond2 { body2 } ...
+    pub conds: Vec<(Expr<'a>, Block<'a>)>,
+    /// The `else` clause (if any)
+    pub else_body: Option<Block<'a>>,
 }
 
 #[derive(Debug)]

@@ -44,6 +44,8 @@ impl<'a> Block<'a> {
 
 #[derive(Debug)]
 pub enum Stmt<'a> {
+    /// A conditional in statement position always has type unit
+    Cond(Cond<'a>),
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
 }
@@ -53,6 +55,7 @@ impl<'a> Stmt<'a> {
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Stmt<'a> {
         use Stmt::*;
         match self {
+            Cond(cond) => ir::Stmt::Cond(cond.apply_subst(subst)),
             VarDecl(decl) => ir::Stmt::VarDecl(decl.apply_subst(subst)),
             Expr(expr) => ir::Stmt::Expr(expr.apply_subst(subst)),
         }
@@ -83,6 +86,9 @@ impl<'a> VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    /// A conditional without an else clause always has type unit. With an else clause, the type of
+    /// the conditional can be anything.
+    Cond(Cond<'a>, TyVar),
     Call(CallExpr<'a>, TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
@@ -96,6 +102,10 @@ impl<'a> Expr<'a> {
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Expr<'a> {
         use Expr::*;
         match self {
+            Cond(cond, ty_var) => {
+                ir::Expr::Cond(cond.apply_subst(subst), ty_var.apply_subst(subst))
+            },
+
             Call(call, ty_var) => {
                 ir::Expr::Call(call.apply_subst(subst), ty_var.apply_subst(subst))
             },
@@ -119,6 +129,28 @@ impl<'a> Expr<'a> {
             Var(var_name, ty_var) => {
                 ir::Expr::Var(var_name, ty_var.apply_subst(subst))
             },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Cond<'a> {
+    /// A list of (condition, body) that corresponds to:
+    /// if cond1 { body1 } else if cond2 { body2 } ...
+    pub conds: Vec<(Expr<'a>, Block<'a>)>,
+    /// The `else` clause (if any)
+    pub else_body: Option<Block<'a>>,
+}
+
+impl<'a> Cond<'a> {
+    /// Applies the given substitution to this conditional and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::Cond<'a> {
+        let Cond {conds, else_body} = self;
+        ir::Cond {
+            conds: conds.into_iter().map(|(cond, body)| {
+                (cond.apply_subst(subst), body.apply_subst(subst))
+            }).collect(),
+            else_body: else_body.map(|else_body| else_body.apply_subst(subst)),
         }
     }
 }

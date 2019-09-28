@@ -22,6 +22,47 @@ pub struct TyVar(usize);
 /// A map of variable names to their type variables
 type LocalScope<'a> = HashMap<ast::Ident<'a>, TyVar>;
 
+/// A linked list of scopes, used to create an ad-hoc stack where only the "top" is mutable
+///
+/// `'a` is the lifetime of the things stored in the scope. `'s` is the lifetime of the parent scope.
+#[derive(Debug, Default)]
+struct Scope<'a, 's> {
+    /// The current scope, it can be modified freely
+    pub current: LocalScope<'a>,
+    /// The next upper level of scope (if any)
+    pub parent: Option<&'s Scope<'a, 's>>,
+}
+
+impl<'a, 's> Scope<'a, 's> {
+    /// Create a new mutable child scope
+    pub fn child_scope(&'s self) -> Self {
+        Self {
+            current: LocalScope::default(),
+            parent: Some(self),
+        }
+    }
+
+    /// Returns true if the given variable name is in scope at the current level, or in any parent
+    /// scope.
+    pub fn contains(&self, name: &ast::Ident<'a>) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// Returns the type variable associated with a given variable name
+    pub fn get(&self, name: ast::Ident<'a>) -> Option<TyVar> {
+        self.current.get(name).copied().or_else(|| match self.parent {
+            Some(parent) => parent.get(name),
+            None => None,
+        })
+    }
+
+    /// Adds a new variable *only* to the current scope and associates it with the given type
+    /// variable
+    pub fn add_variable(&mut self, name: ast::Ident<'a>, ty_var: TyVar) {
+        self.current.insert(name, ty_var);
+    }
+}
+
 /// Asserts that a given type variable must be one of the given types
 #[derive(Debug)]
 pub struct TyVarValidTypes {
@@ -52,18 +93,24 @@ impl ConstraintSet {
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
 
-        //TODO: Figure out how to support nested scopes within a function (e.g. any curly braces)
-        let mut local_scope = LocalScope::new();
+        let mut scope = Scope::default();
 
         let ast::Function {name, sig, body, is_extern} = func;
         assert!(!is_extern, "bug: attempt to generate type constraints for an extern function");
 
-        let ast::FuncSig {params, return_type} = sig;
+        let ast::FuncSig {params, return_type: func_return_type} = sig;
         assert!(params.is_empty(), "TODO: Support function parameters");
-        assert_eq!(return_type, &ast::Ty::Unit, "TODO: Only return type currently supported is '()'");
+        assert_eq!(func_return_type, &ast::Ty::Unit, "TODO: Only return type currently supported is '()'");
 
+        let return_type = constraints.fresh_type_var();
         let sig = resolve_sig(decls, prims, sig)?;
-        let body = constraints.append_block(body, &mut local_scope, decls, prims)?;
+        let ir::FuncSig {return_type: func_return_type, ref params} = sig;
+        constraints.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: return_type,
+            valid_tys: hashset!{func_return_type},
+        });
+
+        let body = constraints.append_block(body, return_type, &mut scope, decls, prims)?;
         Ok((constraints, tyir::Function {name, sig, body}))
     }
 
@@ -77,7 +124,6 @@ impl ConstraintSet {
         let mut valid_types = collect_valid_types(ty_var_valid_types);
         apply_eq_constraints(&ty_var_equals, &mut valid_types);
 
-        //TODO: Resolve ambiguity {int, real} -> int, etc.
         build_substitution(valid_types, (0..next_var).map(TyVar), resolve_ambiguity)
     }
 
@@ -89,53 +135,59 @@ impl ConstraintSet {
     }
 
     /// Appends constraints for the given block
-    fn append_block<'a>(
+    ///
+    /// IMPORTANT: The scope passed to this function should pretty much *always* be a new scope or
+    /// a new child scope (created with `child_scope`)
+    fn append_block<'a, 's>(
         &mut self,
         block: &'a ast::Block<'a>,
-        local_scope: &mut LocalScope<'a>,
+        return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Block<'a>, Error> {
         let ast::Block {stmts} = block;
         Ok(tyir::Block {
             stmts: stmts.iter()
-                .map(|stmt| self.append_stmt(stmt, local_scope, decls, prims))
+                .map(|stmt| self.append_stmt(stmt, scope, decls, prims))
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
 
     /// Appends constraints for the given statement
-    fn append_stmt<'a>(
+    fn append_stmt<'a, 's>(
         &mut self,
         stmt: &'a ast::Stmt<'a>,
-        local_scope: &mut LocalScope<'a>,
+        scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Stmt<'a>, Error> {
         match stmt {
-            ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, local_scope, decls, prims)
+            ast::Stmt::Cond(cond) => self.append_cond(cond, None, scope, decls, prims)
+                .map(tyir::Stmt::Cond),
+            ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, scope, decls, prims)
                 .map(tyir::Stmt::VarDecl),
             ast::Stmt::Expr(expr) => {
                 // Generate a fresh variable that is never used after this point. By not using the
                 // type variable, we indicate that the type of this expression does not matter.
                 // Statement types do not matter because statements end with semicolons.
                 let ty_var = self.fresh_type_var();
-                self.append_expr(expr, ty_var, local_scope, decls, prims).map(tyir::Stmt::Expr)
+                self.append_expr(expr, ty_var, scope, decls, prims).map(tyir::Stmt::Expr)
             },
         }
     }
 
     /// Appends constraints for the given variable declaration
-    fn append_var_decl<'a>(
+    fn append_var_decl<'a, 's>(
         &mut self,
         var_decl: &'a ast::VarDecl<'a>,
-        local_scope: &mut LocalScope<'a>,
+        scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::VarDecl<'a>, Error> {
         let ast::VarDecl {ident, ty, expr} = var_decl;
 
-        if local_scope.contains_key(ident) {
+        if scope.contains(ident) {
             //TODO: To support variable shadowing in this algorithm we just need to make sure that
             // statements are walked in order and that new variable declarations overwrite the
             // recorded types of previous declarations with a *fresh* variable.
@@ -157,10 +209,10 @@ impl ConstraintSet {
         // Must append expr BEFORE updating local scope with the new type variable or else variable
         // shadowing will not work. Semantically, this variable does not come into scope until
         // *after* the variable expression has been evaluated.
-        let expr = self.append_expr(expr, var_decl_ty_var, local_scope, decls, prims)?;
+        let expr = self.append_expr(expr, var_decl_ty_var, scope, decls, prims)?;
 
         // Associate the variable name with its type variable
-        local_scope.insert(ident, var_decl_ty_var);
+        scope.add_variable(ident, var_decl_ty_var);
 
         Ok(tyir::VarDecl {
             ident,
@@ -170,17 +222,22 @@ impl ConstraintSet {
     }
 
     /// Appends constraints for the given expression
-    fn append_expr<'a>(
+    fn append_expr<'a, 's>(
         &mut self,
         expr: &'a ast::Expr<'a>,
         return_type: TyVar,
-        local_scope: &LocalScope<'a>,
+        scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
+            ast::Expr::Cond(cond) => {
+                self.append_cond(cond, Some(return_type), scope, decls, prims)
+                    .map(|cond| tyir::Expr::Cond(cond, return_type))
+            },
+
             ast::Expr::Call(call) => {
-                self.append_call_expr(call, return_type, local_scope, decls, prims)
+                self.append_call_expr(call, return_type, scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
@@ -229,7 +286,7 @@ impl ConstraintSet {
 
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
-                let var_ty_var = local_scope.get(name).copied().context(UnresolvedName {name})?;
+                let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
                 self.ty_var_equals.push(
                     TyVarEquals(var_ty_var, return_type)
                 );
@@ -239,12 +296,62 @@ impl ConstraintSet {
         }
     }
 
+    /// Appends constraints for the given conditional
+    ///
+    /// If return_type is None, the conditional must result in a unit type
+    fn append_cond<'a, 's>(
+        &mut self,
+        cond: &'a ast::Cond<'a>,
+        return_type: Option<TyVar>,
+        scope: &mut Scope<'a, 's>,
+        decls: &DeclMap,
+        prims: &Primitives,
+    ) -> Result<tyir::Cond<'a>, Error> {
+        let ast::Cond {conds, else_body} = cond;
+
+        let no_return_type = return_type.is_none();
+        // Create a fresh type variable if none was provided
+        let return_type = return_type.unwrap_or_else(|| self.fresh_type_var());
+
+        // If the condition is used as a statement (no return type) or if there is no else clause,
+        // the if condition must return unit
+        if no_return_type || cond.else_body.is_none() {
+            self.ty_var_valid_types.push(TyVarValidTypes {
+                ty_var: return_type,
+                valid_tys: hashset!{prims.unit()},
+            });
+        }
+
+        let conds = conds.iter().map(|(cond, body)| {
+            // Every condition must evaluate to a value of type bool
+            let cond_var = self.fresh_type_var();
+            self.ty_var_valid_types.push(TyVarValidTypes {
+                ty_var: cond_var,
+                valid_tys: hashset!{prims.bool()},
+            });
+            let cond = self.append_expr(cond, cond_var, scope, decls, prims)?;
+
+            // The body of every condition must evaluate to the same type
+            let mut child_scope = scope.child_scope();
+            let body = self.append_block(body, return_type, &mut child_scope, decls, prims)?;
+
+            Ok((cond, body))
+        }).collect::<Result<Vec<_>, _>>()?;
+
+        // The body of the else clause must evaluate to the same type as the other condition bodies
+        let else_body = else_body.as_ref().map(|else_body| {
+            let mut child_scope = scope.child_scope();
+            self.append_block(else_body, return_type, &mut child_scope, decls, prims)
+        }).transpose()?;
+
+        Ok(tyir::Cond {conds, else_body})
+    }
     /// Appends constraints for the given function call
-    fn append_call_expr<'a>(
+    fn append_call_expr<'a, 's>(
         &mut self,
         call: &'a ast::CallExpr<'a>,
         return_type: TyVar,
-        local_scope: &LocalScope<'a>,
+        scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::CallExpr<'a>, Error> {
@@ -278,7 +385,7 @@ impl ConstraintSet {
                 valid_tys: hashset!{param_ty},
             });
 
-            self.append_expr(arg, arg_ty_var, local_scope, decls, prims)
+            self.append_expr(arg, arg_ty_var, scope, decls, prims)
         }).collect::<Result<Vec<_>, _>>()?;
 
         Ok(tyir::CallExpr {

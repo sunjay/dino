@@ -65,7 +65,7 @@ pub struct FuncParam<'a> {
     pub ty: Ty<'a>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
 }
@@ -77,13 +77,14 @@ impl<'a> Block<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt<'a> {
+    Cond(Cond<'a>),
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
@@ -95,12 +96,22 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
+    Cond(Cond<'a>),
     Call(CallExpr<'a>),
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),
     BoolLiteral(bool),
     Var(Ident<'a>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cond<'a> {
+    /// A list of (condition, body) that corresponds to:
+    /// if cond1 { body1 } else if cond2 { body2 } ...
+    pub conds: Vec<(Expr<'a>, Block<'a>)>,
+    /// The `else` clause (if any)
+    pub else_body: Option<Block<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

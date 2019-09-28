@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use snafu::Snafu;
 use nom::{
     error::VerboseError,
@@ -92,6 +94,7 @@ fn block(input: Input) -> IResult<Block> {
 
 fn stmt(input: Input) -> IResult<Stmt> {
     alt((
+        map(cond, Stmt::Cond),
         map(var_decl, Stmt::VarDecl),
         map(tuple((expr, wsc0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
     ))(input)
@@ -126,6 +129,7 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 
 fn expr(input: Input) -> IResult<Expr> {
     alt((
+        map(cond, Expr::Cond),
         map(func_call, Expr::Call),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
@@ -134,6 +138,25 @@ fn expr(input: Input) -> IResult<Expr> {
         map(bool_literal, Expr::BoolLiteral),
         map(ident, Expr::Var),
     ))(input)
+}
+
+fn cond(input: Input) -> IResult<Cond> {
+    map(
+        tuple((
+            tuple((tag("if"), wsc1, expr, wsc0, block)),
+            many0(tuple((wsc0, tag("else"), wsc1, tag("if"), wsc1, expr, wsc0, block))),
+            opt(tuple((wsc0, tag("else"), wsc0, block))),
+        )),
+        |(top_if, else_ifs, else_body)| {
+            let (_, _, top_if_cond, _, top_if_body) = top_if;
+            let else_ifs = else_ifs.into_iter()
+                .map(|(_, _, _, _, _, else_if_cond, _, else_if_body)| (else_if_cond, else_if_body));
+            let else_body = else_body.map(|(_, _, _, else_body)| else_body);
+
+            let conds = once((top_if_cond, top_if_body)).chain(else_ifs).collect();
+            Cond {conds, else_body}
+        },
+    )(input)
 }
 
 fn func_call(input: Input) -> IResult<CallExpr> {

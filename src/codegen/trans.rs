@@ -31,6 +31,8 @@ impl NameMangler {
         // Append some random bytes to the end of the name to differentiate this name from any
         // other shadowed variables with the same name
         //TODO: Base the random characters off of the name so they aren't the same in every function
+        //TODO: Make it impossible for there to be collisions (currently collisions are unlikely,
+        // but still entirely possible)
         let mut mangled_name = name.to_string();
         mangled_name.reserve_exact(9);
         mangled_name.push('_');
@@ -80,8 +82,12 @@ pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CE
                 // a given module.
                 debug_assert!(entry_point.is_none(), "bug: allowed multiple entry points");
 
+                // Each function body should have a single name mangler
+                let mut mangler = NameMangler::new();
                 entry_point = Some(CEntryPoint {
-                    body: gen_function_body(body, mod_scope)?,
+                    body: CFunctionBody {
+                        stmts: gen_block(body, &mut mangler, mod_scope)?,
+                    },
                 });
             },
             ir::Decl::Function(func) => functions.push(gen_function(func, mod_scope)?),
@@ -103,20 +109,41 @@ fn gen_function(
     unimplemented!() //TODO
 }
 
-fn gen_function_body(
+fn gen_block(
     block: &ir::Block,
+    mangler: &mut NameMangler,
     mod_scope: &DeclMap,
-) -> Result<CFunctionBody, Error> {
+) -> Result<Vec<CStmt>, Error> {
     let ir::Block {stmts} = block;
 
-    let mut mangler = NameMangler::new();
-    // Statements must be traversed in order for this name mangling mechanism to work
-    let stmts = stmts.iter().map(|stmt| Ok(match stmt {
-        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, &mut mangler, mod_scope)?),
-        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, &mangler, mod_scope)?),
-    })).collect::<Result<_, _>>()?;
+    // Statements must be traversed in order for our name mangling mechanism to work
+    stmts.iter().map(|stmt| Ok(match stmt {
+        ir::Stmt::Cond(cond) => CStmt::Cond(gen_cond_stmt(cond, mangler, mod_scope)?),
+        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, mangler, mod_scope)?),
+        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, mangler, mod_scope)?),
+    })).collect()
+}
 
-    Ok(CFunctionBody {stmts})
+fn gen_cond_stmt(
+    cond: &ir::Cond,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CCond, Error> {
+    let ir::Cond {conds, else_body} = cond;
+
+    // Note that there is no need to generate a new mangler for each block because C does not
+    // support variable shadowing. A single scope is sufficient.
+
+    Ok(CCond {
+        conds: conds.iter().map(|(cond, body)| {
+            let cond = gen_expr(cond, mangler, mod_scope)?;
+            let body = gen_block(body, mangler, mod_scope)?;
+            Ok((cond, body))
+        }).collect::<Result<Vec<_>, _>>()?,
+        else_body: else_body.as_ref()
+            .map(|else_body| gen_block(else_body, mangler, mod_scope))
+            .transpose()?,
+    })
 }
 
 fn gen_var_decl(
@@ -135,10 +162,13 @@ fn gen_var_decl(
 
 fn gen_expr(
     expr: &ir::Expr,
-    mangler: &NameMangler,
+    mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
     Ok(match expr {
+        //TODO: Cond will need more complex code generation (e.g. fresh temporary variables)
+        //TODO: Probably want to do this by allowing gen_expr to append to &mut Vec<CStmt>
+        ir::Expr::Cond(cond, _) => unimplemented!(),
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, mangler, mod_scope)?),
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
@@ -150,7 +180,7 @@ fn gen_expr(
 
 fn gen_call_expr(
     expr: &ir::CallExpr,
-    mangler: &NameMangler,
+    mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CCallExpr, Error> {
     let ir::CallExpr {func_name, args} = expr;

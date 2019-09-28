@@ -1,6 +1,16 @@
 fn main() {
-    let x = true;
-    let y = false;
-    print_bool(x);
-    print_bool(y);
+    let x = false;
+    let y = true;
+    print_int(1);
+    if x {
+        print_int(2);
+    } else if y {
+        if true {
+            print_int(3);
+        }
+        print_int(4);
+    } else {
+        print_int(5);
+    }
+    print_int(6);
 }
