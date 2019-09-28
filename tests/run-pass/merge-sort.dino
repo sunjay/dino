@@ -20,8 +20,8 @@ fn merge_sort(input: bstr) -> bstr {
     }
 
     // Split the string and sort each half
-    let left = bstr_slice(input, 0, int_div(input_len, 2));
-    let right = bstr_slice(input, int_div(input_len, 2), input_len);
+    let left = bstr_slice(input, 0, div_int(input_len, 2));
+    let right = bstr_slice(input, div_int(input_len, 2), input_len);
 
     let sorted_left = merge_sort(left);
     let sorted_right = merge_sort(right);
