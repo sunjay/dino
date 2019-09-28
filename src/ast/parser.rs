@@ -160,19 +160,26 @@ fn ident(input: Input) -> IResult<&str> {
     ))(input)
 }
 
-fn integer_literal(input: Input) -> IResult<i64> {
+fn integer_literal(input: Input) -> IResult<IntegerLiteral> {
     use nom::ParseTo;
     use nom::error::{ParseError, ErrorKind};
 
     map_res(
-        recognize(tuple((
-            opt(alt((char('+'), char('-')))),
-            digit1,
-            // Cannot end in something that would result in a real number literal
-            not(one_of(".eEjiJI")),
-        ))),
-        |val: Input| match val.parse_to() {
-            Some(n) => Ok(n),
+        tuple((
+            recognize(tuple((
+                opt(alt((char('+'), char('-')))),
+                digit1,
+                // Cannot end in something that would result in a real number literal
+                not(one_of(".eEjJI")),
+                // 'i' is a special case because 'i' isn't allowed, but "int" is fine
+                //
+                // This reads as "you're not allowed i when it isn't followed by 'nt'"
+                not(pair(char('i'), not(tag("nt")))),
+            ))),
+            opt(alt((tag("int"), tag("real")))),
+        )),
+        |(val, type_hint): (Input, _)| match val.parse_to() {
+            Some(value) => Ok(IntegerLiteral {value, type_hint}),
             None => Err(nom::Err::Error(VerboseError::from_error_kind(input, ErrorKind::ParseTo))),
         },
     )(input)

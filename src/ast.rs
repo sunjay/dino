@@ -96,10 +96,18 @@ pub struct VarDecl<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
     Call(CallExpr<'a>),
-    IntegerLiteral(i64),
+    IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),
     Var(Ident<'a>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntegerLiteral<'a> {
+    pub value: i64,
+    /// You can append "int" or "real" to help disambiguate the literal
+    /// e.g. 132int or 32real
+    pub type_hint: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

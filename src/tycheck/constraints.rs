@@ -183,12 +183,15 @@ impl ConstraintSet {
                 self.append_call_expr(call, return_type, local_scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
-            &ast::Expr::IntegerLiteral(value) => {
+            &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.ty_var_valid_types.push(TyVarValidTypes {
-                    ty_var: return_type,
-                    valid_tys: hashset!{prims.int(), prims.real(), prims.complex()},
-                });
+                let valid_tys = match type_hint {
+                    Some(ty_name) => hashset!{decls.type_id(&ty_name)
+                        .expect("bug: parser allowed an invalid integer type hint")},
+                    // Integer literals can be used to create instances of all these types
+                    None => hashset!{prims.int(), prims.real(), prims.complex()}
+                };
+                self.ty_var_valid_types.push(TyVarValidTypes {ty_var: return_type, valid_tys});
 
                 Ok(tyir::Expr::IntegerLiteral(value, return_type))
             },
