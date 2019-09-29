@@ -166,11 +166,26 @@ impl ConstraintSet {
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Block<'a>, Error> {
-        let ast::Block {stmts} = block;
+        let ast::Block {stmts, ret} = block;
+
         Ok(tyir::Block {
             stmts: stmts.iter()
                 .map(|stmt| self.append_stmt(stmt, scope, decls, prims))
                 .collect::<Result<Vec<_>, _>>()?,
+            ret: match ret {
+                // The returned expression must have the same type as the block
+                Some(ret) => Some(self.append_expr(ret, return_type, scope, decls, prims)?),
+
+                None => {
+                    // No return expression, so the return type of this block should be unit
+                    self.ty_var_valid_types.push(TyVarValidTypes {
+                        ty_var: return_type,
+                        valid_tys: hashset!{prims.unit()},
+                    });
+
+                    None
+                },
+            },
         })
     }
 
@@ -254,7 +269,7 @@ impl ConstraintSet {
         match expr {
             ast::Expr::Cond(cond) => {
                 self.append_cond(cond, Some(return_type), scope, decls, prims)
-                    .map(|cond| tyir::Expr::Cond(cond, return_type))
+                    .map(|cond| tyir::Expr::Cond(Box::new(cond), return_type))
             },
 
             ast::Expr::Call(call) => {
@@ -367,6 +382,7 @@ impl ConstraintSet {
 
         Ok(tyir::Cond {conds, else_body})
     }
+
     /// Appends constraints for the given function call
     fn append_call_expr<'a, 's>(
         &mut self,

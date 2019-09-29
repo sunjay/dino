@@ -15,6 +15,7 @@ use crate::resolve::{TyId, ProgramDecls, DeclMap, ExternType};
 struct NameMangler {
     rng: SmallRng,
     mangled_names: HashMap<String, String>,
+    next_fresh_name: u64,
 }
 
 impl NameMangler {
@@ -23,6 +24,7 @@ impl NameMangler {
             // Want names to be deterministic across builds
             rng: SmallRng::seed_from_u64(2194920),
             mangled_names: HashMap::new(),
+            next_fresh_name: 0,
         }
     }
 
@@ -42,6 +44,19 @@ impl NameMangler {
 
         self.mangled_names.insert(name.to_string(), mangled_name);
         self.get(name)
+    }
+
+    /// Generates a fresh mangled name that is not associated with any program variable name
+    pub fn fresh_mangled_name(&mut self) -> String {
+        //TODO: Actually ensure that this name is unique
+        let mut mangled_name = format!("var{}_", self.next_fresh_name);
+        self.next_fresh_name += 1;
+        mangled_name.reserve_exact(8);
+        for _ in 0..8 {
+            mangled_name.push(self.rng.gen_range(b'a', b'z') as char);
+        }
+
+        mangled_name
     }
 
     /// Returns the mangled name of the given name or panics
@@ -124,28 +139,68 @@ fn gen_function(
         params: cparams,
     };
 
-    let body = gen_block(body, &mut mangler, mod_scope)?;
+    let body = gen_block(body, None, &mut mangler, mod_scope)?;
 
     Ok(CFunction {sig, body})
 }
 
+/// Generates code for a block. If `result_var_mangled_name` is None, the final expression of the
+/// block (if any) will be returned. Otherwise, if that parameter is provided, the final expression
+/// will be assigned to that variable.
 fn gen_block(
     block: &ir::Block,
+    result_var_mangled_name: Option<String>,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CStmts, Error> {
-    let ir::Block {stmts} = block;
+    let ir::Block {stmts, ret} = block;
+
+    let mut cstmts = Vec::new();
 
     // Statements must be traversed in order for our name mangling mechanism to work
-    Ok(CStmts(stmts.iter().map(|stmt| Ok(match stmt {
-        ir::Stmt::Cond(cond) => CStmt::Cond(gen_cond_stmt(cond, mangler, mod_scope)?),
-        ir::Stmt::VarDecl(var_decl) => CStmt::VarDecl(gen_var_decl(var_decl, mangler, mod_scope)?),
-        ir::Stmt::Expr(expr) => CStmt::Expr(gen_expr(expr, mangler, mod_scope)?),
-    })).collect::<Result<Vec<_>, _>>()?))
+    for stmt in stmts {
+        let gen_stmt = match stmt {
+            ir::Stmt::Cond(cond) => {
+                // Conditionals in statement position can't assign to the `result_var_mangled_name`
+                // even if one is provided. Only the final expression of the block should assign
+                // to that.
+                CStmt::Cond(gen_cond_stmt(cond, &mut cstmts, None, mangler, mod_scope)?)
+            },
+            ir::Stmt::VarDecl(var_decl) => {
+                CStmt::VarDecl(gen_var_decl(var_decl, &mut cstmts, mangler, mod_scope)?)
+            },
+            ir::Stmt::Expr(expr) => {
+                CStmt::Expr(gen_expr(expr, &mut cstmts, mangler, mod_scope)?)
+            },
+        };
+        cstmts.push(gen_stmt);
+    }
+
+    let ret_expr = ret.as_ref()
+        .map(|ret| gen_expr(ret, &mut cstmts, mangler, mod_scope))
+        .transpose()?;
+
+    // Do not do anything with the return expression if there is nothing to return
+    if let Some(ret_expr) = ret_expr {
+        cstmts.push(match result_var_mangled_name {
+            // Only generate an assignment if there is actually an expression to assign
+            Some(result_var_mangled_name) => {
+                CStmt::VarAssign(CVarAssign {
+                    mangled_name: result_var_mangled_name.clone(),
+                    init_expr: CInitializerExpr::Expr(ret_expr),
+                })
+            },
+            None => CStmt::Return(Some(ret_expr)),
+        });
+    }
+
+    Ok(CStmts(cstmts))
 }
 
 fn gen_cond_stmt(
     cond: &ir::Cond,
+    prev_stmts: &mut Vec<CStmt>,
+    result_var_mangled_name: Option<String>,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CCond, Error> {
@@ -154,20 +209,68 @@ fn gen_cond_stmt(
     // Note that there is no need to generate a new mangler for each block because C does not
     // support variable shadowing. A single scope is sufficient.
 
-    Ok(CCond {
-        conds: conds.iter().map(|(cond, body)| {
-            let cond = gen_expr(cond, mangler, mod_scope)?;
-            let body = gen_block(body, mangler, mod_scope)?;
-            Ok((cond, body))
-        }).collect::<Result<Vec<_>, _>>()?,
-        else_body: else_body.as_ref()
-            .map(|else_body| gen_block(else_body, mangler, mod_scope))
-            .transpose()?,
-    })
+    // This loop takes any else-if expressions and nests them in else clauses:
+    //
+    // So this code:
+    //
+    //     if (...) {
+    //         body1
+    //     } else if (...) {
+    //         body2
+    //     } else if (...) {
+    //         body3
+    //     } else {
+    //         body4
+    //     }
+    //
+    // Becomes this code:
+    //
+    //     if (...) {
+    //         body1
+    //     } else {
+    //         if (...) {
+    //             body2
+    //         } else {
+    //             if (...) {
+    //                 body3
+    //             } else {
+    //                 body4
+    //             }
+    //         }
+    //     }
+    //
+    // Notice that any temporary variables needed for an else-if condition can now go just above
+    // the corresponding if statement.
+
+    // It guaranteed that there is at least one condition
+    let (cond, body) = conds.first().expect("bug: codegen received empty conditional");
+    let cond_expr = gen_expr(cond, prev_stmts, mangler, mod_scope)?;
+    let if_body = gen_block(body, result_var_mangled_name.clone(), mangler, mod_scope)?;
+
+    // Put any else-ifs into the else body
+    let mut else_body = else_body.as_ref()
+        .map(|else_body| gen_block(else_body, result_var_mangled_name.clone(), mangler, mod_scope))
+        .transpose()?;
+    // Traverses in reverse order so it collects the else clause, then uses the last else if as the
+    // else clause, and so on until it gets back to the end of the if.
+    for (cond, body) in conds.iter().skip(1).rev() {
+        // The statements containing the entire else-if expression
+        // This becomes the body of the else for either the previous else-if or the top-level if.
+        let mut else_if_stmts = Vec::new();
+
+        let cond_expr = gen_expr(cond, &mut else_if_stmts, mangler, mod_scope)?;
+        let if_body = gen_block(body, result_var_mangled_name.clone(), mangler, mod_scope)?;
+
+        else_if_stmts.push(CStmt::Cond(CCond {cond_expr, if_body, else_body}));
+        else_body = Some(CStmts(else_if_stmts));
+    }
+
+    Ok(CCond {cond_expr, if_body, else_body})
 }
 
 fn gen_var_decl(
     var_decl: &ir::VarDecl,
+    prev_stmts: &mut Vec<CStmt>,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CVarDecl, Error> {
@@ -176,20 +279,23 @@ fn gen_var_decl(
     Ok(CVarDecl {
         mangled_name: mangler.mangle_name(ident).to_string(),
         ty: lookup_type_name(ty, mod_scope),
-        init_expr: CInitializerExpr::Expr(gen_expr(expr, mangler, mod_scope)?)
+        init_expr: CInitializerExpr::Expr(gen_expr(expr, prev_stmts, mangler, mod_scope)?)
     })
 }
 
+/// Generates code for an expression. In the process of doing this, we may need to append
+/// additional statements that are necessary for this expression to be evaluated.
 fn gen_expr(
     expr: &ir::Expr,
+    prev_stmts: &mut Vec<CStmt>,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
     Ok(match expr {
         //TODO: Cond will need more complex code generation (e.g. fresh temporary variables)
         //TODO: Probably want to do this by allowing gen_expr to append to &mut Vec<CStmt>
-        ir::Expr::Cond(cond, _) => unimplemented!(),
-        ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, mangler, mod_scope)?),
+        ir::Expr::Cond(cond, ty) => gen_cond_expr(cond, ty, prev_stmts, mangler, mod_scope)?,
+        ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, prev_stmts, mangler, mod_scope)?),
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
@@ -198,8 +304,36 @@ fn gen_expr(
     })
 }
 
+/// Generates an expression (and series of statements) that evaluate a conditional that was used
+/// in expression position. C doesn't support this, so we need to generate a temporary value and
+/// evaluate the expression beforehand.
+fn gen_cond_expr(
+    cond: &ir::Cond,
+    ret_ty: &TyId,
+    prev_stmts: &mut Vec<CStmt>,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    // Generate a temporary uninitialized variable to store the result of the conditional
+    let result_var_mangled_name = mangler.fresh_mangled_name();
+    prev_stmts.push(CStmt::TempVarDecl(CTempVarDecl {
+        mangled_name: result_var_mangled_name.clone(),
+        ty: lookup_type_name(ret_ty, mod_scope),
+        init_expr: None,
+    }));
+
+    // Generate the conditional, putting the result of all the blocks into the temporary variable
+    let cond = gen_cond_stmt(cond, prev_stmts, Some(result_var_mangled_name.clone()), mangler, mod_scope)?;
+    prev_stmts.push(CStmt::Cond(cond));
+
+    // Now that the variable has been assigned as part of the if, produce the variable that
+    // contains the result
+    Ok(CExpr::Var(result_var_mangled_name))
+}
+
 fn gen_call_expr(
     expr: &ir::CallExpr,
+    prev_stmts: &mut Vec<CStmt>,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CCallExpr, Error> {
@@ -209,7 +343,7 @@ fn gen_call_expr(
         //TODO: Mangle function names
         mangled_func_name: func_name.to_string(),
         args: args.iter()
-            .map(|expr| gen_expr(expr, mangler, mod_scope))
+            .map(|expr| gen_expr(expr, prev_stmts, mangler, mod_scope))
             .collect::<Result<Vec<_>, _>>()?,
     })
 }

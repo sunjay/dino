@@ -68,12 +68,14 @@ pub struct FuncParam<'a> {
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
+    /// The final statement of the block, used as the return value of the block
+    pub ret: Option<Expr<'a>>,
 }
 
 impl<'a> Block<'a> {
     pub fn is_empty(&self) -> bool {
-        let Block {stmts} = self;
-        stmts.is_empty()
+        let Block {stmts, ret} = self;
+        stmts.is_empty() && ret.is_none()
     }
 }
 
@@ -96,7 +98,7 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
-    Cond(Cond<'a>),
+    Cond(Box<Cond<'a>>),
     Call(CallExpr<'a>),
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
@@ -109,6 +111,8 @@ pub enum Expr<'a> {
 pub struct Cond<'a> {
     /// A list of (condition, body) that corresponds to:
     /// if cond1 { body1 } else if cond2 { body2 } ...
+    ///
+    /// This must be non-empty (or else there would be no condition).
     pub conds: Vec<(Expr<'a>, Block<'a>)>,
     /// The `else` clause (if any)
     pub else_body: Option<Block<'a>>,

@@ -96,16 +96,46 @@ fn block(input: Input) -> IResult<Block> {
     map(
         delimited(
             char('{'),
-            preceded(wsc0, many0(terminated(stmt, wsc0))),
+            tuple((
+                preceded(wsc0, many0(terminated(stmt, wsc0))),
+                opt(tuple((expr, wsc0))),
+            )),
             char('}'),
         ),
-        |stmts| Block {stmts},
+        |(mut stmts, expr)| {
+            let ret = expr.map(|(expr, _)| expr);
+
+            // There is an ambiguity here because certain expressions can also be written in
+            // statment position. When that is the case, we need to be sure to pull those
+            // statements into the return expression instead of leaving them in the statements
+            // list.
+            let ret = if ret.is_none() && !stmts.is_empty() {
+                match stmts.pop().unwrap() {
+                    // Since semi-colons after conditionals are optional even in statement
+                    // position, they may sometimes be seen as statements when the user actually
+                    // intended them to be the return expression
+                    Stmt::Cond(cond) => Some(Expr::Cond(Box::new(cond))),
+                    // Cannot promote var declaration to expression
+                    Stmt::VarDecl(_) => None,
+                    // Expressions cannot be promoted because for them to be parsed as statements
+                    // they must have ended in a semi-colon. That means that the user explicitly
+                    // indended the expression's value to *not* be returned.
+                    Stmt::Expr(_) => None,
+                }
+            } else {
+                ret
+            };
+
+            Block {stmts, ret}
+        },
     )(input)
 }
 
 fn stmt(input: Input) -> IResult<Stmt> {
     alt((
-        map(cond, Stmt::Cond),
+        // Need to explicitly ensure that there is so semi-colon following this since that means it
+        // was intended as an expression, not a statement
+        map(tuple((cond, not(char(';')))), |(cond, _)| Stmt::Cond(cond)),
         map(var_decl, Stmt::VarDecl),
         map(tuple((expr, wsc0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
     ))(input)
@@ -140,7 +170,7 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 
 fn expr(input: Input) -> IResult<Expr> {
     alt((
-        map(cond, Expr::Cond),
+        map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals

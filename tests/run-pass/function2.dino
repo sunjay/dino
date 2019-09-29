@@ -1,0 +1,37 @@
+fn main() {
+    let cool_stuff: int = -3;
+    let other_value = add_int(95, cool_stuff);
+
+    print_bool(check_value(other_value, true));
+    print_bool(check_value(other_value, false));
+}
+
+// Function declarations can occur in any order.
+// There is no need for declaration before use.
+fn check_value(x: int, should_be_bigger: bool) -> bool {
+    if should_be_bigger {
+        print_int(x);
+        check_bigger(x)
+    } else if int_lt(x, 0) {
+        print_int(x);
+        true
+    } else {
+        check_smaller(x)
+    }
+}
+
+fn check_bigger(y: int) -> bool {
+    if int_gt(y, 100int) {
+        true
+    } else {
+        false
+    }
+}
+
+fn check_smaller(y: int) -> bool {
+    if int_lt(y, 10) {
+        true
+    } else {
+        false
+    }
+}

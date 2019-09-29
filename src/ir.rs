@@ -47,6 +47,8 @@ pub struct FuncParam<'a> {
 #[derive(Debug)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
+    /// The final statement of the block, used as the return value of the block
+    pub ret: Option<Expr<'a>>,
 }
 
 #[derive(Debug)]
@@ -68,7 +70,7 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
-    Cond(Cond<'a>, TyId),
+    Cond(Box<Cond<'a>>, TyId),
     Call(CallExpr<'a>, TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
@@ -81,6 +83,8 @@ pub enum Expr<'a> {
 pub struct Cond<'a> {
     /// A list of (condition, body) that corresponds to:
     /// if cond1 { body1 } else if cond2 { body2 } ...
+    ///
+    /// This must be non-empty (or else there would be no condition).
     pub conds: Vec<(Expr<'a>, Block<'a>)>,
     /// The `else` clause (if any)
     pub else_body: Option<Block<'a>>,

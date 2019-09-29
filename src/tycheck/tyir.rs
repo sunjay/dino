@@ -30,14 +30,17 @@ impl<'a> Function<'a> {
 #[derive(Debug)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
+    /// The final statement of the block, used as the return value of the block
+    pub ret: Option<Expr<'a>>,
 }
 
 impl<'a> Block<'a> {
     /// Applies the given substitution to this block and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Block<'a> {
-        let Block {stmts} = self;
+        let Block {stmts, ret} = self;
         ir::Block {
             stmts: stmts.into_iter().map(|stmt| stmt.apply_subst(subst)).collect(),
+            ret: ret.map(|ret| ret.apply_subst(subst)),
         }
     }
 }
@@ -88,7 +91,7 @@ impl<'a> VarDecl<'a> {
 pub enum Expr<'a> {
     /// A conditional without an else clause always has type unit. With an else clause, the type of
     /// the conditional can be anything.
-    Cond(Cond<'a>, TyVar),
+    Cond(Box<Cond<'a>>, TyVar),
     Call(CallExpr<'a>, TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
@@ -103,7 +106,7 @@ impl<'a> Expr<'a> {
         use Expr::*;
         match self {
             Cond(cond, ty_var) => {
-                ir::Expr::Cond(cond.apply_subst(subst), ty_var.apply_subst(subst))
+                ir::Expr::Cond(Box::new(cond.apply_subst(subst)), ty_var.apply_subst(subst))
             },
 
             Call(call, ty_var) => {
@@ -137,6 +140,8 @@ impl<'a> Expr<'a> {
 pub struct Cond<'a> {
     /// A list of (condition, body) that corresponds to:
     /// if cond1 { body1 } else if cond2 { body2 } ...
+    ///
+    /// This must be non-empty (or else there would be no condition).
     pub conds: Vec<(Expr<'a>, Block<'a>)>,
     /// The `else` clause (if any)
     pub else_body: Option<Block<'a>>,
