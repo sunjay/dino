@@ -20,6 +20,12 @@ pub extern fn __dino__DInt_from_int_literal(value: i64) -> DInt {
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
+pub extern fn int_eq(x: DInt, y: DInt) -> DBool {
+    DBool::from(x.0 == y.0)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
 pub extern fn int_gt(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 > y.0)
 }
