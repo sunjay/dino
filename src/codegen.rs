@@ -43,7 +43,7 @@ impl fmt::Display for CExecutableProgram {
 
         // Finally, write out the code for each forward declared function
         for func in functions {
-            writeln!(f, "{};", func)?;
+            writeln!(f, "{}", func)?;
         }
 
         Ok(())
@@ -239,10 +239,10 @@ impl fmt::Display for CTempVarDecl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {mangled_name, ty, init_expr} = self;
 
-        write!(f, "{} {};", ty, mangled_name)?;
+        write!(f, "{} {}", ty, mangled_name)?;
 
         match init_expr {
-            Some(init_expr) => write!(f, "= {};", init_expr),
+            Some(init_expr) => write!(f, " = {};", init_expr),
             None => write!(f, ";"),
         }
     }
