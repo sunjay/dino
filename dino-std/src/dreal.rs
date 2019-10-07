@@ -1,3 +1,5 @@
+use crate::dunit::DUnit;
+
 /// The dino real number type
 ///
 /// A 64-bit floating point number
@@ -42,8 +44,10 @@ pub extern fn sub_real(x: DReal, y: DReal) -> DReal {
 
 //TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
-pub extern fn print_real(x: DReal) {
+pub extern fn print_real(x: DReal) -> DUnit {
     unsafe {
         super::printf(b"%g\n\0" as *const u8, x.0);
     }
+
+    DUnit::default()
 }

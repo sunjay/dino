@@ -1,3 +1,4 @@
+use crate::dunit::DUnit;
 use crate::dbool::DBool;
 
 /// The dino integer type
@@ -62,8 +63,10 @@ pub extern fn sub_int(x: DInt, y: DInt) -> DInt {
 
 //TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
-pub extern fn print_int(x: DInt) {
+pub extern fn print_int(x: DInt) -> DUnit {
     unsafe {
         super::printf(b"%lld\n\0" as *const u8, x.0);
     }
+
+    DUnit::default()
 }

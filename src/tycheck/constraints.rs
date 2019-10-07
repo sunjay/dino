@@ -186,6 +186,7 @@ impl ConstraintSet {
                     None
                 },
             },
+            ret_ty_var: return_type,
         })
     }
 
@@ -320,6 +321,16 @@ impl ConstraintSet {
                 Ok(tyir::Expr::BoolLiteral(value, return_type))
             },
 
+            &ast::Expr::UnitLiteral => {
+                // Assert that the literal is one of the expected types for this kind of literal
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: return_type,
+                    valid_tys: hashset!{prims.unit()},
+                });
+
+                Ok(tyir::Expr::UnitLiteral(return_type))
+            },
+
             &ast::Expr::Var(name) => {
                 // Assert that the type variable is equal to the return type variable
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
@@ -344,6 +355,7 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<tyir::Cond<'a>, Error> {
         let ast::Cond {conds, else_body} = cond;
+        debug_assert!(!conds.is_empty(), "bug: conditional had no initial if block");
 
         let no_return_type = return_type.is_none();
         // Create a fresh type variable if none was provided

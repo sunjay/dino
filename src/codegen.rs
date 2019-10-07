@@ -60,9 +60,16 @@ impl fmt::Display for CEntryPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {body} = self;
 
+        // The dino entry point returns unit, but the C entry point needs to return int.
+        // This generates a special function which is then called from the C entry point.
+        writeln!(f, "DUnit __dino__main(void) {{")?;
+        writeln!(f, "{}", body)?;
+        writeln!(f, "}}")?;
+
+        // The "actual" C entry point
         // This is the only place where `int` is explicitly used. Use DInt everywhere else.
         writeln!(f, "int main(void) {{")?;
-        writeln!(f, "{}", body)?;
+        writeln!(f, "__dino__main();")?;
         // Return an exit code of zero because if the program got to this point it succeeded
         writeln!(f, "return 0;")?;
         write!(f, "}}")
@@ -103,7 +110,6 @@ impl fmt::Display for CFunctionSignature {
 
         //TODO: Use a better calling convention that allows every function to return void and uses
         // out pointers instead
-        let return_type = if return_type.is_empty() { "void" } else { &return_type };
 
         // Empty parentheses in C imply any number of arguments being allowed.
         // Using `void` is more explicit

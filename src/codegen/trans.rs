@@ -139,21 +139,31 @@ fn gen_function(
         params: cparams,
     };
 
-    let body = gen_block(body, None, &mut mangler, mod_scope)?;
+    let body = gen_block(body, BlockBehaviour::Return, &mut mangler, mod_scope)?;
 
     Ok(CFunction {sig, body})
 }
 
-/// Generates code for a block. If `result_var_mangled_name` is None, the final expression of the
-/// block (if any) will be returned. Otherwise, if that parameter is provided, the final expression
-/// will be assigned to that variable.
+/// Choices for what to do with the result of a block
+#[derive(Debug, Clone)]
+enum BlockBehaviour {
+    /// Return the result of the block using a `return` statement
+    Return,
+    /// Ignore the result, doing nothing with it
+    Ignore,
+    /// Store the result in the given variable
+    StoreVar {
+        mangled_name: String,
+    },
+}
+
 fn gen_block(
     block: &ir::Block,
-    result_var_mangled_name: Option<String>,
+    behaviour: BlockBehaviour,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CStmts, Error> {
-    let ir::Block {stmts, ret} = block;
+    let ir::Block {stmts, ret, ret_ty} = block;
 
     let mut cstmts = Vec::new();
 
@@ -161,10 +171,13 @@ fn gen_block(
     for stmt in stmts {
         let gen_stmt = match stmt {
             ir::Stmt::Cond(cond) => {
-                // Conditionals in statement position can't assign to the `result_var_mangled_name`
-                // even if one is provided. Only the final expression of the block should assign
-                // to that.
-                CStmt::Cond(gen_cond_stmt(cond, &mut cstmts, None, mangler, mod_scope)?)
+                // Conditionals in statement position do not return a value from the block. They
+                // also do not cause a `return` unless there is an explicit return statement in
+                // one of the conditional branch bodies. Thus, the only remaining alternative is
+                // to ignore the result of each block. These conditionals type check to unit
+                // anyway, so we are just ignoring the unit value.
+
+                CStmt::Cond(gen_cond_stmt(cond, &mut cstmts, BlockBehaviour::Ignore, mangler, mod_scope)?)
             },
             ir::Stmt::VarDecl(var_decl) => {
                 CStmt::VarDecl(gen_var_decl(var_decl, &mut cstmts, mangler, mod_scope)?)
@@ -177,22 +190,28 @@ fn gen_block(
     }
 
     let ret_expr = ret.as_ref()
-        .map(|ret| gen_expr(ret, &mut cstmts, mangler, mod_scope))
+        .map(|ret| gen_expr(ret, &mut cstmts, mangler, mod_scope).map(|val| (ret.ty_id(), val)))
         .transpose()?;
 
-    // Do not do anything with the return expression if there is nothing to return
-    if let Some(ret_expr) = ret_expr {
-        cstmts.push(match result_var_mangled_name {
-            // Only generate an assignment if there is actually an expression to assign
-            Some(result_var_mangled_name) => {
-                CStmt::VarAssign(CVarAssign {
-                    mangled_name: result_var_mangled_name.clone(),
-                    init_expr: CInitializerExpr::Expr(ret_expr),
-                })
-            },
-            None => CStmt::Return(Some(ret_expr)),
-        });
-    }
+    let last_stmt_expr = match ret_expr {
+        Some((ret_expr_ty, ret_expr)) => {
+            debug_assert_eq!(*ret_ty, ret_expr_ty,
+                "bug: return expression of block had different type than the block itself");
+
+            ret_expr
+        },
+        // Produce unit if no return expression
+        None => gen_unit_literal(*ret_ty, mangler, mod_scope)?,
+    };
+
+    cstmts.push(match behaviour {
+        BlockBehaviour::Return => CStmt::Return(Some(last_stmt_expr)),
+        BlockBehaviour::Ignore => CStmt::Expr(last_stmt_expr),
+        BlockBehaviour::StoreVar {mangled_name} => CStmt::VarAssign(CVarAssign {
+                mangled_name,
+                init_expr: CInitializerExpr::Expr(last_stmt_expr),
+        }),
+    });
 
     Ok(CStmts(cstmts))
 }
@@ -200,7 +219,7 @@ fn gen_block(
 fn gen_cond_stmt(
     cond: &ir::Cond,
     prev_stmts: &mut Vec<CStmt>,
-    result_var_mangled_name: Option<String>,
+    block_behaviour: BlockBehaviour,
     mangler: &mut NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CCond, Error> {
@@ -245,12 +264,31 @@ fn gen_cond_stmt(
     // It guaranteed that there is at least one condition
     let (cond, body) = conds.first().expect("bug: codegen received empty conditional");
     let cond_expr = gen_expr(cond, prev_stmts, mangler, mod_scope)?;
-    let if_body = gen_block(body, result_var_mangled_name.clone(), mangler, mod_scope)?;
+    let if_body = gen_block(body, block_behaviour.clone(), mangler, mod_scope)?;
 
     // Put any else-ifs into the else body
     let mut else_body = else_body.as_ref()
-        .map(|else_body| gen_block(else_body, result_var_mangled_name.clone(), mangler, mod_scope))
+        .map(|else_body| gen_block(else_body, block_behaviour.clone(), mangler, mod_scope))
         .transpose()?;
+
+    // Special-case: if we have been asked to assign the result to a variable, we need to do so in
+    // every branch of the conditional, otherwise that variable is left uninitialized.
+    if else_body.is_none() {
+        if let BlockBehaviour::StoreVar {..} = &block_behaviour {
+            // If we have no else and we're storing to a variable, the type checker ensures that
+            // we must be assigning to a variable of type unit. That means that it is sufficient
+            // to generate an empty else block and generate code for that.
+            let empty_block = ir::Block {
+                stmts: Vec::new(),
+                ret: None,
+                // Take the return type from the if-block
+                ret_ty: body.ret_ty,
+            };
+            else_body = Some(gen_block(&empty_block, block_behaviour.clone(), mangler, mod_scope)
+                .expect("bug: failed to generate empty else block"));
+        }
+    }
+
     // Traverses in reverse order so it collects the else clause, then uses the last else if as the
     // else clause, and so on until it gets back to the end of the if.
     for (cond, body) in conds.iter().skip(1).rev() {
@@ -259,7 +297,7 @@ fn gen_cond_stmt(
         let mut else_if_stmts = Vec::new();
 
         let cond_expr = gen_expr(cond, &mut else_if_stmts, mangler, mod_scope)?;
-        let if_body = gen_block(body, result_var_mangled_name.clone(), mangler, mod_scope)?;
+        let if_body = gen_block(body, block_behaviour.clone(), mangler, mod_scope)?;
 
         else_if_stmts.push(CStmt::Cond(CCond {cond_expr, if_body, else_body}));
         else_body = Some(CStmts(else_if_stmts));
@@ -300,6 +338,7 @@ fn gen_expr(
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::BoolLiteral(value, ty) => gen_bool_literal(value, ty, mangler, mod_scope)?,
+        &ir::Expr::UnitLiteral(ty) => gen_unit_literal(ty, mangler, mod_scope)?,
         &ir::Expr::Var(name, _) => CExpr::Var(mangler.get(name).to_string()),
     })
 }
@@ -323,7 +362,8 @@ fn gen_cond_expr(
     }));
 
     // Generate the conditional, putting the result of all the blocks into the temporary variable
-    let cond = gen_cond_stmt(cond, prev_stmts, Some(result_var_mangled_name.clone()), mangler, mod_scope)?;
+    let block_behaviour = BlockBehaviour::StoreVar {mangled_name: result_var_mangled_name.clone()};
+    let cond = gen_cond_stmt(cond, prev_stmts, block_behaviour, mangler, mod_scope)?;
     prev_stmts.push(CStmt::Cond(cond));
 
     // Now that the variable has been assigned as part of the if, produce the variable that
@@ -413,6 +453,23 @@ fn gen_bool_literal(
             .expect("bug: no bool literal constructor defined for type that type checked to bool")
             .clone(),
         args: vec![CExpr::BoolLiteral(value)],
+    }))
+}
+
+/// Unit literals are zero-sized and thus can be spawned arbitrarily and out of nowhere
+fn gen_unit_literal(
+    ty: TyId,
+    _mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let extern_type = lookup_type(&ty, mod_scope);
+    Ok(CExpr::Call(CCallExpr {
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.unit_literal_constructor
+            .as_ref()
+            .expect("bug: no unit literal constructor defined for type that type checked to ()")
+            .clone(),
+        args: Vec::new(),
     }))
 }
 

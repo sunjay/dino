@@ -32,15 +32,19 @@ pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
     /// The final statement of the block, used as the return value of the block
     pub ret: Option<Expr<'a>>,
+    /// The type variable of the return expression (still provided even if the return expression
+    /// is None)
+    pub ret_ty_var: TyVar,
 }
 
 impl<'a> Block<'a> {
     /// Applies the given substitution to this block and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Block<'a> {
-        let Block {stmts, ret} = self;
+        let Block {stmts, ret, ret_ty_var} = self;
         ir::Block {
             stmts: stmts.into_iter().map(|stmt| stmt.apply_subst(subst)).collect(),
             ret: ret.map(|ret| ret.apply_subst(subst)),
+            ret_ty: ret_ty_var.apply_subst(subst),
         }
     }
 }
@@ -97,6 +101,7 @@ pub enum Expr<'a> {
     RealLiteral(f64, TyVar),
     ComplexLiteral(f64, TyVar),
     BoolLiteral(bool, TyVar),
+    UnitLiteral(TyVar),
     Var(Ident<'a>, TyVar),
 }
 
@@ -127,6 +132,10 @@ impl<'a> Expr<'a> {
 
             BoolLiteral(value, ty_var) => {
                 ir::Expr::BoolLiteral(value, ty_var.apply_subst(subst))
+            },
+
+            UnitLiteral(ty_var) => {
+                ir::Expr::UnitLiteral(ty_var.apply_subst(subst))
             },
 
             Var(var_name, ty_var) => {

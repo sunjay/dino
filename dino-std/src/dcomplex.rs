@@ -1,3 +1,4 @@
+use crate::dunit::DUnit;
 use crate::dreal::{self, DReal};
 
 /// The dino complex number type
@@ -92,8 +93,10 @@ pub extern fn sub_complex_real(x: DComplex, y: DReal) -> DComplex {
 
 //TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
-pub extern fn print_complex(x: DComplex) {
+pub extern fn print_complex(x: DComplex) -> DUnit {
     unsafe {
         super::printf(b"%g + %gi\n\0" as *const u8, x.real, x.imag);
     }
+
+    DUnit::default()
 }

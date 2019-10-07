@@ -39,9 +39,12 @@ primitives! {
     #[derive(Debug)]
     pub struct Primitives {
         // The unit type has a special syntax, not any particular name (like "int"), so we just use
-        // an empty string here. We should also never generate any code for it. Hence why there is
-        // no information for its extern type.
-        unit => "" => ExternType::default(),
+        // an empty string here.
+        unit => "" => ExternType {
+            extern_name: "DUnit".to_string(),
+            unit_literal_constructor: Some("__dino__DUnit_from_unit_literal".to_string()),
+            ..ExternType::default()
+        },
 
         bool => "bool" => ExternType {
             extern_name: "DBool".to_string(),

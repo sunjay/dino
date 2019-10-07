@@ -104,6 +104,7 @@ pub enum Expr<'a> {
     RealLiteral(f64),
     ComplexLiteral(f64),
     BoolLiteral(bool),
+    UnitLiteral,
     Var(Ident<'a>),
 }
 

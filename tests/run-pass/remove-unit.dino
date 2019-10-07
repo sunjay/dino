@@ -1,0 +1,53 @@
+//! A test program for ensuring that () is removed from the generated
+//! code in all circumstances. The program should still behave as if
+//! the zero-sized type was actually there.
+
+//TODO: When structs are supported, have a test for zero-sized structs
+
+// A function that generates a unit value
+fn unit() {}
+
+fn nested_expr_unit(x: int) {
+    // Nested expression that returns unit
+    if int_gt(x, 2) {
+        // Semi-colon forces unit as the result of the block
+        print_int(x);
+    } else {
+        // No semi-colon here
+        print_int(2)
+    }
+}
+
+// Unit is allowed in type position
+fn takes_unit(x: (), y: ()) {
+    // Implicitly returning unit
+}
+
+fn main() {
+    let u = ();
+    let u2 = print_unit(u);
+    // Unit values should always be equal, even when
+    // they come from different functions
+    if unit_eq(u, u2) {
+        print_int(1);
+    }
+
+    let u3 = nested_expr_unit(32);
+    print_bool(unit_eq(u2, u3));
+
+    takes_unit(unit(), ());
+    takes_unit(u, ());
+
+    // It's valid to use an if in statement position and its valid to use
+    // the () literal as the last statement in its block
+    if true { () }
+
+    // Return unit -- no semi-colon
+    unit()
+}
+
+fn single_if(x: int) {
+    // A single if is allowed if the return type is unit
+    if int_gt(x, 3) {
+    }
+}

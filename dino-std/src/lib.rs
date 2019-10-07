@@ -1,10 +1,12 @@
 #![no_std]
 
+mod dunit;
 mod dbool;
 mod dint;
 mod dreal;
 mod dcomplex;
 
+pub use dunit::*;
 pub use dbool::*;
 pub use dint::*;
 pub use dreal::*;

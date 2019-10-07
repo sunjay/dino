@@ -49,6 +49,10 @@ pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
     /// The final statement of the block, used as the return value of the block
     pub ret: Option<Expr<'a>>,
+    /// The return type of the block. Must match TyId in `ret` if `ret` is not None
+    ///
+    /// Must always be stored because the return expression is optional.
+    pub ret_ty: TyId,
 }
 
 #[derive(Debug)]
@@ -76,7 +80,24 @@ pub enum Expr<'a> {
     RealLiteral(f64, TyId),
     ComplexLiteral(f64, TyId),
     BoolLiteral(bool, TyId),
+    UnitLiteral(TyId),
     Var(Ident<'a>, TyId),
+}
+
+impl<'a> Expr<'a> {
+    pub fn ty_id(&self) -> TyId {
+        use Expr::*;
+        match *self {
+            Cond(_, ty_id) => ty_id,
+            Call(_, ty_id) => ty_id,
+            IntegerLiteral(_, ty_id) => ty_id,
+            RealLiteral(_, ty_id) => ty_id,
+            ComplexLiteral(_, ty_id) => ty_id,
+            BoolLiteral(_, ty_id) => ty_id,
+            UnitLiteral(ty_id) => ty_id,
+            Var(_, ty_id) => ty_id,
+        }
+    }
 }
 
 #[derive(Debug)]
