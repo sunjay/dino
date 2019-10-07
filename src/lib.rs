@@ -12,7 +12,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
-use maplit::hashset;
 use snafu::{Snafu, ResultExt};
 
 use crate::codegen::CExecutableProgram;
@@ -67,12 +66,28 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
 }
 
 /// Resolves ambiguous type checking situations where possible
+///
+/// This function MUST return one of the types provided in `tys`.
 fn resolve_ambiguity(tys: &HashSet<TyId>, prims: &Primitives) -> Option<TyId> {
-    // Since integer literals can be {int, real}, resolve to {int} where possible
-    if *tys == hashset!{prims.int(), prims.real()} {
-        Some(prims.int())
-    } else {
-        None
+    let has_int = tys.contains(&prims.int());
+    let has_real = tys.contains(&prims.real());
+    let has_complex = tys.contains(&prims.complex());
+
+    // Need to be very careful here to always match on the entire set of types. We don't want to
+    // turn {int, real, string} into {int}. (Not that this should be possible.)
+    match tys.len() {
+        // Since integer literals can be {int, real} or {int, complex} or {int, real, complex},
+        // resolve to {int} where possible
+        2 if has_int && has_real => Some(prims.int()),
+        2 if has_int && has_complex => Some(prims.int()),
+        3 if has_int && has_real && has_complex => Some(prims.int()),
+
+        // Similarly, real number literals can be {real, complex}, so resolve to {real} if there is
+        // an ambiguity
+        2 if has_real && has_complex => Some(prims.real()),
+
+        // Did not successfully resolve the ambiguity
+        _ => None,
     }
 }
 

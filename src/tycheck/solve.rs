@@ -133,7 +133,9 @@ pub fn apply_eq_constraints(
 ///
 /// In the ambiguous case, special effort can be made to artificially "solve" the ambiguity. The
 /// `resolve_ambiguity` callback is used to reduce a set of more than one type into just a single
-/// type. It returns Some(...) if it was able to resolve the ambiguity and None otherwise.
+/// type. It returns Some(...) if it was able to resolve the ambiguity and None otherwise. This
+/// function MUST return one of the types passed in as input or it may result in undefined
+/// behaviour.
 pub fn build_substitution<I: Iterator<Item=TyVar>>(
     ty_var_valid_types: TyVarValidTypesMap,
     ty_vars: I,
