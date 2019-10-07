@@ -116,11 +116,18 @@ fn block(input: Input) -> IResult<Block> {
                     // intended them to be the return expression
                     Stmt::Cond(cond) => Some(Expr::Cond(Box::new(cond))),
                     // Cannot promote var declaration to expression
-                    Stmt::VarDecl(_) => None,
+                    stmt@Stmt::VarDecl(_) |
                     // Expressions cannot be promoted because for them to be parsed as statements
                     // they must have ended in a semi-colon. That means that the user explicitly
                     // indended the expression's value to *not* be returned.
-                    Stmt::Expr(_) => None,
+                    stmt@Stmt::Expr(_) => {
+                        // Need to push statement back. Likely won't cause any re-allocation, since
+                        // the collection shouldn't have freed the space we just pop'd this from.
+                        // At most we pay a bit for a move, but that's not too big of a price to
+                        // pay for simpler code.
+                        stmts.push(stmt);
+                        None
+                    },
                 }
             } else {
                 ret
