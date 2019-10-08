@@ -9,7 +9,7 @@ use nom::{
     combinator::{all_consuming, map, map_res, recognize, opt, not},
     bytes::complete::{tag, take_while1, take_while, take_till},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::{many0, many1, separated_list},
+    multi::{many0, separated_list},
 };
 
 use super::*;
@@ -61,8 +61,8 @@ fn decl(input: Input) -> IResult<Decl> {
 
 fn function(input: Input) -> IResult<Function> {
     map(tuple((
-        tag("fn"),
-        wsc1,
+        kw_fn,
+        wsc0,
         ident,
         wsc0,
         function_params,
@@ -153,7 +153,7 @@ fn stmt(input: Input) -> IResult<Stmt> {
 
 fn while_loop(input: Input) -> IResult<WhileLoop> {
     map(
-        tuple((tag("while"), wsc1, expr, wsc0, block)),
+        tuple((kw_while, wsc0, expr, wsc0, block)),
         |(_, _, cond, _, body)| WhileLoop {cond, body},
     )(input)
 }
@@ -161,8 +161,8 @@ fn while_loop(input: Input) -> IResult<WhileLoop> {
 fn var_decl(input: Input) -> IResult<VarDecl> {
     map(
         tuple((
-            tag("let"),
-            wsc1,
+            kw_let,
+            wsc0,
             ident,
             wsc0,
             opt(tuple((
@@ -202,9 +202,9 @@ fn expr(input: Input) -> IResult<Expr> {
 fn cond(input: Input) -> IResult<Cond> {
     map(
         tuple((
-            tuple((tag("if"), wsc1, expr, wsc0, block)),
-            many0(tuple((wsc0, tag("else"), wsc1, tag("if"), wsc1, expr, wsc0, block))),
-            opt(tuple((wsc0, tag("else"), wsc0, block))),
+            tuple((kw_if, wsc0, expr, wsc0, block)),
+            many0(tuple((wsc0, kw_else, wsc0, kw_if, wsc0, expr, wsc0, block))),
+            opt(tuple((wsc0, kw_else, wsc0, block))),
         )),
         |(top_if, else_ifs, else_body)| {
             let (_, _, top_if_cond, _, top_if_body) = top_if;
@@ -242,6 +242,15 @@ fn ty(input: Input) -> IResult<Ty> {
 }
 
 fn ident(input: Input) -> IResult<&str> {
+    preceded(
+        // Identifier must not be a keyword
+        not(keyword),
+        ident_raw,
+    )(input)
+}
+
+/// The raw identifier, without checking for whether it is a keyword
+fn ident_raw(input: Input) -> IResult<&str> {
     recognize(pair(
         // Must be at least non-number
         take_while1(|c: char| c.is_alphabetic() || c == '_'),
@@ -288,8 +297,8 @@ fn real_or_complex_literal(input: Input) -> IResult<Expr> {
 
 fn bool_literal(input: Input) -> IResult<bool> {
     alt((
-        map(tag("true"), |_| true),
-        map(tag("false"), |_| false),
+        map(kw_true, |_| true),
+        map(kw_false, |_| false),
     ))(input)
 }
 
@@ -297,14 +306,15 @@ fn unit_literal(input: Input) -> IResult<()> {
     map(tag("()"), |_| ())(input)
 }
 
-/// Parses at least one whitespace character or comment
-fn wsc1(input: Input) -> IResult<()> {
-    map(many1(alt((comment, ws::ws1))), |_| ())(input)
-}
-
 /// Parses any amount of whitespace or comment
 fn wsc0(input: Input) -> IResult<()> {
-    map(many0(alt((comment, ws::ws1))), |_| ())(input)
+    // Using an inner function to avoid allowing anyone to accidentally use this instead of wsc1
+    /// Parses at least one whitespace character
+    fn ws1(input: Input) -> IResult<()> {
+        map(take_while1(|c: char| c.is_whitespace()), |_| ())(input)
+    }
+
+    map(many0(alt((comment, ws1))), |_| ())(input)
 }
 
 /// Parses a comment
@@ -315,14 +325,96 @@ fn comment(input: Input) -> IResult<()> {
     )(input)
 }
 
-// Keeping in a separate module so it's easier to use wsc0 and wsc1 instead of these
-mod ws {
-    use super::*;
+/// Generates keyword parsers
+macro_rules! keywords {
+    ($($parser:ident : $kw:ident)*) => {
+        /// Parses any keyword
+        fn keyword(input: Input) -> IResult<Input> {
+            // alt() could not handle this many values, so we had to hand roll it ourself
+            let (inp, parsed) = ident_raw(input)?;
 
-    /// Parses at least one whitespace character
-    pub fn ws1(input: Input) -> IResult<()> {
-        map(take_while1(|c: char| c.is_whitespace()), |_| ())(input)
-    }
+            // Optimization: do not match if input too long
+            let mut max_len = 0;
+            $(
+                let $parser = stringify!($kw);
+                max_len = max_len.max($parser.len());
+            )*
+            if parsed.len() > max_len {
+                // Return the same error returned by tag()
+                return Err(nom::Err::Error(nom::error_position!(input, nom::error::ErrorKind::TagBits)));
+            }
+
+            match parsed {
+                $(stringify!($kw) => Ok((inp, parsed))),*,
+                // Return the same error returned by tag()
+                _ => Err(nom::Err::Error(nom::error_position!(input, nom::error::ErrorKind::TagBits))),
+            }
+        }
+
+        $(
+            // Keywords are reserved for the future, so the parser may not be used immediately
+            #[allow(dead_code)]
+            fn $parser(input: Input) -> IResult<Input> {
+                // Keyword must be followed by non-identifier characters
+                terminated(tag(stringify!($kw)), not(ident))(input)
+            }
+        )*
+    };
+}
+
+keywords! {
+    kw_as : as
+    kw_break : break
+    kw_const : const
+    kw_continue : continue
+    kw_crate : crate
+    kw_else : else
+    kw_enum : enum
+    kw_extern : extern
+    kw_false : false
+    kw_fn : fn
+    kw_for : for
+    kw_if : if
+    kw_impl : impl
+    kw_in : in
+    kw_let : let
+    kw_loop : loop
+    kw_match : match
+    kw_mod : mod
+    kw_move : move
+    kw_mut : mut
+    kw_pub : pub
+    kw_ref : ref
+    kw_return : return
+    kw_selfvalue : self
+    kw_selftype : Self
+    kw_static : static
+    kw_struct : struct
+    kw_super : super
+    kw_trait : trait
+    kw_true : true
+    kw_type : type
+    kw_unsafe : unsafe
+    kw_use : use
+    kw_where : where
+    kw_while : while
+    kw_abstract : abstract
+    kw_become : become
+    kw_box : box
+    kw_do : do
+    kw_final : final
+    kw_macro : macro
+    kw_override : override
+    kw_priv : priv
+    kw_typeof : typeof
+    kw_unsized : unsized
+    kw_virtual : virtual
+    kw_yield : yield
+    kw_async : async
+    kw_await : await
+    kw_try : try
+    kw_union : union
+    kw_dyn : dyn
 }
 
 #[cfg(test)]
