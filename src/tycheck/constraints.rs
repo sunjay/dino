@@ -201,6 +201,8 @@ impl ConstraintSet {
         match stmt {
             ast::Stmt::Cond(cond) => self.append_cond(cond, None, scope, decls, prims)
                 .map(tyir::Stmt::Cond),
+            ast::Stmt::WhileLoop(wloop) => self.append_while_loop(wloop, scope, decls, prims)
+                .map(tyir::Stmt::WhileLoop),
             ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, scope, decls, prims)
                 .map(tyir::Stmt::VarDecl),
             ast::Stmt::Expr(expr) => {
@@ -211,6 +213,39 @@ impl ConstraintSet {
                 self.append_expr(expr, ty_var, scope, decls, prims).map(tyir::Stmt::Expr)
             },
         }
+    }
+
+    /// Appends constraints for the given variable declaration
+    fn append_while_loop<'a, 's>(
+        &mut self,
+        wloop: &'a ast::WhileLoop<'a>,
+        scope: &mut Scope<'a, 's>,
+        decls: &DeclMap,
+        prims: &Primitives,
+    ) -> Result<tyir::WhileLoop<'a>, Error> {
+        let ast::WhileLoop {cond, body} = wloop;
+
+        // Every condition must evaluate to a value of type bool
+        let cond_var = self.fresh_type_var();
+        self.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: cond_var,
+            valid_tys: hashset!{prims.bool()},
+        });
+        // Loop condition must use the parent scope, not the child scope for the loop body
+        let cond = self.append_expr(cond, cond_var, scope, decls, prims)?;
+
+        // Loops are not currently allowed in expression position, so the body must result in ()
+        let loop_body_var = self.fresh_type_var();
+        self.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: loop_body_var,
+            valid_tys: hashset!{prims.unit()},
+        });
+        // The body of the loop gets a new inner scope so that variables declared within it aren't
+        // accessible after the loop has finished running
+        let mut child_scope = scope.child_scope();
+        let body = self.append_block(body, loop_body_var, &mut child_scope, decls, prims)?;
+
+        Ok(tyir::WhileLoop {cond, body})
     }
 
     /// Appends constraints for the given variable declaration

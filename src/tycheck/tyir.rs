@@ -18,7 +18,7 @@ pub struct Function<'a> {
 impl<'a> Function<'a> {
     /// Applies the given substitution to this function and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Function<'a> {
-        let Function {name, sig, body} = self;
+        let Self {name, sig, body} = self;
         ir::Function {
             name,
             sig,
@@ -40,7 +40,7 @@ pub struct Block<'a> {
 impl<'a> Block<'a> {
     /// Applies the given substitution to this block and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Block<'a> {
-        let Block {stmts, ret, ret_ty_var} = self;
+        let Self {stmts, ret, ret_ty_var} = self;
         ir::Block {
             stmts: stmts.into_iter().map(|stmt| stmt.apply_subst(subst)).collect(),
             ret: ret.map(|ret| ret.apply_subst(subst)),
@@ -53,6 +53,7 @@ impl<'a> Block<'a> {
 pub enum Stmt<'a> {
     /// A conditional in statement position always has type unit
     Cond(Cond<'a>),
+    WhileLoop(WhileLoop<'a>),
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
 }
@@ -63,8 +64,28 @@ impl<'a> Stmt<'a> {
         use Stmt::*;
         match self {
             Cond(cond) => ir::Stmt::Cond(cond.apply_subst(subst)),
+            WhileLoop(wloop) => ir::Stmt::WhileLoop(wloop.apply_subst(subst)),
             VarDecl(decl) => ir::Stmt::VarDecl(decl.apply_subst(subst)),
             Expr(expr) => ir::Stmt::Expr(expr.apply_subst(subst)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct WhileLoop<'a> {
+    /// The condition for which the loop is expected to continue
+    pub cond: Expr<'a>,
+    /// The body of the loop, executed until the condition is false
+    pub body: Block<'a>,
+}
+
+impl<'a> WhileLoop<'a> {
+    /// Applies the given substitution to this while loop and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::WhileLoop<'a> {
+        let Self {cond, body} = self;
+        ir::WhileLoop {
+            cond: cond.apply_subst(subst),
+            body: body.apply_subst(subst),
         }
     }
 }
@@ -82,7 +103,7 @@ pub struct VarDecl<'a> {
 impl<'a> VarDecl<'a> {
     /// Applies the given substitution to this variable decl and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::VarDecl<'a> {
-        let VarDecl {ident, ty_var, expr} = self;
+        let Self {ident, ty_var, expr} = self;
         ir::VarDecl {
             ident,
             ty: ty_var.apply_subst(subst),
@@ -159,7 +180,7 @@ pub struct Cond<'a> {
 impl<'a> Cond<'a> {
     /// Applies the given substitution to this conditional and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Cond<'a> {
-        let Cond {conds, else_body} = self;
+        let Self {conds, else_body} = self;
         ir::Cond {
             conds: conds.into_iter().map(|(cond, body)| {
                 (cond.apply_subst(subst), body.apply_subst(subst))
@@ -178,7 +199,7 @@ pub struct CallExpr<'a> {
 impl<'a> CallExpr<'a> {
     /// Applies the given substitution to this function call and returns the corresponding IR
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::CallExpr<'a> {
-        let CallExpr {func_name, args} = self;
+        let Self {func_name, args} = self;
         ir::CallExpr {
             func_name,
             args: args.into_iter().map(|expr| expr.apply_subst(subst)).collect(),

@@ -58,8 +58,17 @@ pub struct Block<'a> {
 #[derive(Debug)]
 pub enum Stmt<'a> {
     Cond(Cond<'a>),
+    WhileLoop(WhileLoop<'a>),
     VarDecl(VarDecl<'a>),
     Expr(Expr<'a>),
+}
+
+#[derive(Debug)]
+pub struct WhileLoop<'a> {
+    /// The condition for which the loop is expected to continue
+    pub cond: Expr<'a>,
+    /// The body of the loop, executed until the condition is false
+    pub body: Block<'a>,
 }
 
 #[derive(Debug)]

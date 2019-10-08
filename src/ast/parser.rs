@@ -115,6 +115,8 @@ fn block(input: Input) -> IResult<Block> {
                     // position, they may sometimes be seen as statements when the user actually
                     // intended them to be the return expression
                     Stmt::Cond(cond) => Some(Expr::Cond(Box::new(cond))),
+                    // Cannot currently promote a while loop to an expression
+                    stmt@Stmt::WhileLoop(_) |
                     // Cannot promote var declaration to expression
                     stmt@Stmt::VarDecl(_) |
                     // Expressions cannot be promoted because for them to be parsed as statements
@@ -143,9 +145,17 @@ fn stmt(input: Input) -> IResult<Stmt> {
         // Need to explicitly ensure that there is so semi-colon following this since that means it
         // was intended as an expression, not a statement
         map(tuple((cond, not(char(';')))), |(cond, _)| Stmt::Cond(cond)),
+        map(while_loop, Stmt::WhileLoop),
         map(var_decl, Stmt::VarDecl),
         map(tuple((expr, wsc0, char(';'))), |(expr, _, _)| Stmt::Expr(expr)),
     ))(input)
+}
+
+fn while_loop(input: Input) -> IResult<WhileLoop> {
+    map(
+        tuple((tag("while"), wsc1, expr, wsc0, block)),
+        |(_, _, cond, _, body)| WhileLoop {cond, body},
+    )(input)
 }
 
 fn var_decl(input: Input) -> IResult<VarDecl> {

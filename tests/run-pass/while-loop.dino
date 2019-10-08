@@ -1,0 +1,7 @@
+fn main() {
+    let counter = 10;
+    while int_gt(counter, 0) {
+        print_int(counter);
+        //counter = sub_int(counter, 1);
+    }
+}

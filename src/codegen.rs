@@ -158,6 +158,8 @@ impl fmt::Display for CStmts {
 pub enum CStmt {
     /// A conditional statement
     Cond(CCond),
+    /// A while loop
+    WhileLoop(CWhileLoop),
     /// A variable declaration of the form `type-name var-name = value-expr;`
     VarDecl(CVarDecl),
     /// A variable assignment of the form `var-name = value-expr;`
@@ -175,6 +177,7 @@ impl fmt::Display for CStmt {
         use CStmt::*;
         match self {
             Cond(cond) => write!(f, "{}", cond),
+            WhileLoop(wloop) => write!(f, "{}", wloop),
             VarDecl(var_decl) => write!(f, "{}", var_decl),
             VarAssign(var_assign) => write!(f, "{}", var_assign),
             TempVarDecl(temp_var_decl) => write!(f, "{}", temp_var_decl),
@@ -182,6 +185,23 @@ impl fmt::Display for CStmt {
             Return(Some(expr)) => write!(f, "return {};", expr),
             Return(None) => write!(f, "return;"),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct CWhileLoop {
+    /// The condition for which the loop is expected to continue
+    pub cond: CExpr,
+    /// The body of the loop, executed until the condition is false
+    pub body: CStmts,
+}
+
+impl fmt::Display for CWhileLoop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {cond, body} = self;
+        writeln!(f, "while ({}) {{", cond)?;
+        writeln!(f, "{}", body)?;
+        write!(f, "}}")
     }
 }
 

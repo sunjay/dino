@@ -179,6 +179,9 @@ fn gen_block(
 
                 CStmt::Cond(gen_cond_stmt(cond, &mut cstmts, BlockBehaviour::Ignore, mangler, mod_scope)?)
             },
+            ir::Stmt::WhileLoop(wloop) => {
+                CStmt::WhileLoop(gen_while_loop(wloop, &mut cstmts, mangler, mod_scope)?)
+            },
             ir::Stmt::VarDecl(var_decl) => {
                 CStmt::VarDecl(gen_var_decl(var_decl, &mut cstmts, mangler, mod_scope)?)
             },
@@ -304,6 +307,22 @@ fn gen_cond_stmt(
     }
 
     Ok(CCond {cond_expr, if_body, else_body})
+}
+
+fn gen_while_loop(
+    wloop: &ir::WhileLoop,
+    prev_stmts: &mut Vec<CStmt>,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CWhileLoop, Error> {
+    let ir::WhileLoop {cond, body} = wloop;
+
+    let cond = gen_expr(cond, prev_stmts, mangler, mod_scope)?;
+    // Ignore the result of the body because it is currently guaranteed to be unit. We don't
+    // support returning values from loops yet.
+    let body = gen_block(body, BlockBehaviour::Ignore, mangler, mod_scope)?;
+
+    Ok(CWhileLoop {cond, body})
 }
 
 fn gen_var_decl(
