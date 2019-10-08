@@ -118,6 +118,7 @@ pub enum Expr<'a> {
     /// the conditional can be anything.
     Cond(Box<Cond<'a>>, TyVar),
     Call(CallExpr<'a>, TyVar),
+    VarAssign(Box<VarAssign<'a>>, TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
     ComplexLiteral(f64, TyVar),
@@ -137,6 +138,10 @@ impl<'a> Expr<'a> {
 
             Call(call, ty_var) => {
                 ir::Expr::Call(call.apply_subst(subst), ty_var.apply_subst(subst))
+            },
+
+            VarAssign(assign, ty_var) => {
+                ir::Expr::VarAssign(Box::new(assign.apply_subst(subst)), ty_var.apply_subst(subst))
             },
 
             IntegerLiteral(value, ty_var) => {
@@ -203,6 +208,25 @@ impl<'a> CallExpr<'a> {
         ir::CallExpr {
             func_name,
             args: args.into_iter().map(|expr| expr.apply_subst(subst)).collect(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct VarAssign<'a> {
+    /// The identifier to assign a value to
+    pub ident: Ident<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
+}
+
+impl<'a> VarAssign<'a> {
+    /// Applies the given substitution to this function call and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::VarAssign<'a> {
+        let Self {ident, expr} = self;
+        ir::VarAssign {
+            ident,
+            expr: expr.apply_subst(subst),
         }
     }
 }

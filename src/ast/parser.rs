@@ -189,6 +189,8 @@ fn expr(input: Input) -> IResult<Expr> {
     alt((
         map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
+        // Must be above `ident` or else this will never parse
+        map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
@@ -232,6 +234,23 @@ fn func_args(input: Input) -> IResult<Vec<Expr>> {
 fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
     where F: Fn(Input<'r>) -> IResult<T> {
     separated_list(tuple((wsc0, char(','), wsc0)), parser)
+}
+
+fn var_assign(input: Input) -> IResult<VarAssign> {
+    map(
+        tuple((
+            ident,
+            wsc0,
+            char('='),
+            wsc0,
+            expr,
+            // No semi-colon because this is an expression
+        )),
+        |(ident, _, _, _, expr)| VarAssign {
+            ident,
+            expr,
+        },
+    )(input)
 }
 
 fn ty(input: Input) -> IResult<Ty> {

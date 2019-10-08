@@ -313,6 +313,11 @@ impl ConstraintSet {
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
+            ast::Expr::VarAssign(assign) => {
+                self.append_var_assign(assign, return_type, scope, decls, prims)
+                    .map(|assign| tyir::Expr::VarAssign(Box::new(assign), return_type))
+            },
+
             &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 let valid_tys = match type_hint {
@@ -476,6 +481,31 @@ impl ConstraintSet {
             func_name,
             args,
         })
+    }
+
+    /// Appends constraints for the given assignment expression
+    fn append_var_assign<'a, 's>(
+        &mut self,
+        assign: &'a ast::VarAssign<'a>,
+        return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+        decls: &DeclMap,
+        prims: &Primitives,
+    ) -> Result<tyir::VarAssign<'a>, Error> {
+        let ast::VarAssign {ident, expr} = assign;
+
+        // The return type of a variable assignment is ()
+        self.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: return_type,
+            valid_tys: hashset!{prims.unit()},
+        });
+
+        // The type of the right-hand expression of the assignment must match the type of the
+        // variable being assigned to
+        let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
+        let expr = self.append_expr(expr, var_ty_var, scope, decls, prims)?;
+
+        Ok(tyir::VarAssign {ident, expr})
     }
 }
 

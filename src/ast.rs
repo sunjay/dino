@@ -109,6 +109,7 @@ pub struct VarDecl<'a> {
 pub enum Expr<'a> {
     Cond(Box<Cond<'a>>),
     Call(CallExpr<'a>),
+    VarAssign(Box<VarAssign<'a>>),
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),
@@ -129,17 +130,26 @@ pub struct Cond<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CallExpr<'a> {
+    pub func_name: Ident<'a>,
+    pub args: Vec<Expr<'a>>,
+}
+
+/// An assignment expression in the form `<name> = <value>`
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarAssign<'a> {
+    /// The identifier to assign a value to
+    pub ident: Ident<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct IntegerLiteral<'a> {
     pub value: i64,
     /// You can append "int" or "real" to help disambiguate the literal
     /// e.g. 132int or 32real
     pub type_hint: Option<&'a str>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct CallExpr<'a> {
-    pub func_name: Ident<'a>,
-    pub args: Vec<Expr<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

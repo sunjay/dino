@@ -353,6 +353,7 @@ fn gen_expr(
         //TODO: Probably want to do this by allowing gen_expr to append to &mut Vec<CStmt>
         ir::Expr::Cond(cond, ty) => gen_cond_expr(cond, ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, prev_stmts, mangler, mod_scope)?),
+        ir::Expr::VarAssign(assign, ty) => gen_var_assign(assign, *ty, prev_stmts, mangler, mod_scope)?,
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
@@ -398,6 +399,8 @@ fn gen_call_expr(
 ) -> Result<CCallExpr, Error> {
     let ir::CallExpr {func_name, args} = expr;
 
+    //TODO: In order to preserve execution order, calls should be lifted into a temporary variable
+    // and the expression returned from here should be a CExpr::Var(temp_var)
     Ok(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: func_name.to_string(),
@@ -405,6 +408,27 @@ fn gen_call_expr(
             .map(|expr| gen_expr(expr, prev_stmts, mangler, mod_scope))
             .collect::<Result<Vec<_>, _>>()?,
     })
+}
+
+fn gen_var_assign(
+    assign: &ir::VarAssign,
+    ty: TyId,
+    prev_stmts: &mut Vec<CStmt>,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let ir::VarAssign {ident, expr} = assign;
+
+    // C doesn't support assignment in expression position, so the assignment must be lifted into
+    // a statement
+    let assign = CStmt::VarAssign(CVarAssign {
+        mangled_name: mangler.get(ident).to_string(),
+        init_expr: CInitializerExpr::Expr(gen_expr(expr, prev_stmts, mangler, mod_scope)?),
+    });
+    prev_stmts.push(assign);
+
+    // We can then produce a unit value since that is always the result of an assignment
+    gen_unit_literal(ty, mangler, mod_scope)
 }
 
 fn gen_int_literal(

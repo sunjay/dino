@@ -85,6 +85,7 @@ pub struct VarDecl<'a> {
 pub enum Expr<'a> {
     Cond(Box<Cond<'a>>, TyId),
     Call(CallExpr<'a>, TyId),
+    VarAssign(Box<VarAssign<'a>>, TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
     ComplexLiteral(f64, TyId),
@@ -97,13 +98,14 @@ impl<'a> Expr<'a> {
     pub fn ty_id(&self) -> TyId {
         use Expr::*;
         match *self {
-            Cond(_, ty_id) => ty_id,
-            Call(_, ty_id) => ty_id,
-            IntegerLiteral(_, ty_id) => ty_id,
-            RealLiteral(_, ty_id) => ty_id,
-            ComplexLiteral(_, ty_id) => ty_id,
-            BoolLiteral(_, ty_id) => ty_id,
-            UnitLiteral(ty_id) => ty_id,
+            Cond(_, ty_id) |
+            Call(_, ty_id) |
+            VarAssign(_, ty_id) |
+            IntegerLiteral(_, ty_id) |
+            RealLiteral(_, ty_id) |
+            ComplexLiteral(_, ty_id) |
+            BoolLiteral(_, ty_id) |
+            UnitLiteral(ty_id) |
             Var(_, ty_id) => ty_id,
         }
     }
@@ -126,4 +128,12 @@ pub struct CallExpr<'a> {
     pub func_name: Ident<'a>,
     /// The argument expressions to pass to the function
     pub args: Vec<Expr<'a>>,
+}
+
+#[derive(Debug)]
+pub struct VarAssign<'a> {
+    /// The identifier to assign a value to
+    pub ident: Ident<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
 }

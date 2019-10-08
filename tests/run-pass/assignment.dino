@@ -1,0 +1,6 @@
+fn main() {
+    let x = 10;
+    print_int(x);
+    x = 12;
+    print_int(x);
+}
