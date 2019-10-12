@@ -32,4 +32,10 @@ pub struct ExternType {
     ///
     /// Only required if a complex number literal may type check to this type
     pub complex_literal_constructor: Option<String>,
+
+    /// (optional) A function that takes a *const u8 pointer and a uintptr_t length and returns a
+    /// value of the extern type
+    ///
+    /// Only required if a byte string literal may type check to this type
+    pub bstr_literal_constructor: Option<String>,
 }

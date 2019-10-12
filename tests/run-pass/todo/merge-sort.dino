@@ -45,10 +45,10 @@ fn merge(left: bstr, right: bstr) -> bstr {
         let right_byte = bstr_get(right, right_i);
 
         if byte_lt(left_byte, right_byte) {
-            append_string_byte(output, left_byte);
+            output = bstr_concat(output, left_byte);
             left_i = add_int(left_i, 1);
         } else { // byte_gte(left_byte, right_byte)
-            append_string_byte(output, right_byte);
+            output = bstr_concat(output, right_byte);
             right_i = add_int(right_i, 1);
         }
     }
@@ -56,11 +56,11 @@ fn merge(left: bstr, right: bstr) -> bstr {
     // Append any remaining characters on to the string
     // Only one of these loops will run
     while int_lt(left_i, left_len) {
-        append_string_byte(output, bstr_get(left, left_i));
+        output = bstr_concat(output, bstr_get(left, left_i));
         left_i = add_int(left_i, 1);
     }
     while int_lt(right_i, right_len) {
-        append_string_byte(output, bstr_get(right, right_i));
+        output = bstr_concat(output, bstr_get(right, right_i));
         right_i = add_int(right_i, 1);
     }
 

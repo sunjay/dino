@@ -285,4 +285,39 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "value", ty: Ty::Named("complex")},
         ],
     })).unwrap();
+
+    decls.insert_func(Function::new_extern("bstr_len", FuncSig {
+        return_type: Ty::Named("int"),
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_concat", FuncSig {
+        return_type: Ty::Named("bstr"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_slice", FuncSig {
+        return_type: Ty::Named("bstr"),
+        params: vec![
+            FuncParam {name: "string", ty: Ty::Named("bstr")},
+            FuncParam {name: "start", ty: Ty::Named("int")},
+            FuncParam {name: "end", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_get", FuncSig {
+        return_type: Ty::Named("bstr"),
+        params: vec![
+            FuncParam {name: "string", ty: Ty::Named("bstr")},
+            FuncParam {name: "index", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("print_bstr", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
 }

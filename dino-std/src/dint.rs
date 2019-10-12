@@ -5,11 +5,24 @@ use crate::dbool::DBool;
 ///
 /// An integer type that is (at least) 64-bits wide.
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct DInt(i64);
+
+impl DInt {
+    pub fn map(self, f: impl FnOnce(i64) -> i64) -> Self {
+        DInt(f(self.0))
+    }
+}
 
 impl From<i64> for DInt {
     fn from(x: i64) -> Self {
         DInt(x)
+    }
+}
+
+impl From<DInt> for i64 {
+    fn from(x: DInt) -> Self {
+        x.0
     }
 }
 

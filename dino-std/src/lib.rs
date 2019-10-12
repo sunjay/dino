@@ -5,12 +5,14 @@ mod dbool;
 mod dint;
 mod dreal;
 mod dcomplex;
+mod dbstr;
 
 pub use dunit::*;
 pub use dbool::*;
 pub use dint::*;
 pub use dreal::*;
 pub use dcomplex::*;
+pub use dbstr::*;
 
 // Needed to define #[panic_handler]
 #[allow(unused_imports)]

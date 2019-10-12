@@ -19,6 +19,11 @@ panic = "abort"
 [dependencies]
 panic-halt = "0.2.0"
 
+[dependencies.libc]
+version = "0.2"
+# Disable std feature so this crate works with no_std
+default-features = false
+
 [build-dependencies]
 cbindgen = "0.9.1"
 build-helper = "0.1"

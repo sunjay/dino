@@ -72,5 +72,11 @@ primitives! {
             complex_literal_constructor: Some("__dino__DComplex_from_complex_literal".to_string()),
             ..ExternType::default()
         },
+
+        bstr => "bstr" => ExternType {
+            extern_name: "DBStr".to_string(),
+            bstr_literal_constructor: Some("__dino__DBStr_from_bstr_literal".to_string()),
+            ..ExternType::default()
+        },
     }
 }
