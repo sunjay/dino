@@ -1,6 +1,6 @@
 use core::ptr;
 
-use libc::malloc;
+use libc::{malloc, getline};
 
 use crate::dunit::DUnit;
 use crate::dint::DInt;
@@ -84,4 +84,17 @@ pub extern fn print_bstr(s: DBStr) -> DUnit {
     unsafe { super::printf(b"%*.*s\n\0" as *const u8, s.length, s.length, s.data); }
 
     DUnit::default()
+}
+
+#[no_mangle]
+pub extern fn read_line_bstr() -> DBStr {
+    //TODO: Free memory allocated by getline
+    // See: http://man7.org/linux/man-pages/man3/getline.3.html
+    let mut data = ptr::null_mut();
+    let mut length = 0;
+    //TODO: lock stdin
+    if unsafe { getline(&mut data as *mut _, &mut length as *mut _, super::stdin) } == -1 {
+        //TODO: Error handling
+    }
+    return DBStr {data: data as *mut u8, length}
 }

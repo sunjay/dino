@@ -18,7 +18,8 @@ pub use dbstr::*;
 #[allow(unused_imports)]
 use panic_halt;
 
-// A list of C functions that are being imported
+// A list of C functions/items that are being imported
 extern {
+    pub static mut stdin: *mut libc::FILE;
     pub fn printf(format: *const u8, ...) -> i32;
 }
