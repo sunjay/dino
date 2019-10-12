@@ -310,7 +310,14 @@ impl fmt::Display for CExpr {
             NTStrLiteral(data) => {
                 write!(f, "(const unsigned char *)\"")?;
                 for &ch in data {
-                    write!(f, "{}", ch as char)?;
+                    match ch {
+                        b'\\' => write!(f, "\\\\")?,
+                        b'"' => write!(f, "\\\"")?,
+                        b'\n' => write!(f, "\\n")?,
+                        b'\r' => write!(f, "\\r")?,
+                        b'\t' => write!(f, "\\t")?,
+                        _ => write!(f, "{}", ch as char)?,
+                    }
                 }
                 write!(f, "\"")
             },

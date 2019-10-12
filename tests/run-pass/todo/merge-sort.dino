@@ -8,6 +8,7 @@ fn main() {
         let input = read_line_bstr();
         let output = merge_sort(input);
         print_bstr(output);
+        print_bstr(b"\n");
     }
 }
 
