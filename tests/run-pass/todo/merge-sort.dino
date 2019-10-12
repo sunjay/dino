@@ -1,4 +1,4 @@
-//! A dino program that reads a line of text as input, sorts it, and then outputs the
+//! A program that reads a line of text as input, sorts it, and then outputs the
 //! sorted string.
 
 fn main() {
@@ -8,7 +8,8 @@ fn main() {
         let input = read_line_bstr();
         let output = merge_sort(input);
         print_bstr(output);
-        print_bstr(b"\n");
+        // Print empty line for formatting purposes
+        print_bstr(b"");
     }
 }
 
