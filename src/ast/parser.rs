@@ -191,6 +191,7 @@ fn expr(input: Input) -> IResult<Expr> {
         map(func_call, Expr::Call),
         // Must be above `ident` or else this will never parse
         map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
+        map(return_expr, |ret_expr| Expr::Return(ret_expr.map(Box::new))),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
@@ -250,6 +251,13 @@ fn var_assign(input: Input) -> IResult<VarAssign> {
             ident,
             expr,
         },
+    )(input)
+}
+
+fn return_expr(input: Input) -> IResult<Option<Expr>> {
+    map(
+        tuple((kw_return, wsc0, opt(expr))),
+        |(_, _, expr)| expr,
     )(input)
 }
 

@@ -168,8 +168,9 @@ pub enum CStmt {
     TempVarDecl(CTempVarDecl),
     /// An expression followed by a semi-colon is a statement
     Expr(CExpr),
-    /// A `return expr;` statement. The expression is optional.
-    Return(Option<CExpr>),
+    /// A `return expr;` statement. The expression is not optional because every function at least
+    /// returns unit.
+    Return(CExpr),
 }
 
 impl fmt::Display for CStmt {
@@ -182,8 +183,7 @@ impl fmt::Display for CStmt {
             VarAssign(var_assign) => write!(f, "{}", var_assign),
             TempVarDecl(temp_var_decl) => write!(f, "{}", temp_var_decl),
             Expr(expr) => write!(f, "{};", expr),
-            Return(Some(expr)) => write!(f, "return {};", expr),
-            Return(None) => write!(f, "return;"),
+            Return(expr) => write!(f, "return {};", expr),
         }
     }
 }

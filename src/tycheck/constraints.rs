@@ -149,7 +149,8 @@ impl ConstraintSet {
             scope.add_variable(name, param_ty_var);
         }
 
-        let body = self.append_block(body, return_type, &mut scope, decls, prims)?;
+        // Type expected from block is the same as the type expected from the function
+        let body = self.append_block(body, return_type, return_type, &mut scope, decls, prims)?;
         Ok(tyir::Function {name, sig, body})
     }
 
@@ -161,7 +162,10 @@ impl ConstraintSet {
     fn append_block<'a, 's>(
         &mut self,
         block: &'a ast::Block<'a>,
+        // The type expected from the block
         return_type: TyVar,
+        // The return type of the function surrounding this block
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -170,11 +174,11 @@ impl ConstraintSet {
 
         Ok(tyir::Block {
             stmts: stmts.iter()
-                .map(|stmt| self.append_stmt(stmt, scope, decls, prims))
+                .map(|stmt| self.append_stmt(stmt, func_return_type, scope, decls, prims))
                 .collect::<Result<Vec<_>, _>>()?,
             ret: match ret {
                 // The returned expression must have the same type as the block
-                Some(ret) => Some(self.append_expr(ret, return_type, scope, decls, prims)?),
+                Some(ret) => Some(self.append_expr(ret, return_type, func_return_type, scope, decls, prims)?),
 
                 None => {
                     // No return expression, so the return type of this block should be unit
@@ -194,23 +198,25 @@ impl ConstraintSet {
     fn append_stmt<'a, 's>(
         &mut self,
         stmt: &'a ast::Stmt<'a>,
+        // The return type of the function surrounding this statement
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Stmt<'a>, Error> {
         match stmt {
-            ast::Stmt::Cond(cond) => self.append_cond(cond, None, scope, decls, prims)
+            ast::Stmt::Cond(cond) => self.append_cond(cond, None, func_return_type, scope, decls, prims)
                 .map(tyir::Stmt::Cond),
-            ast::Stmt::WhileLoop(wloop) => self.append_while_loop(wloop, scope, decls, prims)
+            ast::Stmt::WhileLoop(wloop) => self.append_while_loop(wloop, func_return_type, scope, decls, prims)
                 .map(tyir::Stmt::WhileLoop),
-            ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, scope, decls, prims)
+            ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, func_return_type, scope, decls, prims)
                 .map(tyir::Stmt::VarDecl),
             ast::Stmt::Expr(expr) => {
                 // Generate a fresh variable that is never used after this point. By not using the
                 // type variable, we indicate that the type of this expression does not matter.
                 // Statement types do not matter because statements end with semicolons.
                 let ty_var = self.fresh_type_var();
-                self.append_expr(expr, ty_var, scope, decls, prims).map(tyir::Stmt::Expr)
+                self.append_expr(expr, ty_var, func_return_type, scope, decls, prims).map(tyir::Stmt::Expr)
             },
         }
     }
@@ -219,6 +225,8 @@ impl ConstraintSet {
     fn append_while_loop<'a, 's>(
         &mut self,
         wloop: &'a ast::WhileLoop<'a>,
+        // The return type of the function surrounding this while loop
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -232,7 +240,7 @@ impl ConstraintSet {
             valid_tys: hashset!{prims.bool()},
         });
         // Loop condition must use the parent scope, not the child scope for the loop body
-        let cond = self.append_expr(cond, cond_var, scope, decls, prims)?;
+        let cond = self.append_expr(cond, cond_var, func_return_type, scope, decls, prims)?;
 
         // Loops are not currently allowed in expression position, so the body must result in ()
         let loop_body_var = self.fresh_type_var();
@@ -243,7 +251,7 @@ impl ConstraintSet {
         // The body of the loop gets a new inner scope so that variables declared within it aren't
         // accessible after the loop has finished running
         let mut child_scope = scope.child_scope();
-        let body = self.append_block(body, loop_body_var, &mut child_scope, decls, prims)?;
+        let body = self.append_block(body, loop_body_var, func_return_type, &mut child_scope, decls, prims)?;
 
         Ok(tyir::WhileLoop {cond, body})
     }
@@ -252,6 +260,8 @@ impl ConstraintSet {
     fn append_var_decl<'a, 's>(
         &mut self,
         var_decl: &'a ast::VarDecl<'a>,
+        // The return type of the function surrounding this variable declaration
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -281,7 +291,7 @@ impl ConstraintSet {
         // Must append expr BEFORE updating local scope with the new type variable or else variable
         // shadowing will not work. Semantically, this variable does not come into scope until
         // *after* the variable expression has been evaluated.
-        let expr = self.append_expr(expr, var_decl_ty_var, scope, decls, prims)?;
+        let expr = self.append_expr(expr, var_decl_ty_var, func_return_type, scope, decls, prims)?;
 
         // Associate the variable name with its type variable
         scope.add_variable(ident, var_decl_ty_var);
@@ -297,25 +307,33 @@ impl ConstraintSet {
     fn append_expr<'a, 's>(
         &mut self,
         expr: &'a ast::Expr<'a>,
+        // The type expected from the expression
         return_type: TyVar,
+        // The return type of the function surrounding this expression
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
             ast::Expr::Cond(cond) => {
-                self.append_cond(cond, Some(return_type), scope, decls, prims)
+                self.append_cond(cond, Some(return_type), func_return_type, scope, decls, prims)
                     .map(|cond| tyir::Expr::Cond(Box::new(cond), return_type))
             },
 
             ast::Expr::Call(call) => {
-                self.append_call_expr(call, return_type, scope, decls, prims)
+                self.append_call_expr(call, return_type, func_return_type, scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
             ast::Expr::VarAssign(assign) => {
-                self.append_var_assign(assign, return_type, scope, decls, prims)
+                self.append_var_assign(assign, return_type, func_return_type, scope, decls, prims)
                     .map(|assign| tyir::Expr::VarAssign(Box::new(assign), return_type))
+            },
+
+            ast::Expr::Return(ret_expr) => {
+                self.append_return(ret_expr.as_ref().map(|x| x.as_ref()), return_type, func_return_type, scope, decls, prims)
+                    .map(|ret_expr| tyir::Expr::Return(ret_expr.map(Box::new), return_type))
             },
 
             &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
@@ -389,7 +407,10 @@ impl ConstraintSet {
     fn append_cond<'a, 's>(
         &mut self,
         cond: &'a ast::Cond<'a>,
+        // The type expected from the conditional blocks
         return_type: Option<TyVar>,
+        // The return type of the function surrounding this conditional
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -417,11 +438,11 @@ impl ConstraintSet {
                 ty_var: cond_var,
                 valid_tys: hashset!{prims.bool()},
             });
-            let cond = self.append_expr(cond, cond_var, scope, decls, prims)?;
+            let cond = self.append_expr(cond, cond_var, func_return_type, scope, decls, prims)?;
 
             // The body of every condition must evaluate to the same type
             let mut child_scope = scope.child_scope();
-            let body = self.append_block(body, return_type, &mut child_scope, decls, prims)?;
+            let body = self.append_block(body, return_type, func_return_type, &mut child_scope, decls, prims)?;
 
             Ok((cond, body))
         }).collect::<Result<Vec<_>, _>>()?;
@@ -429,7 +450,7 @@ impl ConstraintSet {
         // The body of the else clause must evaluate to the same type as the other condition bodies
         let else_body = else_body.as_ref().map(|else_body| {
             let mut child_scope = scope.child_scope();
-            self.append_block(else_body, return_type, &mut child_scope, decls, prims)
+            self.append_block(else_body, return_type, func_return_type, &mut child_scope, decls, prims)
         }).transpose()?;
 
         Ok(tyir::Cond {conds, else_body})
@@ -439,7 +460,10 @@ impl ConstraintSet {
     fn append_call_expr<'a, 's>(
         &mut self,
         call: &'a ast::CallExpr<'a>,
+        // The type expected from the call expression
         return_type: TyVar,
+        // The return type of the function surrounding this call
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -458,10 +482,10 @@ impl ConstraintSet {
         }
 
         // Assert that the return type of this expression is the same as the function return type
-        let ir::FuncSig {return_type: func_return_type, params} = resolve_sig(decls, prims, sig)?;
+        let ir::FuncSig {return_type: call_return_type, params} = resolve_sig(decls, prims, sig)?;
         self.ty_var_valid_types.push(TyVarValidTypes {
             ty_var: return_type,
-            valid_tys: hashset!{func_return_type},
+            valid_tys: hashset!{call_return_type},
         });
 
         let args = args.iter().zip(params).map(|(arg, param)| {
@@ -474,7 +498,7 @@ impl ConstraintSet {
                 valid_tys: hashset!{param_ty},
             });
 
-            self.append_expr(arg, arg_ty_var, scope, decls, prims)
+            self.append_expr(arg, arg_ty_var, func_return_type, scope, decls, prims)
         }).collect::<Result<Vec<_>, _>>()?;
 
         Ok(tyir::CallExpr {
@@ -487,7 +511,10 @@ impl ConstraintSet {
     fn append_var_assign<'a, 's>(
         &mut self,
         assign: &'a ast::VarAssign<'a>,
+        // The type expected from the assignment expression
         return_type: TyVar,
+        // The return type of the function surrounding this assignment
+        func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
         decls: &DeclMap,
         prims: &Primitives,
@@ -503,9 +530,44 @@ impl ConstraintSet {
         // The type of the right-hand expression of the assignment must match the type of the
         // variable being assigned to
         let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
-        let expr = self.append_expr(expr, var_ty_var, scope, decls, prims)?;
+        let expr = self.append_expr(expr, var_ty_var, func_return_type, scope, decls, prims)?;
 
         Ok(tyir::VarAssign {ident, expr})
+    }
+
+    /// Appends constraints for the given return expression
+    fn append_return<'a, 's>(
+        &mut self,
+        ret_expr: Option<&'a ast::Expr<'a>>,
+        // The type expected from the return expression
+        return_type: TyVar,
+        // The return type of the function surrounding this return expression
+        func_return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+        decls: &DeclMap,
+        prims: &Primitives,
+    ) -> Result<Option<tyir::Expr<'a>>, Error> {
+        // A return expression always type checks to ()
+        self.ty_var_valid_types.push(TyVarValidTypes {
+            ty_var: return_type,
+            valid_tys: hashset!{prims.unit()},
+        });
+
+        Ok(match ret_expr {
+            // The return expression must match the type returned from the function
+            Some(ret_expr) => {
+                Some(self.append_expr(ret_expr, func_return_type, func_return_type, scope, decls, prims)?)
+            },
+            // No return expression, thus the function must be returning unit
+            None => {
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: func_return_type,
+                    valid_tys: hashset!{prims.unit()},
+                });
+
+                None
+            },
+        })
     }
 }
 

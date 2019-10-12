@@ -42,6 +42,17 @@ fn main() {
     // the () literal as the last statement in its block
     if true { () }
 
+    // The type of return is always ()
+    let u4: () = if false {
+        // With no return expression, we return ()
+        // Note that return is an expression and this is the end of a block,
+        // so the semi-colon is optional
+        return
+    } else {
+        // We can also return unit explicitly
+        return ();
+    };
+
     // Return unit -- no semi-colon
     unit()
 }

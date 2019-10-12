@@ -119,6 +119,7 @@ pub enum Expr<'a> {
     Cond(Box<Cond<'a>>, TyVar),
     Call(CallExpr<'a>, TyVar),
     VarAssign(Box<VarAssign<'a>>, TyVar),
+    Return(Option<Box<Expr<'a>>>, TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
     ComplexLiteral(f64, TyVar),
@@ -142,6 +143,10 @@ impl<'a> Expr<'a> {
 
             VarAssign(assign, ty_var) => {
                 ir::Expr::VarAssign(Box::new(assign.apply_subst(subst)), ty_var.apply_subst(subst))
+            },
+
+            Return(ret_expr, ty_var) => {
+                ir::Expr::Return(ret_expr.map(|expr| Box::new(expr.apply_subst(subst))), ty_var.apply_subst(subst))
             },
 
             IntegerLiteral(value, ty_var) => {

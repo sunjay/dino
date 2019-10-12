@@ -86,6 +86,7 @@ pub enum Expr<'a> {
     Cond(Box<Cond<'a>>, TyId),
     Call(CallExpr<'a>, TyId),
     VarAssign(Box<VarAssign<'a>>, TyId),
+    Return(Option<Box<Expr<'a>>>, TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
     ComplexLiteral(f64, TyId),
@@ -101,6 +102,7 @@ impl<'a> Expr<'a> {
             Cond(_, ty_id) |
             Call(_, ty_id) |
             VarAssign(_, ty_id) |
+            Return(_, ty_id) |
             IntegerLiteral(_, ty_id) |
             RealLiteral(_, ty_id) |
             ComplexLiteral(_, ty_id) |

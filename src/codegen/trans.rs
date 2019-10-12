@@ -208,7 +208,7 @@ fn gen_block(
     };
 
     cstmts.push(match behaviour {
-        BlockBehaviour::Return => CStmt::Return(Some(last_stmt_expr)),
+        BlockBehaviour::Return => CStmt::Return(last_stmt_expr),
         BlockBehaviour::Ignore => CStmt::Expr(last_stmt_expr),
         BlockBehaviour::StoreVar {mangled_name} => CStmt::VarAssign(CVarAssign {
                 mangled_name,
@@ -354,6 +354,7 @@ fn gen_expr(
         ir::Expr::Cond(cond, ty) => gen_cond_expr(cond, ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, prev_stmts, mangler, mod_scope)?),
         ir::Expr::VarAssign(assign, ty) => gen_var_assign(assign, *ty, prev_stmts, mangler, mod_scope)?,
+        ir::Expr::Return(ret_expr, ty) => gen_return(ret_expr.as_ref().map(|x| x.as_ref()), *ty, prev_stmts, mangler, mod_scope)?,
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
@@ -428,6 +429,26 @@ fn gen_var_assign(
     prev_stmts.push(assign);
 
     // We can then produce a unit value since that is always the result of an assignment
+    gen_unit_literal(ty, mangler, mod_scope)
+}
+
+fn gen_return(
+    ret_expr: Option<&ir::Expr>,
+    ty: TyId,
+    prev_stmts: &mut Vec<CStmt>,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    // C doesn't support return in expression position, so the return must be lifted into
+    // a statement
+    let assign = CStmt::Return(match ret_expr {
+        Some(ret_expr) => gen_expr(ret_expr, prev_stmts, mangler, mod_scope)?,
+        // If no return expression is provided, we must be returning unit
+        None => gen_unit_literal(ty, mangler, mod_scope)?,
+    });
+    prev_stmts.push(assign);
+
+    // We can then produce a unit value since that is always the result of a return expression
     gen_unit_literal(ty, mangler, mod_scope)
 }
 
