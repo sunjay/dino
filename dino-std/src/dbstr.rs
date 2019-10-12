@@ -1,12 +1,16 @@
 use core::ptr;
+use core::slice;
+use core::cmp::Ordering;
 
 use libc::{malloc, getline};
 
+use crate::dbool::DBool;
 use crate::dunit::DUnit;
 use crate::dint::DInt;
 
 /// The dino byte string type
 #[repr(C)]
+#[derive(Ord, Eq)]
 pub struct DBStr {
     data: *mut u8,
     length: usize,
@@ -15,6 +19,20 @@ pub struct DBStr {
 impl Default for DBStr {
     fn default() -> Self {
         Self {data: ptr::null_mut(), length: 0}
+    }
+}
+
+impl PartialEq for DBStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl PartialOrd for DBStr {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let s1 = unsafe { slice::from_raw_parts(self.data, self.length) };
+        let s2 = unsafe { slice::from_raw_parts(other.data, other.length) };
+        s1.partial_cmp(s2)
     }
 }
 
@@ -42,6 +60,36 @@ pub extern fn __dino__DBStr_from_bstr_literal(data: *const u8, length: usize) ->
 #[no_mangle]
 pub extern fn bstr_len(s: DBStr) -> DInt {
     DInt::from(s.length as i64)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bstr_eq(s1: DBStr, s2: DBStr) -> DBool {
+    DBool::from(s1 == s2)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bstr_gt(s1: DBStr, s2: DBStr) -> DBool {
+    DBool::from(s1 > s2)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bstr_gte(s1: DBStr, s2: DBStr) -> DBool {
+    DBool::from(s1 >= s2)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bstr_lt(s1: DBStr, s2: DBStr) -> DBool {
+    DBool::from(s1 < s2)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bstr_lte(s1: DBStr, s2: DBStr) -> DBool {
+    DBool::from(s1 <= s2)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).

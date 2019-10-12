@@ -44,10 +44,10 @@ fn merge(left: bstr, right: bstr) -> bstr {
         let left_byte = bstr_get(left, left_i);
         let right_byte = bstr_get(right, right_i);
 
-        if byte_lt(left_byte, right_byte) {
+        if bstr_lt(left_byte, right_byte) {
             output = bstr_concat(output, left_byte);
             left_i = add_int(left_i, 1);
-        } else { // byte_gte(left_byte, right_byte)
+        } else { // bstr_gte(left_byte, right_byte)
             output = bstr_concat(output, right_byte);
             right_i = add_int(right_i, 1);
         }

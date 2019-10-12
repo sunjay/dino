@@ -292,6 +292,41 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "value", ty: Ty::Named("bstr")},
         ],
     })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_eq", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_gt", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_gte", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_lt", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bstr_lte", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bstr")},
+            FuncParam {name: "right", ty: Ty::Named("bstr")},
+        ],
+    })).unwrap();
     decls.insert_func(Function::new_extern("bstr_concat", FuncSig {
         return_type: Ty::Named("bstr"),
         params: vec![
