@@ -3,7 +3,7 @@ use std::fs;
 use std::env;
 use std::ffi::OsStr;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use rayon::prelude::*;
 use tempfile::{NamedTempFile, TempPath};
@@ -19,7 +19,7 @@ fn compile_fail() -> io::Result<()> {
     tests_dir.read_dir()?.par_bridge().panic_fuse().map(|entry| {
         let entry = entry?;
         let entry_path = entry.path();
-        if entry_path.is_dir() || entry_path.extension() == Some(OsStr::new("stderr")) {
+        if entry_path.is_dir() || entry_path.extension() != Some(OsStr::new("dino")) {
             return Ok(());
         }
 
@@ -61,14 +61,22 @@ fn run_pass() -> io::Result<()> {
     tests_dir.read_dir()?.par_bridge().panic_fuse().map(|entry| {
         let entry = entry?;
         let entry_path = entry.path();
-        if entry_path.is_dir() || entry_path.extension() == Some(OsStr::new("stdout")) {
+        if entry_path.is_dir() || entry_path.extension() != Some(OsStr::new("dino")) {
             return Ok(());
         }
 
         match compile(&entry_path) {
             Ok(exec_path) => {
+                // Check for an input file
+                let input_path = entry_path.with_extension("stdin");
+                let stdin = if input_path.exists() {
+                    Stdio::from(fs::File::open(input_path)?)
+                } else {
+                    Stdio::null()
+                };
+
                 // Test running the program
-                let output = Command::new(&exec_path).output()
+                let output = Command::new(&exec_path).stdin(stdin).output()
                     .unwrap_or_else(|err| panic!("Failed to run program generated for '{}': {}", entry_path.display(), err));
 
                 // Check the output of the generated program against what's expected
