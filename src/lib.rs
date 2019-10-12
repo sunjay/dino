@@ -320,4 +320,9 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "value", ty: Ty::Named("bstr")},
         ],
     })).unwrap();
+
+    decls.insert_func(Function::new_extern("read_line_bstr", FuncSig {
+        return_type: Ty::Named("bstr"),
+        params: Vec::new(),
+    })).unwrap();
 }
