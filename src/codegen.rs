@@ -292,6 +292,10 @@ impl fmt::Display for CInitializerExpr {
 #[derive(Debug)]
 pub enum CExpr {
     Call(CCallExpr),
+    /// A null-terminated C byte string literal with the given data.
+    /// The data is allowed to contain null characters.
+    //TODO: Avoid having to copy the data into a Vec
+    NTStrLiteral(Vec<u8>),
     IntegerLiteral(i64),
     DoubleLiteral(f64),
     BoolLiteral(bool),
@@ -303,6 +307,13 @@ impl fmt::Display for CExpr {
         use CExpr::*;
         match self {
             Call(call) => write!(f, "{}", call),
+            NTStrLiteral(data) => {
+                write!(f, "(const unsigned char *)\"")?;
+                for &ch in data {
+                    write!(f, "{}", ch as char)?;
+                }
+                write!(f, "\"")
+            },
             // Since DInt is 64-bits, we need the LL suffix or the literal is not 64-bits wide.
             // https://en.cppreference.com/w/c/language/integer_constant
             IntegerLiteral(value) => write!(f, "{}LL", value),

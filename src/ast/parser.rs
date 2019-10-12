@@ -192,6 +192,7 @@ fn expr(input: Input) -> IResult<Expr> {
         // Must be above `ident` or else this will never parse
         map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
         map(return_expr, |ret_expr| Expr::Return(ret_expr.map(Box::new))),
+        map(bstr_literal, Expr::BStrLiteral),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
         map(integer_literal, Expr::IntegerLiteral),
@@ -259,6 +260,22 @@ fn return_expr(input: Input) -> IResult<Option<Expr>> {
         tuple((kw_return, wsc0, opt(expr))),
         |(_, _, expr)| expr,
     )(input)
+}
+
+fn bstr_literal(input: Input) -> IResult<Vec<u8>> {
+    map(delimited(
+        tag("b\""),
+        //TODO: Figure out how to make escaped strings work
+        take_till(|c| c == '"'),
+        // escaped_transform(take_till(|c| c == '"' || c == '\\'), '\\', |inp| alt((
+        //     map(char('\\'), |_| "\\"),
+        //     map(char('"'), |_| "\""),
+        //     map(char('n'), |_| "\n"),
+        //     map(char('r'), |_| "\r"),
+        //     map(char('t'), |_| "\t"),
+        // ))(inp)),
+        char('"'),
+    ), |s: Input| s.as_bytes().to_vec())(input)
 }
 
 fn ty(input: Input) -> IResult<Ty> {

@@ -111,6 +111,7 @@ pub enum Expr<'a> {
     Call(CallExpr<'a>),
     VarAssign(Box<VarAssign<'a>>),
     Return(Option<Box<Expr<'a>>>),
+    BStrLiteral(Vec<u8>),
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),

@@ -355,6 +355,7 @@ fn gen_expr(
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, prev_stmts, mangler, mod_scope)?),
         ir::Expr::VarAssign(assign, ty) => gen_var_assign(assign, *ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Return(ret_expr, ty) => gen_return(ret_expr.as_ref().map(|x| x.as_ref()), *ty, prev_stmts, mangler, mod_scope)?,
+        &ir::Expr::BStrLiteral(value, ty) => gen_bstr_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::RealLiteral(value, ty) => gen_real_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::ComplexLiteral(value, ty) => gen_complex_literal(value, ty, mangler, mod_scope)?,
@@ -450,6 +451,26 @@ fn gen_return(
 
     // We can then produce a unit value since that is always the result of a return expression
     gen_unit_literal(ty, mangler, mod_scope)
+}
+
+fn gen_bstr_literal(
+    value: &[u8],
+    ty: TyId,
+    _mangler: &NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let extern_type = lookup_type(&ty, mod_scope);
+    Ok(CExpr::Call(CCallExpr {
+        //TODO: Mangle function names
+        mangled_func_name: extern_type.bstr_literal_constructor
+            .as_ref()
+            .expect("bug: no byte string literal constructor defined for type that type checked to bstr")
+            .clone(),
+        args: vec![
+            CExpr::NTStrLiteral(value.to_vec()),
+            CExpr::IntegerLiteral(value.len() as i64),
+        ],
+    }))
 }
 
 fn gen_int_literal(

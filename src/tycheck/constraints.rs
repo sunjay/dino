@@ -336,6 +336,16 @@ impl ConstraintSet {
                     .map(|ret_expr| tyir::Expr::Return(ret_expr.map(Box::new), return_type))
             },
 
+            ast::Expr::BStrLiteral(value) => {
+                // Assert that the literal is one of the expected types for this kind of literal
+                self.ty_var_valid_types.push(TyVarValidTypes {
+                    ty_var: return_type,
+                    valid_tys: hashset!{prims.bstr()},
+                });
+
+                Ok(tyir::Expr::BStrLiteral(value, return_type))
+            },
+
             &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 let valid_tys = match type_hint {
