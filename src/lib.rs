@@ -97,12 +97,6 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
 
     let decls = &mut decls.top_level_decls;
 
-    decls.insert_func(Function::new_extern("print_unit", FuncSig {
-        return_type: Ty::Unit,
-        params: vec![
-            FuncParam {name: "value", ty: Ty::Unit},
-        ],
-    })).unwrap();
     decls.insert_func(Function::new_extern("unit_eq", FuncSig {
         return_type: Ty::Named("bool"),
         params: vec![
@@ -110,7 +104,40 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "right", ty: Ty::Unit},
         ],
     })).unwrap();
+    decls.insert_func(Function::new_extern("print_unit", FuncSig {
+        return_type: Ty::Unit,
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Unit},
+        ],
+    })).unwrap();
 
+    decls.insert_func(Function::new_extern("bool_eq", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bool")},
+            FuncParam {name: "right", ty: Ty::Named("bool")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bool_and", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bool")},
+            FuncParam {name: "right", ty: Ty::Named("bool")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bool_or", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "left", ty: Ty::Named("bool")},
+            FuncParam {name: "right", ty: Ty::Named("bool")},
+        ],
+    })).unwrap();
+    decls.insert_func(Function::new_extern("bool_not", FuncSig {
+        return_type: Ty::Named("bool"),
+        params: vec![
+            FuncParam {name: "value", ty: Ty::Named("bool")},
+        ],
+    })).unwrap();
     decls.insert_func(Function::new_extern("print_bool", FuncSig {
         return_type: Ty::Unit,
         params: vec![

@@ -16,6 +16,30 @@ pub extern fn __dino__DBool_from_bool_literal(value: bool) -> DBool {
     DBool(value)
 }
 
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bool_eq(x: DBool, y: DBool) -> DBool {
+    DBool::from(x.0 == y.0)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bool_and(x: DBool, y: DBool) -> DBool {
+    DBool::from(x.0 && y.0)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bool_or(x: DBool, y: DBool) -> DBool {
+    DBool::from(x.0 || y.0)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn bool_not(x: DBool) -> DBool {
+    DBool::from(!x.0)
+}
+
 //TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
 pub extern fn print_bool(x: DBool) -> DUnit {
