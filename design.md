@@ -80,7 +80,7 @@ Rust dynamic library linked with the compiled code.
 * Pattern matching
 * Loops:
   * `for pat in expr { body }`
-  * `while (expr) { body }`
+  * `while expr { body }`
   * `while let pat = expr { body }`
 * Conditions:
   * `if (expr) { body }`
