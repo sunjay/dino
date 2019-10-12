@@ -7,7 +7,7 @@ use nom::{
     number::complete::double,
     character::complete::{char, digit1, one_of},
     combinator::{all_consuming, map, map_res, recognize, opt, not},
-    bytes::complete::{tag, take_while1, take_while, take_till},
+    bytes::complete::{tag, take_while1, take_while, take_till, take_till1, escaped_transform},
     sequence::{tuple, pair, delimited, terminated, preceded},
     multi::{many0, separated_list},
 };
@@ -265,17 +265,15 @@ fn return_expr(input: Input) -> IResult<Option<Expr>> {
 fn bstr_literal(input: Input) -> IResult<Vec<u8>> {
     map(delimited(
         tag("b\""),
-        //TODO: Figure out how to make escaped strings work
-        take_till(|c| c == '"'),
-        // escaped_transform(take_till(|c| c == '"' || c == '\\'), '\\', |inp| alt((
-        //     map(char('\\'), |_| "\\"),
-        //     map(char('"'), |_| "\""),
-        //     map(char('n'), |_| "\n"),
-        //     map(char('r'), |_| "\r"),
-        //     map(char('t'), |_| "\t"),
-        // ))(inp)),
+        opt(escaped_transform(take_till1(|c| c == '"' || c == '\\'), '\\', |inp| alt((
+            map(char('\\'), |_| "\\"),
+            map(char('"'), |_| "\""),
+            map(char('n'), |_| "\n"),
+            map(char('r'), |_| "\r"),
+            map(char('t'), |_| "\t"),
+        ))(inp))),
         char('"'),
-    ), |s: Input| s.as_bytes().to_vec())(input)
+    ), |s| s.unwrap_or_default().into_bytes())(input)
 }
 
 fn ty(input: Input) -> IResult<Ty> {
