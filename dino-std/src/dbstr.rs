@@ -146,6 +146,7 @@ pub extern fn read_line_bstr() -> DBStr {
     let length = unsafe { getline(&mut data as *mut _, &mut buffer_len as *mut _, super::stdin) };
     if length == -1 {
         //TODO: Error handling
+        unsafe { libc::exit(0); }
     }
 
     // Ignore the trailing newline. Note that because the newline is always read, `length` is
