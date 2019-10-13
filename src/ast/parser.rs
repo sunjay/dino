@@ -186,11 +186,19 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 }
 
 fn expr(input: Input) -> IResult<Expr> {
+    // Precedence of binary operators is defined implicitly by the structure of this code
+    alt((
+        // Assignment (=) has the lowest precedence and is right associative
+        // Must be above `ident` or else this will never parse
+        map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
+        factor,
+    ))(input)
+}
+
+fn factor(input: Input) -> IResult<Expr> {
     alt((
         map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
-        // Must be above `ident` or else this will never parse
-        map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
         map(return_expr, |ret_expr| Expr::Return(ret_expr.map(Box::new))),
         map(bstr_literal, Expr::BStrLiteral),
         // Integer literal must be parsed before real_literal because that parser also accepts all

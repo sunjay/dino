@@ -1,0 +1,9 @@
+fn main() {
+    let x = 3;
+    let y = ();
+    // This is the same as: z = (y = (x = 4))
+    let z = y = x = 4;
+    print_int(x);
+    print_unit(y);
+    print_unit(z);
+}
