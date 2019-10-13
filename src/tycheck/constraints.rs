@@ -393,8 +393,9 @@ impl ConstraintSet {
             },
 
             &ast::Expr::Var(name) => {
-                // Assert that the type variable is equal to the return type variable
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
+                // Assert that the type of the variable must be equal to the type expected from the
+                // expression
                 self.ty_var_equals.push(
                     TyVarEquals(var_ty_var, return_type)
                 );
