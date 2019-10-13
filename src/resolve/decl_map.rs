@@ -115,15 +115,17 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns the name of the given type ID
-    pub fn type_name(&self, id: &TyId) -> Option<&Ident<'a>> {
+    pub fn type_name(&self, id: &TyId) -> &Ident<'a> {
         let &TyId(id) = id;
-        self.types.get(id).map(|ty_entry| &ty_entry.ty_name)
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        &self.types.get(id).unwrap().ty_name
     }
 
     /// Returns the extern type information of the given type ID
-    pub fn type_extern_info(&self, id: &TyId) -> Option<&ExternType> {
+    pub fn type_extern_info(&self, id: &TyId) -> &ExternType {
         let &TyId(id) = id;
-        self.types.get(id).map(|ty_entry| &ty_entry.extern_type)
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        &self.types.get(id).unwrap().extern_type
     }
 
     /// Returns the function signature corresponding to the given name, if any

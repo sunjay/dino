@@ -8,7 +8,7 @@ use snafu::Snafu;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use crate::ir;
-use crate::resolve::{TyId, ProgramDecls, DeclMap, ExternType};
+use crate::resolve::{TyId, ProgramDecls, DeclMap};
 
 /// Represents a single level of local scope and maps the names of variables to their mangled
 /// equivalent
@@ -459,7 +459,7 @@ fn gen_bstr_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.bstr_literal_constructor
@@ -479,7 +479,7 @@ fn gen_int_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.int_literal_constructor
@@ -496,7 +496,7 @@ fn gen_real_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.real_literal_constructor
@@ -513,7 +513,7 @@ fn gen_complex_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.complex_literal_constructor
@@ -530,7 +530,7 @@ fn gen_bool_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.bool_literal_constructor
@@ -547,7 +547,7 @@ fn gen_unit_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = lookup_type(&ty, mod_scope);
+    let extern_type = mod_scope.type_extern_info(&ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
         mangled_func_name: extern_type.unit_literal_constructor
@@ -559,10 +559,5 @@ fn gen_unit_literal(
 }
 
 fn lookup_type_name<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> String {
-    lookup_type(ty, mod_scope).extern_name.clone()
-}
-
-fn lookup_type<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> &'a ExternType {
-    mod_scope.type_extern_info(ty)
-        .expect("bug: unknown type was allowed to get through to codegen")
+    mod_scope.type_extern_info(ty).extern_name.clone()
 }
