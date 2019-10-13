@@ -10,13 +10,10 @@ pub mod dino_std;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
 
 use snafu::{Snafu, ResultExt};
 
 use crate::codegen::CExecutableProgram;
-use crate::resolve::TyId;
-use crate::primitives::Primitives;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -57,38 +54,12 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     let mut decls = resolve::ProgramDecls::new(program)
         .with_context(|| DuplicateDecl {path: path.to_path_buf()})?;
     insert_prelude(&mut decls);
-    let program_ir = tycheck::infer_and_check(&decls, |tys| resolve_ambiguity(tys, &decls.prims))
+    let program_ir = tycheck::infer_and_check(&decls)
         .with_context(|| TypeError {path: path.to_path_buf()})?;
     let code = codegen::executable(&program_ir, &decls)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
 
     Ok(code)
-}
-
-/// Resolves ambiguous type checking situations where possible
-///
-/// This function MUST return one of the types provided in `tys`.
-fn resolve_ambiguity(tys: &HashSet<TyId>, prims: &Primitives) -> Option<TyId> {
-    let has_int = tys.contains(&prims.int());
-    let has_real = tys.contains(&prims.real());
-    let has_complex = tys.contains(&prims.complex());
-
-    // Need to be very careful here to always match on the entire set of types. We don't want to
-    // turn {int, real, string} into {int}. (Not that this should be possible.)
-    match tys.len() {
-        // Since integer literals can be {int, real} or {int, complex} or {int, real, complex},
-        // resolve to {int} where possible
-        2 if has_int && has_real => Some(prims.int()),
-        2 if has_int && has_complex => Some(prims.int()),
-        3 if has_int && has_real && has_complex => Some(prims.int()),
-
-        // Similarly, real number literals can be {real, complex}, so resolve to {real} if there is
-        // an ambiguity
-        2 if has_real && has_complex => Some(prims.real()),
-
-        // Did not successfully resolve the ambiguity
-        _ => None,
-    }
 }
 
 fn insert_prelude(decls: &mut resolve::ProgramDecls) {

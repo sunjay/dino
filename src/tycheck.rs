@@ -1,10 +1,9 @@
 //! Type inference and checking.
 
+mod subst;
 mod constraints;
 mod solve;
 mod tyir;
-
-use std::collections::HashSet;
 
 use snafu::Snafu;
 use rayon::prelude::*;
@@ -42,25 +41,31 @@ pub enum Error {
     },
     #[snafu(display("mismatched types"))]
     MismatchedTypes {
-        //TODO: Add type and span info
+        //TODO: Add span info
+        expected: TyId,
+        actual: TyId,
+    },
+    #[snafu(display("invalid type for integer literal"))]
+    InvalidIntLitType {
+        actual: TyId,
+    },
+    #[snafu(display("invalid type for real number literal"))]
+    InvalidRealLitType {
+        actual: TyId,
     },
 }
 
-pub fn infer_and_check<'a>(
-    decls: &'a ProgramDecls<'a>,
-    resolve_ambiguity: impl Fn(&HashSet<TyId>) -> Option<TyId> + Send + Sync,
-) -> Result<ir::Program<'a>, Error> {
+pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {
     let ProgramDecls {top_level_decls, prims} = decls;
 
-    let top_level_module = infer_and_check_module(top_level_decls, prims, &resolve_ambiguity)?;
+    let top_level_module = infer_and_check_module(top_level_decls, prims)?;
 
     Ok(ir::Program {top_level_module})
 }
 
-fn infer_and_check_module<'a, F: Fn(&HashSet<TyId>) -> Option<TyId> + Send + Sync>(
+fn infer_and_check_module<'a>(
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
-    resolve_ambiguity: &F,
 ) -> Result<ir::Module<'a>, Error> {
     // Able to use par_bridge here because functions can be type checked in any order
     let decls = mod_decls.functions()
@@ -68,7 +73,7 @@ fn infer_and_check_module<'a, F: Fn(&HashSet<TyId>) -> Option<TyId> + Send + Syn
         // No need to check external functions
         .filter(|func| !func.is_extern)
         .map(|func| {
-            infer_and_check_func(func, mod_decls, prims, resolve_ambiguity).map(ir::Decl::Function)
+            infer_and_check_func(func, mod_decls, prims).map(ir::Decl::Function)
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ir::Module {decls})
@@ -78,10 +83,9 @@ fn infer_and_check_func<'a>(
     func: &'a ast::Function<'a>,
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
-    resolve_ambiguity: impl Fn(&HashSet<TyId>) -> Option<TyId> + Send + Sync,
 ) -> Result<ir::Function<'a>, Error> {
     // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
     let (constraints, ty_ir_func) = ConstraintSet::generate(func, mod_decls, prims)?;
-    let solution = constraints.solve(resolve_ambiguity)?;
+    let solution = constraints.solve(prims)?;
     Ok(ty_ir_func.apply_subst(&solution))
 }

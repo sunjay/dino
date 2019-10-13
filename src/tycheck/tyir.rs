@@ -6,7 +6,7 @@ use crate::ast::Ident;
 use crate::resolve::TyId;
 
 use super::constraints::TyVar;
-use super::solve::TypeSubst;
+use super::subst::TypeSubst;
 
 #[derive(Debug)]
 pub struct Function<'a> {
@@ -244,7 +244,7 @@ impl<'a> VarAssign<'a> {
 impl TyVar {
     /// Applies the given substitution to this type and returns the corresponding type ID
     pub fn apply_subst(self, subst: &TypeSubst) -> TyId {
-        subst.get(&self).copied()
+        subst.get(self)
             .expect("bug: substitution did not contain all type variables")
     }
 }

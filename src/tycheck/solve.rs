@@ -1,164 +1,161 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet, HashMap};
 
 use snafu::OptionExt;
+use maplit::hashset;
+use rayon::prelude::*;
 
 use crate::resolve::TyId;
 
-use super::{
-    Error,
-    AmbiguousType,
-    constraints::{TyVar, TyVarValidTypes, TyVarEquals},
-};
+use super::subst::TypeSubst;
+use super::constraints::{TyVar, TyVarEquals};
+use super::{Error, AmbiguousType};
 
-/// A type substitution that maps type variables to their concrete type
-pub type TypeSubst = HashMap<TyVar, TyId>;
+/// Verifies that all of the given type variables have been assigned a type within the
+/// given set of valid types. If a type variable has no type assigned so far (ambiguous),
+/// the ambiguity is resolved using the default type given.
+pub fn verify_valid_tys_or_default(
+    ty_vars: &HashSet<TyVar>,
+    valid_tys: &HashSet<TyId>,
+    default_ty: TyId,
+    subst: &mut TypeSubst,
+) -> Result<(), TyId> {
+    debug_assert!(valid_tys.contains(&default_ty));
 
-/// A map from type variables to a set of types valid for that variable
-///
-/// Any type variable without an entry in this map is completely unconstrained (can be any type)
-pub type TyVarValidTypesMap = HashMap<TyVar, HashSet<TyId>>;
-
-/// Collects the valid types for each type variable by processing pairs of type variables and
-/// their set of valid types
-///
-/// Goes through and narrows the set of valid types for each type variable (TyVarOneOf). The
-/// results are inserted into a map of valid types for each type variable.
-///
-/// Returns the unprocessed TyVarEquals constraints
-pub fn collect_valid_types(ty_var_valid_types: Vec<TyVarValidTypes>) -> TyVarValidTypesMap {
-    let mut valid_types = HashMap::new();
-
-    for TyVarValidTypes {ty_var, valid_tys} in ty_var_valid_types {
-        match valid_types.get_mut(&ty_var) {
+    for &ty_var in ty_vars {
+        match subst.get(ty_var) {
+            Some(ty_id) if valid_tys.contains(&ty_id) => {},
+            // Type was not one of the valid types
+            Some(ty_id) => return Err(ty_id),
+            // If the type was deemed ambiguous, assign it to the default (assumed) value
             None => {
-                valid_types.insert(ty_var, valid_tys);
-            },
-            Some(ty_var_types) => {
-                *ty_var_types = valid_tys.intersection(ty_var_types).copied().collect();
+                // unwrap() is safe because the type hasn't been inserted yet
+                subst.insert(ty_var, default_ty).unwrap();
             },
         }
     }
 
-    valid_types
+    Ok(())
 }
 
-/// Apply "equality" constraints continuously until either there are no more updates to make or
-/// until an infinite loop is detected.
+/// Applies the type equality constraints and updates the substitution accordingly
 pub fn apply_eq_constraints(
     ty_var_eq_constraints: &[TyVarEquals],
-    valid_types: &mut TyVarValidTypesMap,
-) {
+    subst: &mut TypeSubst,
+) -> Result<(), Error> {
+    // Want to avoid any errors caused by the ordering of the equality constraints, so it's
+    // best to group all the equal variables together and then apply the equality all at once
+
     //TODO: Test constraint cycles: (A = B, B = C, C = A) => (A = A)
     // e.g. let x = 2; // x: C, C in {int, real}
     //      let y = x; // y: B, B = C
     //      let z = y; // z: A, A = B
     //      x = z;     //       C = A
 
-    // This needs to be a separate pass because if we were to simply process the constrains in
-    // order we may end up adding types to a set where those types would have ended up filtered
-    // out by an earlier intersection operation.
+    // The unwrap() uses in the code below are safe because this ID is meant to be guaranteed as a
+    // valid value in the maps below
+    let mut next_group_id = 0;
+    // Usually a hash map from usize -> T is actually just a Vec<T>, but in this case we want
+    // fast random access and random removals, so a hash map works better
+    let mut groups: HashMap<usize, HashSet<TyVar>> = HashMap::new();
+    // Contains which variable is associated with which group
+    let mut var_groups: HashMap<TyVar, usize> = HashMap::new();
 
-    // Avoid infinite loops by stopping once we've only got unconstrained pairs of variables
-    let mut stop_next_unconstrained = false;
-    //TODO: Is there a more efficient way to this?
-    // Continuously evaluate type variable equality constraints until none of them apply
-    loop {
-        // Track whether we have updated any of the sets during this pass through the constraints
-        let mut updated = false;
-        // Track whether we ran into an unconstrained pair of type variables
-        let mut unconstrained = false;
+    for TyVarEquals(left, right) in ty_var_eq_constraints {
+        match (var_groups.get(left).copied(), var_groups.get(right).copied()) {
+            (Some(left_group_id), Some(right_group_id)) => {
+                // Merge both groups since the variables are equal and all the variables in their
+                // groups are transitively equal
+                let right_group = groups.remove(&right_group_id).unwrap();
+                let left_group = groups.get_mut(&left_group_id).unwrap();
+                // All the variables in the right group are going in the left group
+                for &ty_var in &right_group {
+                    var_groups.insert(ty_var, left_group_id);
+                }
+                // Perform the merge, consuming the right group
+                left_group.extend(right_group);
+            },
+            (Some(left_group_id), None) => {
+                // Right variable is not in a group yet
+                groups.get_mut(&left_group_id).unwrap().insert(*right);
+                var_groups.insert(*right, left_group_id);
+            },
+            (None, Some(right_group_id)) => {
+                // Left variable is not in a group yet
+                groups.get_mut(&right_group_id).unwrap().insert(*left);
+                var_groups.insert(*left, right_group_id);
+            },
+            (None, None) => {
+                // Neither variable is in a group, add them both to the same one
+                let group_id = next_group_id;
+                next_group_id += 1;
 
-        for &TyVarEquals(left, right) in ty_var_eq_constraints {
-            // We can immediately ignore the case where the left and right are equal since we
-            // know that constraint to be trivially true by the reflexive property
-            if left == right {
-                continue;
-            }
-
-            // Try to find the intersection between the sets of types for left and right
-            let common_types = match (valid_types.get(&left), valid_types.get(&right)) {
-                // Either the left or the right is completely unconstrained
-                (Some(common_types), None) | (None, Some(common_types)) => {
-                    common_types.clone()
-                },
-
-                // Both the left and the right is constrained, so we take the common types
-                // between them
-                (Some(left_types), Some(right_types)) => {
-                    left_types.intersection(right_types).copied().collect()
-                },
-
-                // Neither is constrained, so we have nothing to do
-                (None, None) => {
-                    unconstrained = true;
-                    continue;
-                },
-            };
-
-            // Either there are no types for this variable yet or the types have to be updated
-            if valid_types.get(&left).map(|tys| *tys != common_types).unwrap_or(true) {
-                valid_types.insert(left, common_types.clone());
-                updated = true;
-            }
-            if valid_types.get(&right).map(|tys| *tys != common_types).unwrap_or(true) {
-                valid_types.insert(right, common_types);
-                updated = true;
-            }
+                groups.insert(group_id, hashset!{*left, *right});
+                var_groups.insert(*left, group_id);
+                var_groups.insert(*right, group_id);
+            },
         }
-
-        if updated {
-            // Found some updates, so we no longer need to stop
-            stop_next_unconstrained = false;
-            // Keep going in case we get an update next time
-            continue;
-
-        } else if unconstrained && !stop_next_unconstrained {
-            // Try one more time to see if the next round ends up changing anything
-            // After all, just because the variables were unconstrained this round, doesn't
-            // mean that hasn't changed after the unconstrained pair was processed
-            stop_next_unconstrained = true;
-            continue;
-        }
-        // Stop processing. Either we are done or we have detected a potential infinite loop.
-        break;
     }
-}
 
-/// Attempt to create a solution (a substitution) from the given map of variables to valid types.
-///
-/// The solution must contain *every* type variable in `ty_vars` to be valid.
-///
-/// Some type variables may not have any valid substitution (invalid types) whereas others may have
-/// more than one (ambiguous). Both of these cases will result in an error being returned.
-///
-/// In the ambiguous case, special effort can be made to artificially "solve" the ambiguity. The
-/// `resolve_ambiguity` callback is used to reduce a set of more than one type into just a single
-/// type. It returns Some(...) if it was able to resolve the ambiguity and None otherwise. This
-/// function MUST return one of the types passed in as input or it may result in undefined
-/// behaviour.
-pub fn build_substitution<I: Iterator<Item=TyVar>>(
-    ty_var_valid_types: TyVarValidTypesMap,
-    ty_vars: I,
-    resolve_ambiguity: impl Fn(&HashSet<TyId>) -> Option<TyId>,
-) -> Result<TypeSubst, Error> {
-    // Attempt to construct a valid substitution for *every* type variable
-    let mut subst = TypeSubst::default();
+    // Ensure that groups are disjoint
+    #[cfg(debug_assertions)]
+    {
+        for (gid, group) in &groups {
+            for (gid2, group2) in &groups {
+                if gid == gid2 { continue; }
+                assert!(group.is_disjoint(group2),
+                    "bug: the type variable groups had some overlap");
+            }
+        }
+    }
 
-    for ty_var in ty_vars {
-        // Any type variable not in the map is immediately ambiguous
-        let valid_types = ty_var_valid_types.get(&ty_var)
-            .with_context(|| AmbiguousType {})?;
+    // Go through and find the common type in each group, then update the substitution to make all
+    // the variables in each group equal
+    for (_, group) in groups {
+        // Some of the variables in the group won't have a type assigned yet in the substitution.
+        // This is fine as long as at least one variable has a type assigned.
+        let first_type = group.iter().find_map(|&ty_var| subst.get(ty_var));
 
-        // Attempt to resolve a single type for this type variable
-        let single_type = match valid_types.len() {
-            0 => return Err(Error::MismatchedTypes {}),
-            1 => valid_types.iter().next().copied().unwrap(),
-            _ => resolve_ambiguity(valid_types).with_context(|| AmbiguousType {})?,
+        let common_type = match first_type {
+            Some(ty_var) => ty_var,
+            None => {
+                // None of the variables in this group were assigned to a concrete type. That means
+                // that they are all ambiguous. This will be discovered later in the constraint
+                // solving process, so we just continue for now. The equality constraints were
+                // still technically applied, it just turns out that there is nothing to do for
+                // this particular group of variables.
+                continue;
+            },
         };
 
-        debug_assert!(subst.insert(ty_var, single_type).is_none(),
-            "bug: overwrote type variable in substitution");
+        for ty_var in group {
+            match subst.get(ty_var) {
+                // Type was already assigned to the right type
+                Some(ty_id) if ty_id == common_type => {},
+                // Type was not the common type
+                Some(ty_id) => return Err(Error::MismatchedTypes {
+                    expected: common_type,
+                    actual: ty_id,
+                }),
+                // No substitution yet for that type, so insert the common type
+                None => {
+                    // unwrap() is safe because the type hasn't been inserted yet
+                    subst.insert(ty_var, common_type).unwrap();
+                },
+            }
+        }
     }
 
-    Ok(subst)
+    Ok(())
+}
+
+/// Verifies that the substitution contains all of the generated type variables
+///
+/// Any missing type variables were underconstrained and therefore ambiguous
+pub fn verify_substitution(
+    subst: &TypeSubst,
+    ty_vars: impl Iterator<Item = TyVar> + Send,
+) -> Result<(), Error> {
+    ty_vars.par_bridge().map(|ty_var| {
+        subst.get(ty_var).map(|_| ()).with_context(|| AmbiguousType {})
+    }).collect()
 }
