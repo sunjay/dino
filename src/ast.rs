@@ -107,9 +107,10 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
+    VarAssign(Box<VarAssign<'a>>),
+    MethodCall(Box<MethodCall<'a>>),
     Cond(Box<Cond<'a>>),
     Call(CallExpr<'a>),
-    VarAssign(Box<VarAssign<'a>>),
     Return(Option<Box<Expr<'a>>>),
     BStrLiteral(Vec<u8>),
     IntegerLiteral(IntegerLiteral<'a>),
@@ -118,6 +119,24 @@ pub enum Expr<'a> {
     BoolLiteral(bool),
     UnitLiteral,
     Var(Ident<'a>),
+}
+
+/// An assignment expression in the form `<name> = <value>`
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarAssign<'a> {
+    /// The identifier to assign a value to
+    pub ident: Ident<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
+}
+
+/// A method call in the form `<expr> . <call-expr>`
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodCall<'a> {
+    /// The expression of the left-hand side of the method call
+    pub lhs: Expr<'a>,
+    /// The method being called
+    pub call: CallExpr<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,15 +154,6 @@ pub struct Cond<'a> {
 pub struct CallExpr<'a> {
     pub func_name: Ident<'a>,
     pub args: Vec<Expr<'a>>,
-}
-
-/// An assignment expression in the form `<name> = <value>`
-#[derive(Debug, Clone, PartialEq)]
-pub struct VarAssign<'a> {
-    /// The identifier to assign a value to
-    pub ident: Ident<'a>,
-    /// The expression for the value to assign to the variable
-    pub expr: Expr<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

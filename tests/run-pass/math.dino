@@ -1,4 +1,9 @@
 fn main() {
-    let value = add_int(-34, 43);
+    let value = -34.add(43);
     print_int(value);
+    value = value.add(-2);
+    print_int(value);
+    value = -1.add(value)
+        .add(value).add(-94);
+    print_int(value.add(1));
 }

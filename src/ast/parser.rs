@@ -9,7 +9,7 @@ use nom::{
     combinator::{all_consuming, map, map_res, recognize, opt, not},
     bytes::complete::{tag, take_while1, take_while, take_till, take_till1, escaped_transform},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::{many0, separated_list},
+    multi::{many0, fold_many0, separated_list},
 };
 
 use super::*;
@@ -186,16 +186,37 @@ fn var_decl(input: Input) -> IResult<VarDecl> {
 }
 
 fn expr(input: Input) -> IResult<Expr> {
-    // Precedence of binary operators is defined implicitly by the structure of this code
+    // Precedence of binary operators is defined implicitly by the structure of this code. Each
+    // level is encoded in a function precedenceN where N is the level of precedence.
+    precedence0(input)
+}
+
+fn precedence0(input: Input) -> IResult<Expr> {
     alt((
         // Assignment (=) has the lowest precedence and is right associative
-        // Must be above `ident` or else this will never parse
-        map(var_assign, |assign| Expr::VarAssign(Box::new(assign))),
-        factor,
+        // This is a special operator because its left-hand-side is limited to a subset of all
+        // possible expressions
+        map(
+            // The '=' operator is right associative, so we use right-recursion here
+            infix(ident, char('='), expr),
+            |(ident, expr)| Expr::VarAssign(Box::new(VarAssign {ident, expr})),
+        ),
+
+        // If nothing above parses, we can use the next upper level of precedence
+        precedence1,
     ))(input)
 }
 
-fn factor(input: Input) -> IResult<Expr> {
+fn precedence1(input: Input) -> IResult<Expr> {
+    // The dot (.) operator has very high precedence and is left associative
+    // Using the next level of precedence like this is a technique for left recursion
+    // This operator is special because it has a limited number of things that can be used as its
+    // right-hand side.
+    bin_op_opt1(precedence2, char('.'), func_call,
+        |lhs, _, call| Expr::MethodCall(Box::new(MethodCall {lhs, call})))(input)
+}
+
+fn precedence2(input: Input) -> IResult<Expr> {
     alt((
         map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
@@ -239,28 +260,6 @@ fn func_call(input: Input) -> IResult<CallExpr> {
 
 fn func_args(input: Input) -> IResult<Vec<Expr>> {
     delimited(char('('), comma_separated(expr), char(')'))(input)
-}
-
-fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
-    where F: Fn(Input<'r>) -> IResult<T> {
-    separated_list(tuple((wsc0, char(','), wsc0)), parser)
-}
-
-fn var_assign(input: Input) -> IResult<VarAssign> {
-    map(
-        tuple((
-            ident,
-            wsc0,
-            char('='),
-            wsc0,
-            expr,
-            // No semi-colon because this is an expression
-        )),
-        |(ident, _, _, _, expr)| VarAssign {
-            ident,
-            expr,
-        },
-    )(input)
 }
 
 fn return_expr(input: Input) -> IResult<Option<Expr>> {
@@ -319,11 +318,17 @@ fn integer_literal(input: Input) -> IResult<IntegerLiteral> {
                 opt(alt((char('+'), char('-')))),
                 digit1,
                 // Cannot end in something that would result in a real number literal
-                not(one_of(".eEjJI")),
+                not(one_of("eEjJI")),
                 // 'i' is a special case because 'i' isn't allowed, but "int" is fine
                 //
                 // This reads as "you're not allowed i when it isn't followed by 'nt'"
                 not(pair(char('i'), not(tag("nt")))),
+                // '.' is a special case because method calls are allowed but `12.` is still a
+                // valid real number literal
+                //
+                // This reads as "you're not allowed '.' when it isn't about to be interpreted
+                // as a method call or field access"
+                not(pair(char('.'), not(ident))),
             ))),
             opt(alt((tag("int"), tag("real")))),
         )),
@@ -373,6 +378,70 @@ fn comment(input: Input) -> IResult<()> {
         tuple((tag("//"), take_till(|c| c == '\n'), char('\n'))),
         |_| (),
     )(input)
+}
+
+fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
+    where F: Fn(Input<'r>) -> IResult<T> {
+    separated_list(tuple((wsc0, char(','), wsc0)), parser)
+}
+
+/// Parses the left-hand side of a binary operator, then optionally parses the operator and the
+/// right-hand side repeatedly until there is no more to parse. This is useful for parsing left
+/// associative operators that would normally need to use left recursion. To use this for this
+/// purpose, make sure that `lhs` and `rhs` are of greater precedence than the operator. Use the
+/// folding function `merge` to join the results together.
+///
+/// To parse multiple operators at the same precedence level, use `alt` in `op` and then match on
+/// the result in `merge`.
+fn bin_op_opt1<'r, L, Op, R, LHS, OpR, RHS, F>(
+    lhs: L,
+    op: Op,
+    rhs: R,
+    merge: F,
+) -> impl Fn(Input<'r>) -> IResult<LHS>
+    where L: Fn(Input<'r>) -> IResult<LHS>,
+          Op: Fn(Input<'r>) -> IResult<OpR>,
+          R: Fn(Input<'r>) -> IResult<RHS>,
+          LHS: Clone,
+          F: Fn(LHS, OpR, RHS) -> LHS,
+{
+    move |input| {
+        // Prevent moving these captured variables when they get used below
+        let op = &op;
+        let rhs = &rhs;
+
+        // Parse the initial value
+        let (input, first) = lhs(input)?;
+
+        // Parse any remaining instances of the binary operator being used (or just return the
+        // initial value)
+        fold_many0(
+            tuple((wsc0, op, wsc0, rhs)),
+            first,
+            |lhs, (_, op, _, rhs)| merge(lhs, op, rhs),
+        )(input)
+    }
+}
+
+/// Parses a binary infix operator. This can be used to parse right-associative binary operators
+/// using right recursion. To do this, make sure the `lhs` is of higher precedence and the `rhs` is
+/// of lower/same precedence than the operator.
+fn infix<'r, L, Op, R, LHS, OpR, RHS>(lhs: L, op: Op, rhs: R) -> impl Fn(Input<'r>) -> IResult<(LHS, RHS)>
+    where L: Fn(Input<'r>) -> IResult<LHS>,
+          Op: Fn(Input<'r>) -> IResult<OpR>,
+          R: Fn(Input<'r>) -> IResult<RHS>,
+{
+    map(
+        tuple((
+            lhs,
+            wsc0,
+            op,
+            wsc0,
+            rhs,
+            // No semi-colon because this is an expression
+        )),
+        |(left, _, _, _, right)| (left, right),
+    )
 }
 
 /// Generates keyword parsers

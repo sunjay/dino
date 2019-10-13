@@ -317,6 +317,15 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
+            ast::Expr::VarAssign(assign) => {
+                self.append_var_assign(assign, return_type, func_return_type, scope, decls, prims)
+                    .map(|assign| tyir::Expr::VarAssign(Box::new(assign), return_type))
+            },
+
+            ast::Expr::MethodCall(call) => {
+                unimplemented!()
+            },
+
             ast::Expr::Cond(cond) => {
                 self.append_cond(cond, Some(return_type), func_return_type, scope, decls, prims)
                     .map(|cond| tyir::Expr::Cond(Box::new(cond), return_type))
@@ -325,11 +334,6 @@ impl ConstraintSet {
             ast::Expr::Call(call) => {
                 self.append_call_expr(call, return_type, func_return_type, scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
-            },
-
-            ast::Expr::VarAssign(assign) => {
-                self.append_var_assign(assign, return_type, func_return_type, scope, decls, prims)
-                    .map(|assign| tyir::Expr::VarAssign(Box::new(assign), return_type))
             },
 
             ast::Expr::Return(ret_expr) => {
