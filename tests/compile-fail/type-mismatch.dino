@@ -1,0 +1,4 @@
+fn main() {
+    let x: int = 10j;
+    x = b"abc";
+}
