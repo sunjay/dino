@@ -34,31 +34,31 @@ pub extern fn __dino__DInt_from_int_literal(value: i64) -> DInt {
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn int_eq(x: DInt, y: DInt) -> DBool {
+pub extern fn int__eq(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 == y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn int_gt(x: DInt, y: DInt) -> DBool {
+pub extern fn int__gt(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 > y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn int_gte(x: DInt, y: DInt) -> DBool {
+pub extern fn int__gte(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 >= y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn int_lt(x: DInt, y: DInt) -> DBool {
+pub extern fn int__lt(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 < y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn int_lte(x: DInt, y: DInt) -> DBool {
+pub extern fn int__lte(x: DInt, y: DInt) -> DBool {
     DBool::from(x.0 <= y.0)
 }
 
@@ -70,19 +70,19 @@ pub extern fn int__add(x: DInt, y: DInt) -> DInt {
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn sub_int(x: DInt, y: DInt) -> DInt {
+pub extern fn int__sub(x: DInt, y: DInt) -> DInt {
     DInt(x.0 - y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn mul_int(x: DInt, y: DInt) -> DInt {
+pub extern fn int__mul(x: DInt, y: DInt) -> DInt {
     DInt(x.0 * y.0)
 }
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn div_int(x: DInt, y: DInt) -> DInt {
+pub extern fn int__div(x: DInt, y: DInt) -> DInt {
     DInt(x.0 / y.0)
 }
 

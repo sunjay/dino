@@ -17,13 +17,13 @@ fn merge_sort(input: bstr) -> bstr {
     let input_len = bstr_len(input);
 
     // Base case: return a single character (or nothing)
-    if int_lte(input_len, 1) {
+    if input_len.lte(1) {
         return input;
     }
 
     // Split the string and sort each half
-    let left = bstr_slice(input, 0, div_int(input_len, 2));
-    let right = bstr_slice(input, div_int(input_len, 2), input_len);
+    let left = bstr_slice(input, 0, input_len.div(2));
+    let right = bstr_slice(input, input_len.div(2), input_len);
 
     let sorted_left = merge_sort(left);
     let sorted_right = merge_sort(right);
@@ -42,7 +42,7 @@ fn merge(left: bstr, right: bstr) -> bstr {
 
     let output = b"";
     // Continue until one of the strings runs out of characters
-    while bool_and(int_lt(left_i, left_len), int_lt(right_i, right_len)) {
+    while bool_and(left_i.lt(left_len), right_i.lt(right_len)) {
         let left_byte = bstr_get(left, left_i);
         let right_byte = bstr_get(right, right_i);
 
@@ -57,11 +57,11 @@ fn merge(left: bstr, right: bstr) -> bstr {
 
     // Append any remaining characters on to the string
     // Only one of these loops will run
-    while int_lt(left_i, left_len) {
+    while left_i.lt(left_len) {
         output = bstr_concat(output, bstr_get(left, left_i));
         left_i = left_i.add(1);
     }
-    while int_lt(right_i, right_len) {
+    while right_i.lt(right_len) {
         output = bstr_concat(output, bstr_get(right, right_i));
         right_i = right_i.add(1);
     }

@@ -19,7 +19,7 @@ fn check_value(x: int, should_be_bigger: bool) -> () {
 }
 
 fn check_bigger(y: int) {
-    if int_gt(y, 100int) {
+    if y.gt(100int) {
         print_bool(true);
     } else {
         print_bool(false);
@@ -27,7 +27,7 @@ fn check_bigger(y: int) {
 }
 
 fn check_smaller(y: int) {
-    if int_lt(y, 10) {
+    if y.lt(10) {
         print_bool(true);
     } else {
         print_bool(false);

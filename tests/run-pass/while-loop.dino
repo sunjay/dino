@@ -1,7 +1,7 @@
 fn main() {
-    let counter = 10;
-    while int_gt(counter, 0) {
+    let counter: int = 10;
+    while counter.gt(0) {
         print_int(counter);
-        counter = sub_int(counter, 1);
+        counter = counter.sub(1);
     }
 }

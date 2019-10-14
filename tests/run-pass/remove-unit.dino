@@ -9,7 +9,7 @@ fn unit() {}
 
 fn nested_expr_unit(x: int) {
     // Nested expression that returns unit
-    if int_gt(x, 2) {
+    if x.gt(2) {
         // Semi-colon forces unit as the result of the block
         print_int(x);
     } else {
@@ -59,6 +59,6 @@ fn main() {
 
 fn single_if(x: int) {
     // A single if is allowed if the return type is unit
-    if int_gt(x, 3) {
+    if x.gt(3) {
     }
 }
