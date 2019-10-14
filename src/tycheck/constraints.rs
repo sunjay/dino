@@ -12,6 +12,8 @@ use super::{
     UnresolvedName,
     UnresolvedType,
     UnresolvedFunction,
+    UnresolvedMethod,
+    AmbiguousMethodCall,
     tyir,
     solve::{verify_valid_tys_or_default, apply_eq_constraints, verify_substitution},
 };
@@ -176,7 +178,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this block
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::Block<'a>, Error> {
         let ast::Block {stmts, ret} = block;
@@ -208,7 +210,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this statement
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::Stmt<'a>, Error> {
         match stmt {
@@ -235,7 +237,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this while loop
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::WhileLoop<'a>, Error> {
         let ast::WhileLoop {cond, body} = wloop;
@@ -266,7 +268,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this variable declaration
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::VarDecl<'a>, Error> {
         let ast::VarDecl {ident, ty, expr} = var_decl;
@@ -313,7 +315,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this expression
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
@@ -323,7 +325,8 @@ impl ConstraintSet {
             },
 
             ast::Expr::MethodCall(call) => {
-                unimplemented!()
+                self.append_method_call(call, return_type, func_return_type, scope, decls, prims)
+                    .map(|call| tyir::Expr::Call(call, return_type))
             },
 
             ast::Expr::Cond(cond) => {
@@ -332,7 +335,7 @@ impl ConstraintSet {
             },
 
             ast::Expr::Call(call) => {
-                self.append_call_expr(call, return_type, func_return_type, scope, decls, prims)
+                self.append_func_call(call, return_type, func_return_type, scope, decls, prims)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
@@ -400,9 +403,68 @@ impl ConstraintSet {
                     TyVarEquals(var_ty_var, return_type)
                 );
 
+                //HACK: If we already know the type of the variable and we don't know the type
+                // of the expression return type yet, assign the return type to the variable type.
+                // This *should* be safe since if this leads to an incorrect type derivation, the
+                // equality constraint application algorithm should catch that.
+                // This hack is necessary in order to be able to call methods on variables.
+                // A non-hacky way to do this is to be able to query the constraint set for the
+                // current solution for a given type variable based on the constraints collected
+                // so far.
+                if let (Some(var_ty), None) = (self.subst.get(var_ty_var), self.subst.get(return_type)) {
+                    // This unwrap() is safe because we just checked if the variable already had
+                    // a value in the substitution
+                    self.subst.insert(return_type, var_ty).unwrap();
+                }
+
                 Ok(tyir::Expr::Var(name, var_ty_var))
             },
         }
+    }
+
+    /// Appends constraints for the given method call
+    fn append_method_call<'a, 's>(
+        &mut self,
+        call: &'a ast::MethodCall<'a>,
+        // The type expected from the call expression
+        return_type: TyVar,
+        // The return type of the function surrounding this call
+        func_return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+        decls: &'a DeclMap<'a>,
+        prims: &Primitives,
+    ) -> Result<tyir::CallExpr<'a>, Error> {
+        let ast::MethodCall {lhs, call} = call;
+
+        // Generate the constraints for the left-hand side expression, with the hope that this
+        // type variable gets assigned a type
+        //TODO: Rather than hoping for a type, it would be neat to have a way to solve the current
+        // set of constraints to see if we can get a type based on what we have.
+        let lhs_ty_var = self.fresh_type_var();
+        let lhs = self.append_expr(lhs, lhs_ty_var, func_return_type, scope, decls, prims)?;
+
+        // In order to call the method, we must know the type of lhs at this point. Hopefully the
+        // constraint generation for that expression gave us something.
+        let lhs_ty = self.subst.get(lhs_ty_var)
+            .with_context(|| AmbiguousMethodCall {})?;
+
+        let ast::CallExpr {func_name: method_name, args} = call;
+        let func = decls.method(lhs_ty, method_name)
+            .context(UnresolvedMethod {name: *method_name, ty: lhs_ty})?;
+
+        let has_self = func.sig.params.get(0).map(|param| param.name == "self").unwrap_or(false);
+        if !has_self {
+            return Err(Error::UnexpectedAssociatedFunction {});
+        }
+
+        // Using the func.name like this works for extern methods. Not sure what user-defined
+        // methods will look like just yet. Maybe this is a hack?
+        assert!(func.is_extern,
+            "TODO: Only methods with extern declarations are currently supported");
+        let func_name = &func.name;
+
+        // Append the `self` argument as the lhs expression
+        self.append_func_call_sig(&func.sig, func_name, args, Some(lhs), return_type, func_return_type, scope, decls, prims)
     }
 
     /// Appends constraints for the given conditional
@@ -416,7 +478,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this conditional
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::Cond<'a>, Error> {
         let ast::Cond {conds, else_body} = cond;
@@ -457,7 +519,7 @@ impl ConstraintSet {
     }
 
     /// Appends constraints for the given function call
-    fn append_call_expr<'a, 's>(
+    fn append_func_call<'a, 's>(
         &mut self,
         call: &'a ast::CallExpr<'a>,
         // The type expected from the call expression
@@ -465,19 +527,46 @@ impl ConstraintSet {
         // The return type of the function surrounding this call
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::CallExpr<'a>, Error> {
         let ast::CallExpr {func_name, args} = call;
 
         let sig = decls.func_sig(func_name)
             .context(UnresolvedFunction {name: *func_name})?;
+
+        self.append_func_call_sig(sig, func_name, args, None, return_type, func_return_type, scope, decls, prims)
+    }
+
+    /// Appends constraints for the given function call given the signature
+    fn append_func_call_sig<'a, 's>(
+        &mut self,
+        sig: &ast::FuncSig,
+        // The function name to call, not necessarily the original function/method name
+        func_name: &'a ast::Ident<'a>,
+        args: &'a [ast::Expr<'a>],
+        // An extra argument to prepend on to the list of arguments passed to the call
+        // Used to implement methods with a `self` parameter
+        extra_first_arg: Option<tyir::Expr<'a>>,
+        // The type expected from the call expression
+        return_type: TyVar,
+        // The return type of the function surrounding this call
+        func_return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+        decls: &'a DeclMap<'a>,
+        prims: &Primitives,
+    ) -> Result<tyir::CallExpr<'a>, Error> {
         // Return early if the number of arguments is wrong
-        if args.len() != sig.params.len() {
+        let num_extra_args = match extra_first_arg {
+            Some(_) => 1,
+            None => 0,
+        };
+        let num_actual_args = args.len() + num_extra_args;
+        if num_actual_args != sig.params.len() {
             return Err(Error::ArityMismatch {
                 func_name: func_name.to_string(),
                 expected: sig.params.len(),
-                actual: args.len(),
+                actual: num_actual_args,
             });
         }
 
@@ -486,7 +575,7 @@ impl ConstraintSet {
         self.subst.insert(return_type, call_return_type)
             .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
 
-        let args = args.iter().zip(params).map(|(arg, param)| {
+        let args = extra_first_arg.map(Ok).into_iter().chain(args.iter().zip(params).map(|(arg, param)| {
             let arg_ty_var = self.fresh_type_var();
 
             // Assert that each argument matches the corresponding parameter type
@@ -495,7 +584,7 @@ impl ConstraintSet {
                 .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
 
             self.append_expr(arg, arg_ty_var, func_return_type, scope, decls, prims)
-        }).collect::<Result<Vec<_>, _>>()?;
+        })).collect::<Result<Vec<_>, _>>()?;
 
         Ok(tyir::CallExpr {
             func_name,
@@ -512,7 +601,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this assignment
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::VarAssign<'a>, Error> {
         let ast::VarAssign {ident, expr} = assign;
@@ -538,7 +627,7 @@ impl ConstraintSet {
         // The return type of the function surrounding this return expression
         func_return_type: TyVar,
         scope: &mut Scope<'a, 's>,
-        decls: &DeclMap,
+        decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<Option<tyir::Expr<'a>>, Error> {
         // A return expression always type checks to ()

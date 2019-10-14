@@ -64,7 +64,7 @@ pub extern fn int_lte(x: DInt, y: DInt) -> DBool {
 
 //TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn add_int(x: DInt, y: DInt) -> DInt {
+pub extern fn int__add(x: DInt, y: DInt) -> DInt {
     DInt(x.0 + y.0)
 }
 

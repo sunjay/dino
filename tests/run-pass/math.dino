@@ -1,9 +1,11 @@
 fn main() {
-    let value = -34.add(43);
+    // Need to specify the type in the literal so the
+    // method call isn't ambiguous
+    let value = -34int.add(43);
     print_int(value);
     value = value.add(-2);
     print_int(value);
-    value = -1.add(value)
+    value = -1int.add(value)
         .add(value).add(-94);
     print_int(value.add(1));
 }

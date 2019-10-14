@@ -1,6 +1,6 @@
 fn main() {
     let cool_stuff: int = -3;
-    let other_value = add_int(95, cool_stuff);
+    let other_value = 95int.add(cool_stuff);
 
     print_bool(check_value(other_value, true));
     print_bool(check_value(other_value, false));

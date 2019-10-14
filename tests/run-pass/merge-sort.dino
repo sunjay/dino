@@ -37,8 +37,8 @@ fn merge(left: bstr, right: bstr) -> bstr {
     let left_len = bstr_len(left);
     let right_len = bstr_len(right);
 
-    let left_i = 0;
-    let right_i = 0;
+    let left_i: int = 0;
+    let right_i: int = 0;
 
     let output = b"";
     // Continue until one of the strings runs out of characters
@@ -48,10 +48,10 @@ fn merge(left: bstr, right: bstr) -> bstr {
 
         if bstr_lt(left_byte, right_byte) {
             output = bstr_concat(output, left_byte);
-            left_i = add_int(left_i, 1);
+            left_i = left_i.add(1);
         } else { // bstr_gte(left_byte, right_byte)
             output = bstr_concat(output, right_byte);
-            right_i = add_int(right_i, 1);
+            right_i = right_i.add(1);
         }
     }
 
@@ -59,11 +59,11 @@ fn merge(left: bstr, right: bstr) -> bstr {
     // Only one of these loops will run
     while int_lt(left_i, left_len) {
         output = bstr_concat(output, bstr_get(left, left_i));
-        left_i = add_int(left_i, 1);
+        left_i = left_i.add(1);
     }
     while int_lt(right_i, right_len) {
         output = bstr_concat(output, bstr_get(right, right_i));
-        right_i = add_int(right_i, 1);
+        right_i = right_i.add(1);
     }
 
     output

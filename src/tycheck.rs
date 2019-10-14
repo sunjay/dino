@@ -29,6 +29,11 @@ pub enum Error {
     UnresolvedFunction {
         name: String,
     },
+    #[snafu(display("no method named '{}' in the current scope for type 'TODO'", name))]
+    UnresolvedMethod {
+        name: String,
+        ty: TyId,
+    },
     #[snafu(display("function '{}' takes {} parameter(s) but {} parameter(s) were supplied", func_name, expected, actual))]
     ArityMismatch {
         func_name: String,
@@ -37,6 +42,14 @@ pub enum Error {
     },
     #[snafu(display("cannot infer type, type annotations needed"))]
     AmbiguousType {
+        //TODO: Add span info
+    },
+    #[snafu(display("type must be known at this point, type annotations needed"))]
+    AmbiguousMethodCall {
+        //TODO: Add span info
+    },
+    #[snafu(display("associated functions cannot be called as methods"))]
+    UnexpectedAssociatedFunction {
         //TODO: Add span info
     },
     #[snafu(display("mismatched types"))]
@@ -67,6 +80,8 @@ fn infer_and_check_module<'a>(
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
 ) -> Result<ir::Module<'a>, Error> {
+    //TODO: Type check methods
+
     // Able to use par_bridge here because functions can be type checked in any order
     let decls = mod_decls.functions()
         .par_bridge()

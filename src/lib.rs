@@ -66,6 +66,7 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
     //TODO: Figure out how to do this properly without hard coding things
     use crate::ast::*;
 
+    let prims = &decls.prims;
     let decls = &mut decls.top_level_decls;
 
     decls.insert_func(Function::new_extern("unit_eq", FuncSig {
@@ -152,11 +153,11 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
         ],
     })).unwrap();
 
-    decls.insert_func(Function::new_extern("add_int", FuncSig {
+    decls.insert_method(prims.int(), "add", Function::new_extern("int__add", FuncSig {
         return_type: Ty::Named("int"),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: Ty::Named("int")},
+            FuncParam {name: "other", ty: Ty::Named("int")},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("sub_int", FuncSig {

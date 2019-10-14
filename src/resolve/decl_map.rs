@@ -50,6 +50,12 @@ struct TypeEntry<'a> {
     /// Information about code generation for this type
     //TODO: Not all types will have an extern name once we support structs/enums
     extern_type: ExternType,
+    /// The methods provided by this type.
+    ///
+    /// The keys of the map are the method names (e.g. `add`) whereas the `name` field of
+    /// the `Function` can be anything. If the Function is extern, this `name` field will
+    /// be used in the generated code.
+    methods: HashMap<Ident<'a>, Function<'a>>,
 }
 
 #[derive(Debug)]
@@ -105,8 +111,29 @@ impl<'a> DeclMap<'a> {
             });
         }
 
-        self.types.push(TypeEntry {ty_name, extern_type});
+        self.types.push(TypeEntry {ty_name, extern_type, methods: HashMap::new()});
         Ok(id)
+    }
+
+    /// Inserts a new method for the given type
+    pub fn insert_method(
+        &mut self,
+        id: TyId,
+        method_name: Ident<'a>,
+        method: Function<'a>,
+    ) -> Result<(), DuplicateDecl> {
+        let TyId(id) = id;
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        let methods = &mut self.types.get_mut(id).unwrap().methods;
+
+        //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
+        if methods.insert(method_name, method).is_some() {
+            return Err(DuplicateDecl {
+                duplicate: method_name.to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     /// Returns the ID of the given type name
@@ -115,27 +142,29 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns the name of the given type ID
-    pub fn type_name(&self, id: &TyId) -> &Ident<'a> {
-        let &TyId(id) = id;
+    pub fn type_name(&self, id: TyId) -> &Ident<'a> {
+        let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
         &self.types.get(id).unwrap().ty_name
     }
 
     /// Returns the extern type information of the given type ID
-    pub fn type_extern_info(&self, id: &TyId) -> &ExternType {
-        let &TyId(id) = id;
+    pub fn type_extern_info(&self, id: TyId) -> &ExternType {
+        let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
         &self.types.get(id).unwrap().extern_type
+    }
+
+    /// Returns the method function decl corresponding to the given name, if any
+    pub fn method(&self, id: TyId, name: &Ident<'a>) -> Option<&Function<'a>> {
+        let TyId(id) = id;
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        self.types.get(id).unwrap().methods.get(name)
     }
 
     /// Returns the function signature corresponding to the given name, if any
     pub fn func_sig(&self, name: &Ident<'a>) -> Option<&FuncSig<'a>> {
         self.functions.get(name).map(|entry| &entry.func.sig)
-    }
-
-    /// Returns true if the function is an extern function
-    pub fn is_func_extern(&self, name: &Ident<'a>) -> Option<bool> {
-        self.functions.get(name).map(|entry| &entry.func.is_extern).copied()
     }
 
     /// Returns an iterator that goes through each declaration in the map
