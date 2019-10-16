@@ -1,0 +1,143 @@
+//! A program that implements a doubly-linked list data structure
+
+struct LinkedList<T> {
+    head: Option<ListNode<T>>,
+    tail: Option<ListNode<T>>,
+}
+
+impl<T> LinkedList<T> {
+    fn new() -> Self {
+        Self {
+            head: None,
+            tail: None,
+        }
+    }
+
+    fn is_empty(self) -> bool {
+        self.head.is_none() && self.tail.is_none()
+    }
+
+    fn len(self) -> int {
+        let length = 0;
+        let current = self.head;
+
+        while let Some(node) = current {
+            current = node.next();
+            length += 1;
+        }
+
+        length
+    }
+
+    fn head(self) -> Option<T> {
+        self.head.map(|node| node.value())
+    }
+
+    fn tail(self) -> Option<T> {
+        self.tail.map(|node| node.value())
+    }
+
+    fn pop_front(self) -> Option<T> {
+        self.head.map(|node| node.remove().value())
+    }
+
+    fn pop_back(self) -> Option<T> {
+        self.tail.map(|node| node.remove().value())
+    }
+
+    fn push_front(self, value: T) {
+        let node = ListNode::new(value);
+
+        match (self.head, self.tail) {
+            // List is empty
+            (None, None) => {
+                self.head = Some(node);
+                self.tail = Some(node);
+            },
+            // If the list is non-empty, both head and tail are not None
+            (Some(head), _) => {
+                head.prepend(node);
+            },
+        }
+    }
+
+    fn push_back(self, value: T) {
+        let node = ListNode::new(value);
+
+        match (self.head, self.tail) {
+            // List is empty
+            (None, None) => {
+                self.head = Some(node);
+                self.tail = Some(node);
+            },
+            // If the list is non-empty, both head and tail are not None
+            (_, Some(tail)) => {
+                tail.append(node);
+            },
+        }
+    }
+}
+
+struct ListNode<T> {
+    prev: Option<ListNode<T>>,
+    next: Option<ListNode<T>>,
+    value: T,
+}
+
+impl<T> ListNode<T> {
+    fn new(value: T) -> Self {
+        Self {
+            prev: None,
+            next: None,
+            value,
+        }
+    }
+
+    fn value(self) -> T {
+        self.value
+    }
+
+    fn set_value(self, value: T) {
+        self.value = value;
+    }
+
+    fn prev(self) -> Option<Self> {
+        self.prev
+    }
+
+    fn next(self) -> Option<Self> {
+        self.next
+    }
+
+    fn append(self, node: Self) {
+        self.next = Some(node);
+        node.prev = Some(self);
+    }
+
+    fn prepend(self, node: Self) {
+        node.next = Some(self);
+        self.prev = Some(node);
+    }
+
+    fn remove(self) -> Self {
+        if let Some(next) = self.next {
+            next.prev = Some(self.prev);
+        }
+
+        if let Some(prev) = self.prev {
+            prev.next = Some(self.next);
+        }
+
+        self.prev = None;
+        self.next = None;
+        self
+    }
+}
+
+fn main() {
+    let list = LinkedList::new();
+
+    list.push_back(10);
+    list.push_back(15);
+    list.push_back(20);
+}
