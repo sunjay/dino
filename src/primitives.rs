@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::resolve::{TyId, DeclMap, ExternType};
 
 macro_rules! primitives {
@@ -42,24 +44,28 @@ primitives! {
         // an empty string here.
         unit => "" => ExternType {
             extern_name: "DUnit".to_string(),
+            size: mem::size_of::<()>(),
             unit_literal_constructor: Some("__dino__DUnit_from_unit_literal".to_string()),
             ..ExternType::default()
         },
 
         bool => "bool" => ExternType {
             extern_name: "DBool".to_string(),
+            size: mem::size_of::<bool>(),
             bool_literal_constructor: Some("__dino__DBool_from_bool_literal".to_string()),
             ..ExternType::default()
         },
 
         int => "int" => ExternType {
             extern_name: "DInt".to_string(),
+            size: mem::size_of::<i64>(),
             int_literal_constructor: Some("__dino__DInt_from_int_literal".to_string()),
             ..ExternType::default()
         },
 
         real => "real" => ExternType {
             extern_name: "DReal".to_string(),
+            size: mem::size_of::<f64>(),
             int_literal_constructor: Some("__dino__DReal_from_int_literal".to_string()),
             real_literal_constructor: Some("__dino__DReal_from_real_literal".to_string()),
             ..ExternType::default()
@@ -67,6 +73,7 @@ primitives! {
 
         complex => "complex" => ExternType {
             extern_name: "DComplex".to_string(),
+            size: 2 * mem::size_of::<f64>(),
             int_literal_constructor: Some("__dino__DComplex_from_int_literal".to_string()),
             real_literal_constructor: Some("__dino__DComplex_from_real_literal".to_string()),
             complex_literal_constructor: Some("__dino__DComplex_from_complex_literal".to_string()),
@@ -75,6 +82,7 @@ primitives! {
 
         bstr => "bstr" => ExternType {
             extern_name: "DBStr".to_string(),
+            size: mem::size_of::<*mut u8>() + mem::size_of::<usize>(),
             bstr_literal_constructor: Some("__dino__DBStr_from_bstr_literal".to_string()),
             ..ExternType::default()
         },

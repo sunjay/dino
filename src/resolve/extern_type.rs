@@ -8,6 +8,9 @@ pub struct ExternType {
     /// The name of the extern type to use during code generation
     pub extern_name: String,
 
+    /// The size of the extern type in bytes
+    pub size: usize,
+
     /// (optional) A function that returns a value of the extern type given no parameters
     ///
     /// Only required if a unit literal () may type check to this type
