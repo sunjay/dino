@@ -83,9 +83,9 @@ Rust dynamic library linked with the compiled code.
   * `while expr { body }`
   * `while let pat = expr { body }`
 * Conditions:
-  * `if (expr) { body }`
-  * `if (expr) { body } else { body2 }`
-  * `if (expr) { body } else if (expr2) { body2 } else { body3 }`
+  * `if expr { body }`
+  * `if expr { body } else { body2 }`
+  * `if expr { body } else if expr2 { body2 } else { body3 }`
 * Comments:
   * Single-line: `// This is a comment!`
   * Multi-line: `/* This comment can be /* nested */ and span multiple lines */`
