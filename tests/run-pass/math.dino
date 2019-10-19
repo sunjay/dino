@@ -1,11 +1,22 @@
 fn main() {
     // Need to specify the type in the literal so the
     // method call isn't ambiguous
-    let value = -34int.add(43);
+    let value = -34int + 43;
     print_int(value);
-    value = value.add(-2);
+    value = value + -2;
     print_int(value);
-    value = -1int.add(value)
-        .add(value).add(-94);
-    print_int(value.add(1));
+    value = -1int + value + (value - 94);
+    print_int(value + 1);
+}
+
+fn foo(x: int) -> int {
+    if x > 2 {
+        return x * 2 + 5 / x;
+    }
+
+    -x - 2
+}
+
+fn precedence(x: int, y: int, z: int, w: int) -> int {
+    x * (2int + y) / z - (x - y) % w + x
 }

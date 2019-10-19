@@ -208,16 +208,112 @@ fn precedence0(input: Input) -> IResult<Expr> {
 }
 
 fn precedence1(input: Input) -> IResult<Expr> {
+    bin_op_opt1(
+        precedence2,
+        alt((
+            tag("=="),
+            tag("!="),
+            tag("<"),
+            tag(">"),
+            tag("<="),
+            tag(">="),
+        )),
+        precedence2,
+        |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
+            lhs,
+            //TODO: Should be using trait methods
+            call: CallExpr {
+                func_name: match op {
+                    "==" => "eq",
+                    "!=" => "ne",
+                    "<" => "lt",
+                    ">" => "gt",
+                    "<=" => "le",
+                    ">=" => "ge",
+                    _ => unreachable!(),
+                },
+                args: vec![rhs],
+            },
+        })),
+    )(input)
+}
+
+fn precedence2(input: Input) -> IResult<Expr> {
+    bin_op_opt1(
+        precedence3,
+        one_of("+-"),
+        precedence3,
+        |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
+            lhs,
+            //TODO: Should be using trait methods
+            call: CallExpr {
+                func_name: match op {
+                    '+' => "add",
+                    '-' => "sub",
+                    _ => unreachable!(),
+                },
+                args: vec![rhs],
+            },
+        })),
+    )(input)
+}
+
+fn precedence3(input: Input) -> IResult<Expr> {
+    bin_op_opt1(
+        precedence4,
+        one_of("*/%"),
+        precedence4,
+        |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
+            lhs,
+            //TODO: Should be using trait methods
+            call: CallExpr {
+                func_name: match op {
+                    '*' => "mul",
+                    '/' => "div",
+                    '%' => "rem",
+                    _ => unreachable!(),
+                },
+                args: vec![rhs],
+            },
+        })),
+    )(input)
+}
+
+fn precedence4(input: Input) -> IResult<Expr> {
+    alt((
+        map(
+            tuple((one_of("-!"), wsc0, precedence5)),
+            |(op, _, lhs)| Expr::MethodCall(Box::new(MethodCall {
+                lhs,
+                //TODO: Should be the trait method Neg::neg
+                call: CallExpr {
+                    func_name: match op {
+                        '-' => "neg",
+                        '!' => "not",
+                        _ => unreachable!(),
+                    },
+                    args: Vec::new(),
+                },
+            })),
+        ),
+
+        // If nothing above parses, we can use the next upper level of precedence
+        precedence5,
+    ))(input)
+}
+
+fn precedence5(input: Input) -> IResult<Expr> {
     // The dot (.) operator has very high precedence and is left associative
     // Using the next level of precedence like this is a technique for left recursion
     // This operator is special because it has a limited number of things that can be used as its
     // right-hand side.
-    bin_op_opt1(precedence2, char('.'), func_call,
+    bin_op_opt1(precedence6, char('.'), func_call,
         |lhs, _, call| Expr::MethodCall(Box::new(MethodCall {lhs, call})))(input)
 }
 
-fn precedence2(input: Input) -> IResult<Expr> {
+fn precedence6(input: Input) -> IResult<Expr> {
     alt((
+        group,
         map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
         map(return_expr, |ret_expr| Expr::Return(ret_expr.map(Box::new))),
@@ -230,6 +326,13 @@ fn precedence2(input: Input) -> IResult<Expr> {
         map(unit_literal, |_| Expr::UnitLiteral),
         map(ident, Expr::Var),
     ))(input)
+}
+
+fn group(input: Input) -> IResult<Expr> {
+    map(
+        tuple((char('('), wsc0, expr, wsc0, char(')'))),
+        |(_, _, expr, _, _)| expr,
+    )(input)
 }
 
 fn cond(input: Input) -> IResult<Cond> {
