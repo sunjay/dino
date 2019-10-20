@@ -284,16 +284,28 @@ fn precedence4(input: Input) -> IResult<Expr> {
         map(
             tuple((one_of("-!"), wsc0, precedence5)),
             |(op, _, lhs)| Expr::MethodCall(Box::new(MethodCall {
-                lhs,
-                //TODO: Should be the trait method Neg::neg
+                //TODO: Should be using trait methods for operators
                 call: CallExpr {
                     func_name: match op {
-                        '-' => "neg",
+                        // HACK: we can make type inference a bit easier for ourselves if we allow
+                        // numeric literals to just include their negative sign directly
+                        '-' => match lhs {
+                            Expr::IntegerLiteral(lit) => {
+                                return Expr::IntegerLiteral(IntegerLiteral {
+                                    value: -lit.value,
+                                    ..lit
+                                });
+                            },
+                            Expr::RealLiteral(value) => return Expr::RealLiteral(-value),
+                            Expr::ComplexLiteral(value) => return Expr::ComplexLiteral(-value),
+                            _ => "neg",
+                        },
                         '!' => "not",
                         _ => unreachable!(),
                     },
                     args: Vec::new(),
                 },
+                lhs,
             })),
         ),
 
