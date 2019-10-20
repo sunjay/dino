@@ -1,7 +1,8 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 
 use snafu::OptionExt;
 use maplit::hashset;
+use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
 use crate::resolve::{DeclMap, TyId};
 use crate::primitives::Primitives;
@@ -15,74 +16,42 @@ use super::{
     UnresolvedMethod,
     AmbiguousMethodCall,
     tyir,
-    solve::{verify_valid_tys_or_default, apply_eq_constraints, verify_substitution},
+    solve::{build_substitution, verify_valid_tys_or_default},
 };
+use super::scope::Scope;
 use super::subst::TypeSubst;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TyVar(usize);
+pub struct TyVar(u32);
 
-/// A map of variable names to their type variables
-type LocalScope<'a> = HashMap<ast::Ident<'a>, TyVar>;
+impl UnifyKey for TyVar {
+    type Value = Option<TyId>;
 
-/// A linked list of scopes, used to create an ad-hoc stack where only the "top" is mutable
-///
-/// `'a` is the lifetime of the things stored in the scope. `'s` is the lifetime of the parent scope.
-#[derive(Debug, Default)]
-struct Scope<'a, 's> {
-    /// The current scope, it can be modified freely
-    pub current: LocalScope<'a>,
-    /// The next upper level of scope (if any)
-    pub parent: Option<&'s Scope<'a, 's>>,
-}
-
-impl<'a, 's> Scope<'a, 's> {
-    /// Create a new mutable child scope
-    pub fn child_scope(&'s self) -> Self {
-        Self {
-            current: LocalScope::default(),
-            parent: Some(self),
-        }
+    fn index(&self) -> u32 {
+        self.0
     }
 
-    /// Returns true if the given variable name is in scope at the current level, or in any parent
-    /// scope.
-    pub fn contains(&self, name: &ast::Ident<'a>) -> bool {
-        self.get(name).is_some()
+    fn from_index(id: u32) -> Self {
+        TyVar(id)
     }
 
-    /// Returns the type variable associated with a given variable name
-    pub fn get(&self, name: ast::Ident<'a>) -> Option<TyVar> {
-        self.current.get(name).copied().or_else(|| match self.parent {
-            Some(parent) => parent.get(name),
-            None => None,
-        })
-    }
-
-    /// Adds a new variable *only* to the current scope and associates it with the given type
-    /// variable
-    pub fn add_variable(&mut self, name: ast::Ident<'a>, ty_var: TyVar) {
-        self.current.insert(name, ty_var);
+    fn tag() -> &'static str {
+        "TyVar"
     }
 }
 
-/// Asserts that the given type variables must correspond to the same types
-#[derive(Debug)]
-pub struct TyVarEquals(pub TyVar, pub TyVar);
+impl EqUnifyValue for TyId {}
 
 #[derive(Debug, Default)]
 pub struct ConstraintSet {
-    /// The concrete types collected along the way
-    /// Each type variable can only be assigned to a single type
-    subst: TypeSubst,
-    /// A list of variable equality constraints
-    ty_var_equals: Vec<TyVarEquals>,
+    /// The concrete types for each variable, collected along the way.
+    /// A union-find implementation keeps track of which type variables are equal to each other
+    /// and maintains that equivalence as values are updated.
+    ty_var_table: InPlaceUnificationTable<TyVar>,
     /// A list of variables associated with integer literals (int, real, complex)
     int_vars: HashSet<TyVar>,
     /// A list of variables associated with real literals (real, complex)
     real_vars: HashSet<TyVar>,
-    /// The ID of the next type variable
-    next_var: usize,
 }
 
 impl ConstraintSet {
@@ -100,35 +69,43 @@ impl ConstraintSet {
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
     pub fn solve(self, prims: &Primitives) -> Result<TypeSubst, Error> {
-        let Self {mut subst, ty_var_equals, int_vars, real_vars, next_var} = self;
-
-        apply_eq_constraints(&ty_var_equals, &mut subst)?;
+        let Self {mut ty_var_table, int_vars, real_vars} = self;
 
         // Assert that the literals are one of the expected types for that kind of literal
         verify_valid_tys_or_default(
             &int_vars,
             &hashset!{prims.int(), prims.real(), prims.complex()},
             prims.int(),
-            &mut subst,
+            &mut ty_var_table,
         ).map_err(|actual| Error::InvalidIntLitType {actual})?;
         verify_valid_tys_or_default(
             &real_vars,
             &hashset!{prims.real(), prims.complex()},
             prims.real(),
-            &mut subst,
+            &mut ty_var_table,
         ).map_err(|actual| Error::InvalidRealLitType {actual})?;
 
         // The resulting substitution must contain all variables
-        verify_substitution(&subst, (0..next_var).map(TyVar))?;
-
-        Ok(subst)
+        let ty_vars = (0..ty_var_table.len()).map(|id| TyVar(id as u32));
+        let ty_vars = ty_vars.map(|ty_var| (ty_var, ty_var_table.probe_value(ty_var)));
+        build_substitution(ty_vars)
     }
 
     /// Generates a fresh type variable and returns it
     fn fresh_type_var(&mut self) -> TyVar {
-        let var = TyVar(self.next_var);
-        self.next_var += 1;
-        var
+        self.ty_var_table.new_key(None)
+    }
+
+    /// Asserts that a given type variable is the given type
+    fn ty_var_is_ty(&mut self, ty_var: TyVar, ty: TyId) -> Result<(), Error> {
+        self.ty_var_table.unify_var_value(ty_var, Some(ty))
+            .map_err(|(expected, actual)| Error::MismatchedTypes {expected, actual})
+    }
+
+    /// Asserts that the given type variables must correspond to the same types
+    fn ty_var_equals(&mut self, ty_var1: TyVar, ty_var2: TyVar) -> Result<(), Error> {
+        self.ty_var_table.unify_var_var(ty_var1, ty_var2)
+            .map_err(|(expected, actual)| Error::MismatchedTypes {expected, actual})
     }
 
     /// Appends constrains for the given function
@@ -148,15 +125,13 @@ impl ConstraintSet {
 
         // Assert that the function body block returns the expected type
         let return_type = self.fresh_type_var();
-        self.subst.insert(return_type, func_return_type)
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(return_type, func_return_type)?;
 
         // Add each parameter as a local variable in the function scope
         for &ir::FuncParam {name, ty} in params {
             // Each parameter (and all its uses) must type check to the declared type
             let param_ty_var = self.fresh_type_var();
-            self.subst.insert(param_ty_var, ty)
-                .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+            self.ty_var_is_ty(param_ty_var, ty)?;
             scope.add_variable(name, param_ty_var);
         }
 
@@ -193,8 +168,7 @@ impl ConstraintSet {
 
                 None => {
                     // No return expression, so the return type of this block should be unit
-                    self.subst.insert(return_type, prims.unit())
-                        .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                    self.ty_var_is_ty(return_type, prims.unit())?;
 
                     None
                 },
@@ -244,15 +218,13 @@ impl ConstraintSet {
 
         // Every condition must evaluate to a value of type bool
         let cond_var = self.fresh_type_var();
-        self.subst.insert(cond_var, prims.bool())
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(cond_var, prims.bool())?;
         // Loop condition must use the parent scope, not the child scope for the loop body
         let cond = self.append_expr(cond, cond_var, func_return_type, scope, decls, prims)?;
 
         // Loops are not currently allowed in expression position, so the body must result in ()
         let loop_body_var = self.fresh_type_var();
-        self.subst.insert(loop_body_var, prims.unit())
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(loop_body_var, prims.unit())?;
         // The body of the loop gets a new inner scope so that variables declared within it aren't
         // accessible after the loop has finished running
         let mut child_scope = scope.child_scope();
@@ -287,8 +259,7 @@ impl ConstraintSet {
         // The type variable should match the annotated type (if any)
         if let Some(ty) = ty {
             let var_decl_ty = lookup_type(decls, prims, ty)?;
-            self.subst.insert(var_decl_ty_var, var_decl_ty)
-                .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+            self.ty_var_is_ty(var_decl_ty_var, var_decl_ty)?;
         }
 
         // Must append expr BEFORE updating local scope with the new type variable or else variable
@@ -346,8 +317,7 @@ impl ConstraintSet {
 
             ast::Expr::BStrLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.subst.insert(return_type, prims.bstr())
-                    .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                self.ty_var_is_ty(return_type, prims.bstr())?;
 
                 Ok(tyir::Expr::BStrLiteral(value, return_type))
             },
@@ -357,8 +327,7 @@ impl ConstraintSet {
                 if let Some(ty_name) = type_hint {
                     let expected_type = decls.type_id(&ty_name)
                         .expect("bug: parser allowed an invalid integer type hint");
-                    self.subst.insert(return_type, expected_type)
-                        .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                    self.ty_var_is_ty(return_type, expected_type)?;
                 }
 
                 self.int_vars.insert(return_type);
@@ -373,24 +342,21 @@ impl ConstraintSet {
 
             &ast::Expr::ComplexLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.subst.insert(return_type, prims.complex())
-                    .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                self.ty_var_is_ty(return_type, prims.complex())?;
 
                 Ok(tyir::Expr::ComplexLiteral(value, return_type))
             },
 
             &ast::Expr::BoolLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.subst.insert(return_type, prims.bool())
-                    .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                self.ty_var_is_ty(return_type, prims.bool())?;
 
                 Ok(tyir::Expr::BoolLiteral(value, return_type))
             },
 
             &ast::Expr::UnitLiteral => {
                 // Assert that the literal is one of the expected types for this kind of literal
-                self.subst.insert(return_type, prims.unit())
-                    .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                self.ty_var_is_ty(return_type, prims.unit())?;
 
                 Ok(tyir::Expr::UnitLiteral(return_type))
             },
@@ -399,23 +365,7 @@ impl ConstraintSet {
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
                 // Assert that the type of the variable must be equal to the type expected from the
                 // expression
-                self.ty_var_equals.push(
-                    TyVarEquals(var_ty_var, return_type)
-                );
-
-                //HACK: If we already know the type of the variable and we don't know the type
-                // of the expression return type yet, assign the return type to the variable type.
-                // This *should* be safe since if this leads to an incorrect type derivation, the
-                // equality constraint application algorithm should catch that.
-                // This hack is necessary in order to be able to call methods on variables.
-                // A non-hacky way to do this is to be able to query the constraint set for the
-                // current solution for a given type variable based on the constraints collected
-                // so far.
-                if let (Some(var_ty), None) = (self.subst.get(var_ty_var), self.subst.get(return_type)) {
-                    // This unwrap() is safe because we just checked if the variable already had
-                    // a value in the substitution
-                    self.subst.insert(return_type, var_ty).unwrap();
-                }
+                self.ty_var_equals(var_ty_var, return_type)?;
 
                 Ok(tyir::Expr::Var(name, var_ty_var))
             },
@@ -445,7 +395,7 @@ impl ConstraintSet {
 
         // In order to call the method, we must know the type of lhs at this point. Hopefully the
         // constraint generation for that expression gave us something.
-        let lhs_ty = self.subst.get(lhs_ty_var)
+        let lhs_ty = self.ty_var_table.probe_value(lhs_ty_var)
             .with_context(|| AmbiguousMethodCall {})?;
 
         let ast::CallExpr {func_name: method_name, args} = call;
@@ -491,15 +441,13 @@ impl ConstraintSet {
         // If the condition is used as a statement (no return type) or if there is no else clause,
         // the if condition must return unit
         if no_return_type || cond.else_body.is_none() {
-            self.subst.insert(return_type, prims.unit())
-                .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+            self.ty_var_is_ty(return_type, prims.unit())?;
         }
 
         let conds = conds.iter().map(|(cond, body)| {
             // Every condition must evaluate to a value of type bool
             let cond_var = self.fresh_type_var();
-            self.subst.insert(cond_var, prims.bool())
-                .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+            self.ty_var_is_ty(cond_var, prims.bool())?;
             let cond = self.append_expr(cond, cond_var, func_return_type, scope, decls, prims)?;
 
             // The body of every condition must evaluate to the same type
@@ -572,16 +520,14 @@ impl ConstraintSet {
 
         // Assert that the return type of this expression is the same as the function return type
         let ir::FuncSig {return_type: call_return_type, params} = resolve_sig(decls, prims, sig)?;
-        self.subst.insert(return_type, call_return_type)
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(return_type, call_return_type)?;
 
         let args = extra_first_arg.map(Ok).into_iter().chain(args.iter().zip(params).map(|(arg, param)| {
             let arg_ty_var = self.fresh_type_var();
 
             // Assert that each argument matches the corresponding parameter type
             let ir::FuncParam {name: _, ty: param_ty} = param;
-            self.subst.insert(arg_ty_var, param_ty)
-                .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+            self.ty_var_is_ty(arg_ty_var, param_ty)?;
 
             self.append_expr(arg, arg_ty_var, func_return_type, scope, decls, prims)
         })).collect::<Result<Vec<_>, _>>()?;
@@ -607,8 +553,7 @@ impl ConstraintSet {
         let ast::VarAssign {ident, expr} = assign;
 
         // The return type of a variable assignment is ()
-        self.subst.insert(return_type, prims.unit())
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(return_type, prims.unit())?;
 
         // The type of the right-hand expression of the assignment must match the type of the
         // variable being assigned to
@@ -631,8 +576,7 @@ impl ConstraintSet {
         prims: &Primitives,
     ) -> Result<Option<tyir::Expr<'a>>, Error> {
         // A return expression always type checks to ()
-        self.subst.insert(return_type, prims.unit())
-            .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+        self.ty_var_is_ty(return_type, prims.unit())?;
 
         Ok(match ret_expr {
             // The return expression must match the type returned from the function
@@ -641,8 +585,7 @@ impl ConstraintSet {
             },
             // No return expression, thus the function must be returning unit
             None => {
-                self.subst.insert(func_return_type, prims.unit())
-                    .map_err(|mismatch| Error::MismatchedTypes {expected: mismatch.expected, actual: mismatch.actual})?;
+                self.ty_var_is_ty(func_return_type, prims.unit())?;
 
                 None
             },

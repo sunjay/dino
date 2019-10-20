@@ -15,6 +15,7 @@ terminator = "0.1"
 maplit = "1.0"
 rayon = "1.2"
 rand = { version = "0.7", features = ["small_rng"] }
+ena = "0.13"
 
 [dev-dependencies]
 rayon = "1.2"

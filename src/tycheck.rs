@@ -1,6 +1,7 @@
 //! Type inference and checking.
 
 mod subst;
+mod scope;
 mod constraints;
 mod solve;
 mod tyir;
