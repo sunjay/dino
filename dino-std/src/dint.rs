@@ -86,6 +86,18 @@ pub extern fn int__div(x: DInt, y: DInt) -> DInt {
     DInt(x.0 / y.0)
 }
 
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn int__rem(x: DInt, y: DInt) -> DInt {
+    DInt(x.0 % y.0)
+}
+
+//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
+#[no_mangle]
+pub extern fn int__neg(x: DInt) -> DInt {
+    DInt(-x.0)
+}
+
 //TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
 pub extern fn print_int(x: DInt) -> DUnit {

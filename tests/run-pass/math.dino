@@ -7,16 +7,17 @@ fn main() {
     print_int(value);
     value = -1int + value + (value - 94);
     print_int(value + 1);
+    print_int(precedence(3, 9, -3, 330));
 }
 
 fn foo(x: int) -> int {
     if x > 2 {
-        return x * 2 + 5 / x;
+        return x * 2 + 5int / x;
     }
 
     -x - 2
 }
 
 fn precedence(x: int, y: int, z: int, w: int) -> int {
-    x * (2int + y) / z - (x - y) % w + x
+    x * (2int + y) / -z - (x - y) % w + x
 }

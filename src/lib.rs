@@ -181,6 +181,19 @@ fn insert_prelude(decls: &mut resolve::ProgramDecls) {
             FuncParam {name: "right", ty: Ty::Named("int")},
         ],
     })).unwrap();
+    decls.insert_method(prims.int(), "rem", Function::new_extern("int__rem", FuncSig {
+        return_type: Ty::Named("int"),
+        params: vec![
+            FuncParam {name: "self", ty: Ty::Named("int")},
+            FuncParam {name: "right", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
+    decls.insert_method(prims.int(), "neg", Function::new_extern("int__neg", FuncSig {
+        return_type: Ty::Named("int"),
+        params: vec![
+            FuncParam {name: "self", ty: Ty::Named("int")},
+        ],
+    })).unwrap();
     decls.insert_func(Function::new_extern("print_int", FuncSig {
         return_type: Ty::Unit,
         params: vec![
