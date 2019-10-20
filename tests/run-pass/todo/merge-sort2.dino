@@ -14,7 +14,7 @@ fn main() {
 }
 
 fn merge_sort(input: bstr) -> bstr {
-    let input_len = bstr_len(input);
+    let input_len = input.len();
 
     // Base case: return a single character (or nothing)
     if input_len <= 1 {
@@ -34,8 +34,8 @@ fn merge_sort(input: bstr) -> bstr {
 
 /// Merges two sorted strings into a single sorted string
 fn merge(left: bstr, right: bstr) -> bstr {
-    let left_len = bstr_len(left);
-    let right_len = bstr_len(right);
+    let left_len = left.len();
+    let right_len = right.len();
 
     let left_i: int = 0;
     let right_i: int = 0;
