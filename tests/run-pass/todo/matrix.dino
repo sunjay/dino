@@ -1,0 +1,119 @@
+fn main() {
+    let a = [
+        [-5,  9,  6],
+        [-9, -7, -7],
+        [ 1, -1,  1],
+    ];
+
+    let b = [
+        [ -2, -9, -1],
+        [  3, -4, -5],
+        [-10,  7, -6],
+    ];
+
+    let c = mul(a, b);
+    print_list(c);
+}
+
+/// Returns a zero matrix with the given dimensions
+fn zeros(rows: uint, cols: uint) -> [[real]] {
+    // The fact that the list constructor clones
+    // each element is important here because we
+    // don't want each row to be the same memory
+    [[0; cols]; rows]
+}
+
+/// Returns a square identity matrix with the given dimensions
+fn identity(dim: uint) -> [[real]] {
+    let mat = zeros(dim, dim);
+
+    for i in 0..dim {
+        mat[i][i] = 1;
+    }
+
+    mat
+}
+
+/// Returns a column matrix representing the given vector of values
+fn col_vec(values: [real]) -> [[real]] {
+    let mat = zeros(values.len(), 1);
+
+    for i in 0..values.len() {
+        mat[i][0] = values[i];
+    }
+
+    mat
+}
+
+/// Returns the number of rows in the matrix
+fn nrows(mat: [[real]]) -> uint {
+    mat.len()
+}
+
+/// Returns the number of columns in the matrix
+fn ncols(mat: [[real]]) -> uint {
+    if mat.len() > 0 { mat[0].len() } else { 0 }
+}
+
+/// Adds each corresponding element of both matrices
+///
+/// The matrices must have the same dimensions
+fn add(a: [[real]], b: [[real]]) -> [[real]] {
+    //TODO: Error handling, dimensions check
+
+    let res = a.clone();
+
+    for row_i in 0..nrows(b) {
+        for col_i in 0..ncols(b) {
+            res[row_i][col_i] += b[row_i][col_i];
+        }
+    }
+
+    res
+}
+
+/// Performs matrix multiplication
+///
+/// The number of columns of the first matrix must match
+/// the number of rows in the second matrix.
+fn mul(a: [[real]], b: [[real]]) -> [[real]] {
+    //TODO: Error handling, dimensions check
+
+    let a_rows = nrows(a);
+    let a_cols = ncols(a);
+    let b_rows = nrows(b);
+    let b_cols = ncols(b);
+
+    let res = zeros(a_rows, b_cols);
+
+    for row_i in 0..a_rows {
+        let row = a[row_i];
+        for col_i in 0..b_cols {
+            let total = 0;
+
+            // This loop is why a_cols == b_rows must be true
+            for i in 0..a_cols {
+                total += a[row_i][i] * b[i][col_i];
+            }
+
+            res[row_i][col_i] = total;
+        }
+    }
+
+    res
+}
+
+/// Multiplies each element of the given matrix by
+/// the given scalar value and returns a new matrix
+/// with the results
+fn mul_scalar(a: [[real]], b: real) -> [[real]] {
+    let res = a.clone();
+
+    for row_i in 0..nrows(b) {
+        for col_i in 0..ncols(b) {
+            res[row_i][col_i] *= b;
+        }
+    }
+
+    res
+}
