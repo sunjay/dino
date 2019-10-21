@@ -26,6 +26,8 @@ impl<'a> ProgramDecls<'a> {
 
         for decl in decls {
             match decl {
+                ast::Decl::Struct(struct_decl) => unimplemented!(),
+                ast::Decl::Impl(impl_block) => unimplemented!(),
                 ast::Decl::Function(func) => top_level_decls.insert_func(func)?,
             }
         }

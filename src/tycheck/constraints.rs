@@ -613,6 +613,7 @@ fn resolve_sig<'a>(
 fn lookup_type(decls: &DeclMap, prims: &Primitives, ty: &ast::Ty) -> Result<TyId, Error> {
     match ty {
         ast::Ty::Unit => Ok(prims.unit()),
+        ast::Ty::SelfType => unimplemented!(),
         ast::Ty::Named(ty) => decls.type_id(ty).context(UnresolvedType {name: *ty}),
     }
 }

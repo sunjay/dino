@@ -26,10 +26,34 @@ pub struct Module<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Decl<'a> {
+    Struct(Struct<'a>),
+    Impl(Impl<'a>),
     Function(Function<'a>),
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Struct<'a> {
+    /// The name of the struct
+    pub name: Ident<'a>,
+    /// The fields of the struct
+    pub fields: Vec<StructField<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructField<'a> {
+    name: Ident<'a>,
+    ty: Ty<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Impl<'a> {
+    /// The Self type of this impl block
+    self_ty: Ty<'a>,
+    /// The method decls of this impl block
+    methods: Vec<Function<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function<'a> {
     /// The name of the function
     pub name: Ident<'a>,
@@ -52,8 +76,8 @@ impl<'a> Function<'a> {
     }
 }
 
-/// The type signature of a function
-#[derive(Debug, PartialEq)]
+/// The type signature of a free function
+#[derive(Debug, Clone, PartialEq)]
 pub struct FuncSig<'a> {
     pub return_type: Ty<'a>,
     pub params: Vec<FuncParam<'a>>
@@ -167,6 +191,7 @@ pub struct IntegerLiteral<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty<'a> {
     Unit,
+    SelfType,
     Named(Ident<'a>),
 }
 

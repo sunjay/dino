@@ -56,16 +56,74 @@ fn module(input: Input) -> IResult<Module> {
 }
 
 fn decl(input: Input) -> IResult<Decl> {
-    map(function, Decl::Function)(input)
+    alt((
+        map(struct_decl, Decl::Struct),
+        map(impl_block, Decl::Impl),
+        map(function(FuncType::Function), Decl::Function),
+    ))(input)
 }
 
-fn function(input: Input) -> IResult<Function> {
+fn struct_decl(input: Input) -> IResult<Struct> {
     map(tuple((
+        kw_struct,
+        wsc0,
+        ident,
+        wsc0,
+        struct_fields,
+    )), |(_, _, name, _, fields)| Struct {name, fields})(input)
+}
+
+fn struct_fields(input: Input) -> IResult<Vec<StructField>> {
+    delimited(
+        tuple((char('{'), wsc0)),
+        comma_separated(struct_field),
+        tuple((wsc0, char('}'))),
+    )(input)
+}
+
+fn struct_field(input: Input) -> IResult<StructField> {
+    map(tuple((
+        ident,
+        wsc0,
+        char(':'),
+        wsc0,
+        ty,
+    )), |(name, _, _, _, ty)| StructField {name, ty})(input)
+}
+
+fn impl_block(input: Input) -> IResult<Impl> {
+    map(
+        tuple((
+            kw_impl,
+            wsc0,
+            ty,
+            wsc0,
+            delimited(
+                char('{'),
+                preceded(wsc0, many0(terminated(function(FuncType::Method), wsc0))),
+                char('}'),
+            ),
+        )),
+        |(_, _, self_ty, _, methods)| Impl {self_ty, methods},
+    )(input)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum FuncType {
+    Function,
+    Method,
+}
+
+fn function(func_type: FuncType) -> impl Fn(Input) -> IResult<Function> {
+    move |input| map(tuple((
         kw_fn,
         wsc0,
         ident,
         wsc0,
-        function_params,
+        match func_type {
+            FuncType::Function => function_params,
+            FuncType::Method => method_params,
+        },
         opt(tuple((wsc0, tag("->"), wsc0, ty))),
         wsc0,
         block,
@@ -81,15 +139,45 @@ fn function(input: Input) -> IResult<Function> {
     })(input)
 }
 
+fn method_params(input: Input) -> IResult<Vec<FuncParam>> {
+    static SELF_PARAM: FuncParam = FuncParam {
+        name: "self",
+        ty: Ty::SelfType,
+    };
+
+    delimited(
+        tuple((char('('), wsc0)),
+        alt((
+            // `self` + `,` + param_list
+            map(
+                tuple((kw_selfvalue, wsc0, char(','), wsc0, param_list)),
+                |(_, _, _, _, params)| once(SELF_PARAM.clone()).chain(params).collect(),
+            ),
+            // `self`
+            map(
+                kw_selfvalue,
+                |_| vec![SELF_PARAM.clone()],
+            ),
+            // param_list
+            param_list,
+        )),
+        tuple((wsc0, char(')'))),
+    )(input)
+}
+
 fn function_params(input: Input) -> IResult<Vec<FuncParam>> {
     delimited(
-        char('('),
-        comma_separated(map(
-            tuple((ident, wsc0, char(':'), wsc0, ty)),
-            |(name, _, _, _, ty)| FuncParam {name, ty},
-        )),
-        char(')'),
+        tuple((char('('), wsc0)),
+        param_list,
+        tuple((wsc0, char(')'))),
     )(input)
+}
+
+fn param_list(input: Input) -> IResult<Vec<FuncParam>> {
+    comma_separated(map(
+        tuple((ident, wsc0, char(':'), wsc0, ty)),
+        |(name, _, _, _, ty)| FuncParam {name, ty},
+    ))(input)
 }
 
 fn block(input: Input) -> IResult<Block> {
@@ -401,6 +489,7 @@ fn bstr_literal(input: Input) -> IResult<Vec<u8>> {
 fn ty(input: Input) -> IResult<Ty> {
     alt((
         map(tag("()"), |_| Ty::Unit),
+        map(kw_selftype, |_| Ty::SelfType),
         map(ident, |name| Ty::Named(name)),
     ))(input)
 }
@@ -495,9 +584,15 @@ fn comment(input: Input) -> IResult<()> {
     )(input)
 }
 
+/// Parses comma separated values, allowing for a trailing comma at the end
+///
+/// The returned Vec is allowed to be empty
 fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IResult<Vec<T>>
     where F: Fn(Input<'r>) -> IResult<T> {
-    separated_list(tuple((wsc0, char(','), wsc0)), parser)
+    terminated(
+        separated_list(tuple((wsc0, char(','), wsc0)), parser),
+        opt(tuple((wsc0, char(',')))),
+    )
 }
 
 /// Parses the left-hand side of a binary operator, then optionally parses the operator and the
@@ -685,13 +780,14 @@ mod tests {
     #[test]
     fn function_parser() {
         // Valid cases with different whitespace
-        test_parser!(function("fn foo() {}") -> ok);
-        test_parser!(function("fn foo(){}") -> ok);
-        test_parser!(function("fn foo (){}") -> ok);
-        test_parser!(function("fn
+        let func = function(FuncType::Function);
+        test_parser!(func("fn foo() {}") -> ok);
+        test_parser!(func("fn foo(){}") -> ok);
+        test_parser!(func("fn foo (){}") -> ok);
+        test_parser!(func("fn
             foo () {}") -> ok);
 
         // No space between `fn` and `foo`
-        test_parser!(function("fnfoo(){}") -> err);
+        test_parser!(func("fnfoo(){}") -> err);
     }
 }
