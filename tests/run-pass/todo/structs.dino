@@ -1,0 +1,110 @@
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    /// Create and return a new counter
+    fn new() -> Self {
+        Self {
+            count: 0,
+        }
+    }
+
+    /// Returns the value of the counter
+    fn value(self) -> int {
+        self.count
+    }
+
+    /// Increment the counter
+    fn incr(self) {
+        self.incr_by(1);
+    }
+
+    /// Increment the counter by the given value
+    fn incr_by(self, value: int) {
+        self.count = self.count + value;
+    }
+
+    /// Decrement the counter
+    fn decr(self) {
+        self.count = self.count - 1;
+    }
+}
+
+struct Game {
+    team_a: Counter,
+    team_b: Counter,
+}
+
+impl Game {
+    fn new() -> Self {
+        Self {
+            team_a: Counter::new(),
+            team_b: Counter::new(),
+        }
+    }
+
+    fn team_a_scores(self) {
+        self.team_a.incr();
+    }
+
+    fn team_b_scores(self) {
+        self.team_b.incr();
+    }
+
+    fn print_winner(self) {
+        let a_score = self.team_a.value();
+        let b_score = self.team_b.value();
+        if a_score > b_score {
+            print_bstr(b"a wins");
+        } else if a_score < b_score {
+            print_bstr(b"b wins");
+        } else {
+            print_bstr(b"tie");
+        }
+    }
+}
+
+fn test_counter() {
+    let counter = Counter::new();
+    print_int(counter.value());
+
+    counter.incr();
+    print_int(counter.value());
+
+    counter.incr();
+    print_int(counter.value());
+
+    counter.decr();
+    print_int(counter.value());
+
+    counter.decr();
+    print_int(counter.value());
+
+    counter.decr();
+    print_int(counter.value());
+
+    while counter.value() < 10 {
+        counter.incr();
+    }
+    print_int(counter.value());
+
+    counter.incr_by(34 - 93);
+    print_int(counter.value());
+}
+
+fn test_game() {
+    let game = Game::new();
+
+    game.team_a_scores();
+    game.team_b_scores();
+    game.team_a_scores();
+    game.team_a_scores();
+
+    game.print_winner();
+}
+
+fn main() {
+    test_counter();
+    test_game();
+}
