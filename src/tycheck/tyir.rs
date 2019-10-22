@@ -2,7 +2,7 @@
 //! variables and type IDs directly without having to invent a way to uniquely address AST nodes.
 
 use crate::ir;
-use crate::ast::Ident;
+use crate::ast::{Ident, IdentPath};
 use crate::resolve::TyId;
 
 use super::constraints::TyVar;
@@ -207,7 +207,7 @@ impl<'a> Cond<'a> {
 
 #[derive(Debug)]
 pub struct CallExpr<'a> {
-    pub func_name: Ident<'a>,
+    pub func_name: &'a IdentPath<'a>,
     pub args: Vec<Expr<'a>>,
 }
 

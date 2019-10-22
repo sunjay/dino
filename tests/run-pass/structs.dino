@@ -32,32 +32,51 @@ impl Counter {
 }
 
 struct Game {
+    team_a_name: bstr,
     team_a: Counter,
+    team_b_name: bstr,
     team_b: Counter,
 }
 
 impl Game {
-    fn new() -> Self {
+    fn new(team_a_name: bstr, team_b_name: bstr) -> Self {
         Self {
+            team_a_name,
             team_a: Counter::new(),
+            team_b_name,
             team_b: Counter::new(),
         }
     }
 
+    /// Returns the name of team A
+    fn team_a_name(self) -> bstr {
+        self.team_a_name
+    }
+
+    /// Returns the name of team B
+    fn team_b_name(self) -> bstr {
+        self.team_b_name
+    }
+
+    /// Increments the score of team A
     fn team_a_scores(self) {
         self.team_a.incr();
     }
 
+    /// Increments the score of team B
     fn team_b_scores(self) {
         self.team_b.incr();
     }
 
+    /// Prints out the winner of the game based on who has the higher score
     fn print_winner(self) {
         let a_score = self.team_a.value();
         let b_score = self.team_b.value();
         if a_score > b_score {
+            print_bstr(self.team_a_name);
             print_bstr(b"a wins");
         } else if a_score < b_score {
+            print_bstr(self.team_b_name);
             print_bstr(b"b wins");
         } else {
             print_bstr(b"tie");

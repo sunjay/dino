@@ -2,6 +2,8 @@
 //!
 //! This is the closest representation to the actual syntax.
 
+use std::fmt;
+
 mod parser;
 
 pub use parser::Error as ParseError;
@@ -133,24 +135,34 @@ pub struct VarDecl<'a> {
 pub enum Expr<'a> {
     VarAssign(Box<VarAssign<'a>>),
     MethodCall(Box<MethodCall<'a>>),
+    FieldAccess(Box<FieldAccess<'a>>),
     Cond(Box<Cond<'a>>),
     Call(CallExpr<'a>),
     Return(Option<Box<Expr<'a>>>),
+    StructLiteral(StructLiteral<'a>),
     BStrLiteral(Vec<u8>),
     IntegerLiteral(IntegerLiteral<'a>),
     RealLiteral(f64),
     ComplexLiteral(f64),
     BoolLiteral(bool),
     UnitLiteral,
+    SelfLiteral,
     Var(Ident<'a>),
 }
 
-/// An assignment expression in the form `<name> = <value>`
+/// Expressions that can be on the left-hand side of assignment
+#[derive(Debug, Clone, PartialEq)]
+pub enum LValueExpr<'a> {
+    FieldAccess(FieldAccess<'a>),
+    Var(Ident<'a>),
+}
+
+/// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarAssign<'a> {
-    /// The identifier to assign a value to
-    pub ident: Ident<'a>,
-    /// The expression for the value to assign to the variable
+    /// The left-hand expression to assign a value to
+    pub lhs: LValueExpr<'a>,
+    /// The expression for the value to assign to the left-hand side
     pub expr: Expr<'a>,
 }
 
@@ -161,6 +173,15 @@ pub struct MethodCall<'a> {
     pub lhs: Expr<'a>,
     /// The method being called
     pub call: CallExpr<'a>,
+}
+
+/// A field access in the form `<expr> . <ident>`
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldAccess<'a> {
+    /// The expression of the left-hand side of the field access
+    pub lhs: Expr<'a>,
+    /// The field being accessed
+    pub field: Ident<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -176,8 +197,22 @@ pub struct Cond<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallExpr<'a> {
-    pub func_name: Ident<'a>,
+    pub func_name: IdentPath<'a>,
     pub args: Vec<Expr<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructLiteral<'a> {
+    name: NamedTy<'a>,
+    field_values: Vec<StructFieldValue<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructFieldValue<'a> {
+    /// The name of the field
+    name: Ident<'a>,
+    /// The expression being assigned to the field
+    value: Expr<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -188,11 +223,61 @@ pub struct IntegerLiteral<'a> {
     pub type_hint: Option<&'a str>,
 }
 
+/// An type explicitly named with an identifier or path (as opposited to (), [T], etc.)
+#[derive(Debug, Clone, PartialEq)]
+pub enum NamedTy<'a> {
+    SelfType,
+    Named(Ident<'a>),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty<'a> {
     Unit,
     SelfType,
     Named(Ident<'a>),
+}
+
+impl<'a> From<NamedTy<'a>> for Ty<'a> {
+    fn from(ty: NamedTy<'a>) -> Self {
+        match ty {
+            NamedTy::SelfType => Ty::SelfType,
+            NamedTy::Named(name) => Ty::Named(name),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IdentPath<'a> {
+    /// There is guaranteed to be at least one component
+    pub components: Vec<Ident<'a>>,
+}
+
+impl<'a> From<Ident<'a>> for IdentPath<'a> {
+    fn from(ident: Ident<'a>) -> Self {
+        Self {
+            components: vec![ident],
+        }
+    }
+}
+
+impl<'a, 'b> From<&'b IdentPath<'a>> for String {
+    fn from(path: &'b IdentPath<'a>) -> String {
+        path.to_string()
+    }
+}
+
+impl<'a> fmt::Display for IdentPath<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self {components} = self;
+
+        write!(f, "{}", components[0])?;
+
+        for comp in &components[1..] {
+            write!(f, "::{}", comp)?;
+        }
+
+        Ok(())
+    }
 }
 
 pub type Ident<'a> = &'a str;

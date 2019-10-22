@@ -6,7 +6,7 @@
 //!     * Every call knows all its types and operators have been desugared
 //! * All declaration names are unique within any given module
 
-pub use crate::ast::Ident;
+pub use crate::ast::{Ident, IdentPath};
 
 use crate::resolve::TyId;
 
@@ -129,7 +129,7 @@ pub struct Cond<'a> {
 #[derive(Debug)]
 pub struct CallExpr<'a> {
     /// The name of the function to call
-    pub func_name: Ident<'a>,
+    pub func_name: &'a IdentPath<'a>,
     /// The argument expressions to pass to the function
     pub args: Vec<Expr<'a>>,
 }

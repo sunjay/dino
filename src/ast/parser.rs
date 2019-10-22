@@ -9,7 +9,7 @@ use nom::{
     combinator::{all_consuming, map, map_res, recognize, opt, not},
     bytes::complete::{tag, take_while1, take_while, take_till, take_till1, escaped_transform},
     sequence::{tuple, pair, delimited, terminated, preceded},
-    multi::{many0, fold_many0, separated_list},
+    multi::{many0, fold_many0, separated_list, separated_nonempty_list},
 };
 
 use super::*;
@@ -74,11 +74,7 @@ fn struct_decl(input: Input) -> IResult<Struct> {
 }
 
 fn struct_fields(input: Input) -> IResult<Vec<StructField>> {
-    delimited(
-        tuple((char('{'), wsc0)),
-        comma_separated(struct_field),
-        tuple((wsc0, char('}'))),
-    )(input)
+    delimited_wsc0(char('{'), comma_separated(struct_field), char('}'))(input)
 }
 
 fn struct_field(input: Input) -> IResult<StructField> {
@@ -98,9 +94,9 @@ fn impl_block(input: Input) -> IResult<Impl> {
             wsc0,
             ty,
             wsc0,
-            delimited(
+            delimited_wsc0(
                 char('{'),
-                preceded(wsc0, many0(terminated(function(FuncType::Method), wsc0))),
+                many0(preceded(wsc0, function(FuncType::Method))),
                 char('}'),
             ),
         )),
@@ -145,8 +141,8 @@ fn method_params(input: Input) -> IResult<Vec<FuncParam>> {
         ty: Ty::SelfType,
     };
 
-    delimited(
-        tuple((char('('), wsc0)),
+    delimited_wsc0(
+        char('('),
         alt((
             // `self` + `,` + param_list
             map(
@@ -161,15 +157,15 @@ fn method_params(input: Input) -> IResult<Vec<FuncParam>> {
             // param_list
             param_list,
         )),
-        tuple((wsc0, char(')'))),
+        char(')'),
     )(input)
 }
 
 fn function_params(input: Input) -> IResult<Vec<FuncParam>> {
-    delimited(
-        tuple((char('('), wsc0)),
+    delimited_wsc0(
+        char('('),
         param_list,
-        tuple((wsc0, char(')'))),
+        char(')'),
     )(input)
 }
 
@@ -182,17 +178,15 @@ fn param_list(input: Input) -> IResult<Vec<FuncParam>> {
 
 fn block(input: Input) -> IResult<Block> {
     map(
-        delimited(
+        delimited_wsc0(
             char('{'),
             tuple((
-                preceded(wsc0, many0(terminated(stmt, wsc0))),
-                opt(tuple((expr, wsc0))),
+                many0(preceded(wsc0, stmt)),
+                opt(preceded(wsc0, expr)),
             )),
             char('}'),
         ),
-        |(mut stmts, expr)| {
-            let ret = expr.map(|(expr, _)| expr);
-
+        |(mut stmts, ret)| {
             // There is an ambiguity here because certain expressions can also be written in
             // statment position. When that is the case, we need to be sure to pull those
             // statements into the return expression instead of leaving them in the statements
@@ -286,8 +280,8 @@ fn precedence0(input: Input) -> IResult<Expr> {
         // possible expressions
         map(
             // The '=' operator is right associative, so we use right-recursion here
-            infix(ident, char('='), expr),
-            |(ident, expr)| Expr::VarAssign(Box::new(VarAssign {ident, expr})),
+            infix(lvalue_expr, char('='), expr),
+            |(lhs, expr)| Expr::VarAssign(Box::new(VarAssign {lhs, expr})),
         ),
 
         // If nothing above parses, we can use the next upper level of precedence
@@ -311,7 +305,7 @@ fn precedence1(input: Input) -> IResult<Expr> {
             lhs,
             //TODO: Should be using trait methods
             call: CallExpr {
-                func_name: match op {
+                func_name: IdentPath::from(match op {
                     "==" => "eq",
                     "!=" => "ne",
                     "<" => "lt",
@@ -319,7 +313,7 @@ fn precedence1(input: Input) -> IResult<Expr> {
                     "<=" => "le",
                     ">=" => "ge",
                     _ => unreachable!(),
-                },
+                }),
                 args: vec![rhs],
             },
         })),
@@ -335,11 +329,11 @@ fn precedence2(input: Input) -> IResult<Expr> {
             lhs,
             //TODO: Should be using trait methods
             call: CallExpr {
-                func_name: match op {
+                func_name: IdentPath::from(match op {
                     '+' => "add",
                     '-' => "sub",
                     _ => unreachable!(),
-                },
+                }),
                 args: vec![rhs],
             },
         })),
@@ -355,12 +349,12 @@ fn precedence3(input: Input) -> IResult<Expr> {
             lhs,
             //TODO: Should be using trait methods
             call: CallExpr {
-                func_name: match op {
+                func_name: IdentPath::from(match op {
                     '*' => "mul",
                     '/' => "div",
                     '%' => "rem",
                     _ => unreachable!(),
-                },
+                }),
                 args: vec![rhs],
             },
         })),
@@ -374,7 +368,7 @@ fn precedence4(input: Input) -> IResult<Expr> {
             |(op, _, lhs)| Expr::MethodCall(Box::new(MethodCall {
                 //TODO: Should be using trait methods for operators
                 call: CallExpr {
-                    func_name: match op {
+                    func_name: IdentPath::from(match op {
                         // HACK: we can make type inference a bit easier for ourselves if we allow
                         // numeric literals to just include their negative sign directly
                         '-' => match lhs {
@@ -390,7 +384,7 @@ fn precedence4(input: Input) -> IResult<Expr> {
                         },
                         '!' => "not",
                         _ => unreachable!(),
-                    },
+                    }),
                     args: Vec::new(),
                 },
                 lhs,
@@ -403,12 +397,39 @@ fn precedence4(input: Input) -> IResult<Expr> {
 }
 
 fn precedence5(input: Input) -> IResult<Expr> {
+    enum DotRhs<'a> {
+        MethodCall(CallExpr<'a>),
+        FieldAccess(Ident<'a>),
+    }
+
     // The dot (.) operator has very high precedence and is left associative
     // Using the next level of precedence like this is a technique for left recursion
     // This operator is special because it has a limited number of things that can be used as its
     // right-hand side.
-    bin_op_opt1(precedence6, char('.'), func_call,
-        |lhs, _, call| Expr::MethodCall(Box::new(MethodCall {lhs, call})))(input)
+    bin_op_opt1(
+        precedence6,
+        char('.'),
+        alt((
+            map(func_call, DotRhs::MethodCall),
+            map(ident, DotRhs::FieldAccess),
+        )),
+        |lhs, _, rhs| match rhs {
+            DotRhs::MethodCall(call) => Expr::MethodCall(Box::new(MethodCall {lhs, call})),
+            DotRhs::FieldAccess(field) => Expr::FieldAccess(Box::new(FieldAccess {lhs, field})),
+        },
+    )(input)
+}
+
+fn lvalue_expr(input: Input) -> IResult<LValueExpr> {
+    use nom::error::{ParseError, ErrorKind};
+
+    match precedence5(input) {
+        Ok((input, Expr::FieldAccess(access))) => Ok((input, LValueExpr::FieldAccess(*access))),
+        Ok((input, Expr::Var(var_name))) => Ok((input, LValueExpr::Var(var_name))),
+        //TODO: Replace this with a proper error about which lvalues are allowed
+        Ok(_) => Err(nom::Err::Error(VerboseError::from_error_kind(input, ErrorKind::Alt))),
+        Err(err) => Err(err),
+    }
 }
 
 fn precedence6(input: Input) -> IResult<Expr> {
@@ -417,6 +438,7 @@ fn precedence6(input: Input) -> IResult<Expr> {
         map(cond, |cond| Expr::Cond(Box::new(cond))),
         map(func_call, Expr::Call),
         map(return_expr, |ret_expr| Expr::Return(ret_expr.map(Box::new))),
+        map(struct_literal, Expr::StructLiteral),
         map(bstr_literal, Expr::BStrLiteral),
         // Integer literal must be parsed before real_literal because that parser also accepts all
         // valid integer literals
@@ -424,6 +446,7 @@ fn precedence6(input: Input) -> IResult<Expr> {
         real_or_complex_literal,
         map(bool_literal, Expr::BoolLiteral),
         map(unit_literal, |_| Expr::UnitLiteral),
+        map(kw_selfvalue, |_| Expr::SelfLiteral),
         map(ident, Expr::Var),
     ))(input)
 }
@@ -456,19 +479,50 @@ fn cond(input: Input) -> IResult<Cond> {
 
 fn func_call(input: Input) -> IResult<CallExpr> {
     map(
-        tuple((ident, wsc0, func_args)),
+        tuple((ident_path, wsc0, func_args)),
         |(func_name, _, args)| CallExpr {func_name, args},
     )(input)
 }
 
 fn func_args(input: Input) -> IResult<Vec<Expr>> {
-    delimited(char('('), comma_separated(expr), char(')'))(input)
+    delimited_wsc0(char('('), comma_separated(expr), char(')'))(input)
 }
 
 fn return_expr(input: Input) -> IResult<Option<Expr>> {
     map(
         tuple((kw_return, wsc0, opt(expr))),
         |(_, _, expr)| expr,
+    )(input)
+}
+
+fn struct_literal(input: Input) -> IResult<StructLiteral> {
+    map(
+        tuple((named_ty, wsc0, struct_field_values)),
+        |(name, _, field_values)| StructLiteral {name, field_values},
+    )(input)
+}
+
+fn struct_field_values(input: Input) -> IResult<Vec<StructFieldValue>> {
+    delimited_wsc0(
+        char('{'),
+        comma_separated(struct_field_value),
+        char('}'),
+    )(input)
+}
+
+fn struct_field_value(input: Input) -> IResult<StructFieldValue> {
+    map(
+        tuple((
+            ident,
+            opt(tuple((wsc0, char(':'), wsc0, expr))),
+        )),
+        |(name, value)| StructFieldValue {
+            name,
+            // If the `name` syntax is used instead of `name: value`, default to `name: name` where
+            // the second `name` is a variable
+            value: value.map(|(_, _, _, value)| value)
+                .unwrap_or_else(|| Expr::Var(name)),
+        },
     )(input)
 }
 
@@ -484,32 +538,6 @@ fn bstr_literal(input: Input) -> IResult<Vec<u8>> {
         ))(inp))),
         char('"'),
     ), |s| s.unwrap_or_default().into_bytes())(input)
-}
-
-fn ty(input: Input) -> IResult<Ty> {
-    alt((
-        map(tag("()"), |_| Ty::Unit),
-        map(kw_selftype, |_| Ty::SelfType),
-        map(ident, |name| Ty::Named(name)),
-    ))(input)
-}
-
-fn ident(input: Input) -> IResult<&str> {
-    preceded(
-        // Identifier must not be a keyword
-        not(keyword),
-        ident_raw,
-    )(input)
-}
-
-/// The raw identifier, without checking for whether it is a keyword
-fn ident_raw(input: Input) -> IResult<&str> {
-    recognize(pair(
-        // Must be at least non-number
-        take_while1(|c: char| c.is_alphabetic() || c == '_'),
-        // Followed by any other identifier characters
-        take_while(|c: char| c.is_alphanumeric() || c == '_'),
-    ))(input)
 }
 
 fn integer_literal(input: Input) -> IResult<IntegerLiteral> {
@@ -565,6 +593,45 @@ fn unit_literal(input: Input) -> IResult<()> {
     map(tag("()"), |_| ())(input)
 }
 
+fn ident_path(input: Input) -> IResult<IdentPath> {
+    map(
+        separated_nonempty_list(tuple((wsc0, tag("::"), wsc0)), ident),
+        |components| IdentPath {components},
+    )(input)
+}
+
+fn ident(input: Input) -> IResult<Ident> {
+    preceded(
+        // Identifier must not be a keyword
+        not(keyword),
+        ident_raw,
+    )(input)
+}
+
+/// The raw identifier, without checking for whether it is a keyword
+fn ident_raw(input: Input) -> IResult<Ident> {
+    recognize(pair(
+        // Must be at least non-number
+        take_while1(|c: char| c.is_alphabetic() || c == '_'),
+        // Followed by any other identifier characters
+        take_while(|c: char| c.is_alphanumeric() || c == '_'),
+    ))(input)
+}
+
+fn ty(input: Input) -> IResult<Ty> {
+    alt((
+        map(tag("()"), |_| Ty::Unit),
+        map(named_ty, |ty| Ty::from(ty)),
+    ))(input)
+}
+
+fn named_ty(input: Input) -> IResult<NamedTy> {
+    alt((
+        map(kw_selftype, |_| NamedTy::SelfType),
+        map(ident, |name| NamedTy::Named(name)),
+    ))(input)
+}
+
 /// Parses any amount of whitespace or comment
 fn wsc0(input: Input) -> IResult<()> {
     // Using an inner function to avoid allowing anyone to accidentally use this instead of wsc1
@@ -592,6 +659,24 @@ fn comma_separated<'r, T: Clone + 'r, F>(parser: F) -> impl Fn(Input<'r>) -> IRe
     terminated(
         separated_list(tuple((wsc0, char(','), wsc0)), parser),
         opt(tuple((wsc0, char(',')))),
+    )
+}
+
+/// Parses a value delimited by the `left` and `right` parser while also ignoring whitespace within
+/// the left and right delimiters. Returns the value between `left` and `right`
+pub fn delimited_wsc0<'r, L, LRes, M, MRes, R, RRes>(
+    left: L,
+    middle: M,
+    right: R,
+) -> impl Fn(Input<'r>) -> IResult<MRes>
+    where L: Fn(Input<'r>) -> IResult<LRes>,
+          M: Fn(Input<'r>) -> IResult<MRes>,
+          R: Fn(Input<'r>) -> IResult<RRes>,
+{
+    delimited(
+        tuple((left, wsc0)),
+        middle,
+        tuple((wsc0, right)),
     )
 }
 

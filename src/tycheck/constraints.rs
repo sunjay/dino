@@ -300,6 +300,10 @@ impl ConstraintSet {
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
+            ast::Expr::FieldAccess(access) => {
+                unimplemented!()
+            },
+
             ast::Expr::Cond(cond) => {
                 self.append_cond(cond, Some(return_type), func_return_type, scope, decls, prims)
                     .map(|cond| tyir::Expr::Cond(Box::new(cond), return_type))
@@ -313,6 +317,10 @@ impl ConstraintSet {
             ast::Expr::Return(ret_expr) => {
                 self.append_return(ret_expr.as_ref().map(|x| x.as_ref()), return_type, func_return_type, scope, decls, prims)
                     .map(|ret_expr| tyir::Expr::Return(ret_expr.map(Box::new), return_type))
+            },
+
+            ast::Expr::StructLiteral(struct_lit) => {
+                unimplemented!()
             },
 
             ast::Expr::BStrLiteral(value) => {
@@ -361,6 +369,10 @@ impl ConstraintSet {
                 Ok(tyir::Expr::UnitLiteral(return_type))
             },
 
+            &ast::Expr::SelfLiteral => {
+                unimplemented!()
+            },
+
             &ast::Expr::Var(name) => {
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
                 // Assert that the type of the variable must be equal to the type expected from the
@@ -400,7 +412,7 @@ impl ConstraintSet {
 
         let ast::CallExpr {func_name: method_name, args} = call;
         let func = decls.method(lhs_ty, method_name)
-            .context(UnresolvedMethod {name: *method_name, ty: lhs_ty})?;
+            .context(UnresolvedMethod {name: method_name, ty: lhs_ty})?;
 
         let has_self = func.sig.params.get(0).map(|param| param.name == "self").unwrap_or(false);
         if !has_self {
@@ -414,7 +426,8 @@ impl ConstraintSet {
         let func_name = &func.name;
 
         // Append the `self` argument as the lhs expression
-        self.append_func_call_sig(&func.sig, func_name, args, Some(lhs), return_type, func_return_type, scope, decls, prims)
+        unimplemented!()
+        //self.append_func_call_sig(&func.sig, func_name, args, Some(lhs), return_type, func_return_type, scope, decls, prims)
     }
 
     /// Appends constraints for the given conditional
@@ -481,7 +494,7 @@ impl ConstraintSet {
         let ast::CallExpr {func_name, args} = call;
 
         let sig = decls.func_sig(func_name)
-            .context(UnresolvedFunction {name: *func_name})?;
+            .context(UnresolvedFunction {name: func_name})?;
 
         self.append_func_call_sig(sig, func_name, args, None, return_type, func_return_type, scope, decls, prims)
     }
@@ -491,7 +504,7 @@ impl ConstraintSet {
         &mut self,
         sig: &ast::FuncSig,
         // The function name to call, not necessarily the original function/method name
-        func_name: &'a ast::Ident<'a>,
+        func_name: &'a ast::IdentPath<'a>,
         args: &'a [ast::Expr<'a>],
         // An extra argument to prepend on to the list of arguments passed to the call
         // Used to implement methods with a `self` parameter
@@ -550,17 +563,22 @@ impl ConstraintSet {
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::VarAssign<'a>, Error> {
-        let ast::VarAssign {ident, expr} = assign;
+        let ast::VarAssign {lhs, expr} = assign;
 
         // The return type of a variable assignment is ()
         self.ty_var_is_ty(return_type, prims.unit())?;
 
-        // The type of the right-hand expression of the assignment must match the type of the
-        // variable being assigned to
-        let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
-        let expr = self.append_expr(expr, var_ty_var, func_return_type, scope, decls, prims)?;
+        match lhs {
+            ast::LValueExpr::FieldAccess(access) => unimplemented!(),
+            ast::LValueExpr::Var(ident) => {
+                // The type of the right-hand expression of the assignment must match the type of the
+                // variable being assigned to
+                let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
+                let expr = self.append_expr(expr, var_ty_var, func_return_type, scope, decls, prims)?;
 
-        Ok(tyir::VarAssign {ident, expr})
+                Ok(tyir::VarAssign {ident, expr})
+            },
+        }
     }
 
     /// Appends constraints for the given return expression

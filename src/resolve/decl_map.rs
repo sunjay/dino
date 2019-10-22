@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{Function, FuncSig, Ident};
+use crate::ast::{Function, FuncSig, Ident, IdentPath};
 
 use super::ExternType;
 
@@ -156,15 +156,17 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns the method function decl corresponding to the given name, if any
-    pub fn method(&self, id: TyId, name: &Ident<'a>) -> Option<&Function<'a>> {
+    pub fn method(&self, id: TyId, name: &IdentPath<'a>) -> Option<&Function<'a>> {
         let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
-        self.types.get(id).unwrap().methods.get(name)
+        unimplemented!()
+        //self.types.get(id).unwrap().methods.get(name)
     }
 
     /// Returns the function signature corresponding to the given name, if any
-    pub fn func_sig(&self, name: &Ident<'a>) -> Option<&FuncSig<'a>> {
-        self.functions.get(name).map(|entry| &entry.func.sig)
+    pub fn func_sig(&self, name: &IdentPath<'a>) -> Option<&FuncSig<'a>> {
+        unimplemented!()
+        //self.functions.get(name).map(|entry| &entry.func.sig)
     }
 
     /// Returns an iterator that goes through each declaration in the map
