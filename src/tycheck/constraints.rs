@@ -15,6 +15,8 @@ use super::{
     UnresolvedFunction,
     UnresolvedMethod,
     AmbiguousMethodCall,
+    UnresolvedField,
+    AmbiguousFieldAccess,
     tyir,
     solve::{build_substitution, verify_valid_tys_or_default},
 };
@@ -301,7 +303,8 @@ impl ConstraintSet {
             },
 
             ast::Expr::FieldAccess(access) => {
-                unimplemented!()
+                self.append_field_access(access, return_type, func_return_type, scope, decls, prims)
+                    .map(|access| tyir::Expr::FieldAccess(Box::new(access), return_type))
             },
 
             ast::Expr::Cond(cond) => {
@@ -396,7 +399,7 @@ impl ConstraintSet {
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<tyir::CallExpr<'a>, Error> {
-        let ast::MethodCall {lhs, call} = call;
+        let ast::MethodCall {lhs, method_name, args} = call;
 
         // Generate the constraints for the left-hand side expression, with the hope that this
         // type variable gets assigned a type
@@ -410,9 +413,8 @@ impl ConstraintSet {
         let lhs_ty = self.ty_var_table.probe_value(lhs_ty_var)
             .with_context(|| AmbiguousMethodCall {})?;
 
-        let ast::CallExpr {func_name: method_name, args} = call;
         let func = decls.method(lhs_ty, method_name)
-            .context(UnresolvedMethod {name: method_name, ty: lhs_ty})?;
+            .context(UnresolvedMethod {method_name: *method_name, ty: lhs_ty})?;
 
         let has_self = func.sig.params.get(0).map(|param| param.name == "self").unwrap_or(false);
         if !has_self {
@@ -423,11 +425,49 @@ impl ConstraintSet {
         // methods will look like just yet. Maybe this is a hack?
         assert!(func.is_extern,
             "TODO: Only methods with extern declarations are currently supported");
-        let func_name = &func.name;
+        let func_name = func.name;
 
         // Append the `self` argument as the lhs expression
-        unimplemented!()
-        //self.append_func_call_sig(&func.sig, func_name, args, Some(lhs), return_type, func_return_type, scope, decls, prims)
+        self.append_func_call_sig(&func.sig, ast::IdentPath::from(func_name), args, Some(lhs),
+            return_type, func_return_type, scope, decls, prims)
+    }
+
+    /// Appends constraints for the given field access
+    fn append_field_access<'a, 's>(
+        &mut self,
+        access: &'a ast::FieldAccess<'a>,
+        // The type expected from the field access
+        return_type: TyVar,
+        // The return type of the function surrounding this field access
+        func_return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+        decls: &'a DeclMap<'a>,
+        prims: &Primitives,
+    ) -> Result<tyir::FieldAccess<'a>, Error> {
+        let ast::FieldAccess {lhs, field} = access;
+
+        // Generate the constraints for the left-hand side expression, with the hope that this
+        // type variable gets assigned a type
+        //TODO: Rather than hoping for a type, it would be neat to have a way to solve the current
+        // set of constraints to see if we can get a type based on what we have.
+        let lhs_ty_var = self.fresh_type_var();
+        let lhs = self.append_expr(lhs, lhs_ty_var, func_return_type, scope, decls, prims)?;
+
+        // In order to call the method, we must know the type of lhs at this point. Hopefully the
+        // constraint generation for that expression gave us something.
+        let lhs_ty = self.ty_var_table.probe_value(lhs_ty_var)
+            .with_context(|| AmbiguousFieldAccess {})?;
+
+        let field_ty = decls.field_type(lhs_ty, field)
+            .context(UnresolvedField {field_name: *field, ty: lhs_ty})?;
+
+        let field_ty_id = lookup_type(decls, prims, field_ty)?;
+        self.ty_var_is_ty(return_type, field_ty_id);
+
+        Ok(tyir::FieldAccess {
+            lhs,
+            field,
+        })
     }
 
     /// Appends constraints for the given conditional
@@ -493,10 +533,20 @@ impl ConstraintSet {
     ) -> Result<tyir::CallExpr<'a>, Error> {
         let ast::CallExpr {func_name, args} = call;
 
-        let sig = decls.func_sig(func_name)
-            .context(UnresolvedFunction {name: func_name})?;
+        let sig = match &func_name.components[..] {
+            [] => unreachable!(),
+            [func_name] => decls.func_sig(func_name)
+                .context(UnresolvedFunction {name: *func_name})?,
+            [ty_name, func_name] => {
+                let ty_id = decls.type_id(ty_name).context(UnresolvedType {name: *ty_name})?;
+                decls.method_sig(ty_id, func_name)
+                    .context(UnresolvedFunction {name: *func_name})?
+            },
+            _ => return Err(Error::UnresolvedFunction {name: func_name.to_string()}),
+        };
 
-        self.append_func_call_sig(sig, func_name, args, None, return_type, func_return_type, scope, decls, prims)
+        self.append_func_call_sig(sig, func_name.clone(), args, None, return_type,
+            func_return_type, scope, decls, prims)
     }
 
     /// Appends constraints for the given function call given the signature
@@ -504,7 +554,7 @@ impl ConstraintSet {
         &mut self,
         sig: &ast::FuncSig,
         // The function name to call, not necessarily the original function/method name
-        func_name: &'a ast::IdentPath<'a>,
+        func_name: ast::IdentPath<'a>,
         args: &'a [ast::Expr<'a>],
         // An extra argument to prepend on to the list of arguments passed to the call
         // Used to implement methods with a `self` parameter

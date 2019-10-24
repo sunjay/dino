@@ -30,9 +30,14 @@ pub enum Error {
     UnresolvedFunction {
         name: String,
     },
-    #[snafu(display("no method named '{}' in the current scope for type 'TODO'", name))]
+    #[snafu(display("no field named '{}' for type 'TODO'", field_name))]
+    UnresolvedField {
+        field_name: String,
+        ty: TyId,
+    },
+    #[snafu(display("no method named '{}' in the current scope for type 'TODO'", method_name))]
     UnresolvedMethod {
-        name: String,
+        method_name: String,
         ty: TyId,
     },
     #[snafu(display("function '{}' takes {} parameter(s) but {} parameter(s) were supplied", func_name, expected, actual))]
@@ -47,6 +52,10 @@ pub enum Error {
     },
     #[snafu(display("type must be known at this point, type annotations needed"))]
     AmbiguousMethodCall {
+        //TODO: Add span info
+    },
+    #[snafu(display("type must be known at this point, type annotations needed"))]
+    AmbiguousFieldAccess {
         //TODO: Add span info
     },
     #[snafu(display("associated functions cannot be called as methods"))]

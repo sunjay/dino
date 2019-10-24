@@ -172,7 +172,9 @@ pub struct MethodCall<'a> {
     /// The expression of the left-hand side of the method call
     pub lhs: Expr<'a>,
     /// The method being called
-    pub call: CallExpr<'a>,
+    pub method_name: Ident<'a>,
+    /// The arguments to the method call
+    pub args: Vec<Expr<'a>>,
 }
 
 /// A field access in the form `<expr> . <ident>`

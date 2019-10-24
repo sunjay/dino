@@ -1,10 +1,10 @@
 //! Name resolution code. Takes the AST and extracts all the named items.
 
 mod decl_map;
-mod extern_type;
+mod type_info;
 
 pub use decl_map::*;
-pub use extern_type::*;
+pub use type_info::*;
 
 use crate::ast;
 use crate::primitives::Primitives;

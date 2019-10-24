@@ -4,9 +4,9 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{Function, FuncSig, Ident, IdentPath};
+use crate::ast::{Function, FuncSig, Ident, Ty};
 
-use super::ExternType;
+use super::{TypeInfo, LiteralConstructors};
 
 // Allows functions to be looked up by name without requiring us to use a HashMap and duplicating
 // the name in the key.
@@ -42,22 +42,6 @@ impl<'a> PartialEq<str> for FunctionEntry<'a> {
 
 impl<'a> Eq for FunctionEntry<'a> {}
 
-/// Stores information about a type
-#[derive(Debug)]
-struct TypeEntry<'a> {
-    /// The name of the type to be used in the AST, etc.
-    ty_name: Ident<'a>,
-    /// Information about code generation for this type
-    //TODO: Not all types will have an extern name once we support structs/enums
-    extern_type: ExternType,
-    /// The methods provided by this type.
-    ///
-    /// The keys of the map are the method names (e.g. `add`) whereas the `name` field of
-    /// the `Function` can be anything. If the Function is extern, this `name` field will
-    /// be used in the generated code.
-    methods: HashMap<Ident<'a>, Function<'a>>,
-}
-
 #[derive(Debug)]
 pub struct DuplicateDecl {
     duplicate: String,
@@ -78,7 +62,7 @@ pub struct TyId(usize);
 #[derive(Debug, Default)]
 pub struct DeclMap<'a> {
     functions: HashSet<FunctionEntry<'a>>,
-    types: Vec<TypeEntry<'a>>,
+    types: Vec<TypeInfo<'a>>,
     type_ids: HashMap<Ident<'a>, TyId>,
 }
 
@@ -99,10 +83,13 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Inserts a new type and returns its type ID
+    ///
+    /// Generally, the ty_name should be the same as `type_info.name`. That being said, sometimes
+    /// it can be useful for extern types to have different values for each.
     pub fn insert_type(
         &mut self,
         ty_name: Ident<'a>,
-        extern_type: ExternType,
+        type_info: TypeInfo<'a>,
     ) -> Result<TyId, DuplicateDecl> {
         let id = TyId(self.types.len());
         if self.type_ids.insert(ty_name, id).is_some() {
@@ -111,7 +98,7 @@ impl<'a> DeclMap<'a> {
             });
         }
 
-        self.types.push(TypeEntry {ty_name, extern_type, methods: HashMap::new()});
+        self.types.push(type_info);
         Ok(id)
     }
 
@@ -145,32 +132,54 @@ impl<'a> DeclMap<'a> {
     pub fn type_name(&self, id: TyId) -> &Ident<'a> {
         let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
-        &self.types.get(id).unwrap().ty_name
+        &self.types.get(id).unwrap().name
     }
 
-    /// Returns the extern type information of the given type ID
-    pub fn type_extern_info(&self, id: TyId) -> &ExternType {
+    /// Returns true if this type is extern
+    pub fn type_is_extern(&self, id: TyId) -> bool {
         let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
-        &self.types.get(id).unwrap().extern_type
+        self.types.get(id).unwrap().is_extern
+    }
+
+    /// Returns the literal constructors of the given type ID
+    pub fn type_lit_constructors(&self, id: TyId) -> &LiteralConstructors {
+        let TyId(id) = id;
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        &self.types.get(id).unwrap().constructors
+    }
+
+    /// Returns the field type corresponding to the given name, if any
+    pub fn field_type(&self, id: TyId, field_name: &Ident<'a>) -> Option<&Ty<'a>> {
+        let TyId(id) = id;
+        // unwrap() is safe because it should be impossible to create an invalid TyId
+        self.types.get(id).unwrap().fields.get(field_name)
     }
 
     /// Returns the method function decl corresponding to the given name, if any
-    pub fn method(&self, id: TyId, name: &IdentPath<'a>) -> Option<&Function<'a>> {
+    pub fn method(&self, id: TyId, method_name: &Ident<'a>) -> Option<&Function<'a>> {
         let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
-        unimplemented!()
-        //self.types.get(id).unwrap().methods.get(name)
+        self.types.get(id).unwrap().methods.get(method_name)
+    }
+
+    /// Returns the method signature corresponding to the given type and name, if any
+    pub fn method_sig(&self, id: TyId, method_name: &Ident<'a>) -> Option<&FuncSig<'a>> {
+        self.method(id, method_name).map(|func| &func.sig)
     }
 
     /// Returns the function signature corresponding to the given name, if any
-    pub fn func_sig(&self, name: &IdentPath<'a>) -> Option<&FuncSig<'a>> {
-        unimplemented!()
-        //self.functions.get(name).map(|entry| &entry.func.sig)
+    pub fn func_sig(&self, func_name: &Ident<'a>) -> Option<&FuncSig<'a>> {
+        self.functions.get(func_name).map(|entry| &entry.func.sig)
     }
 
-    /// Returns an iterator that goes through each declaration in the map
+    /// Returns an iterator that goes through each function in the map
+    pub fn types(&self) -> impl Iterator<Item=&TypeInfo<'a>> {
+        self.types.iter()
+    }
+
+    /// Returns an iterator that goes through each function in the map
     pub fn functions(&self) -> impl Iterator<Item=&Function<'a>> {
-        self.functions.iter().map(|entry| &entry.func)
+        self.functions.iter().map(|ty_info| &ty_info.func)
     }
 }

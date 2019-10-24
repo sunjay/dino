@@ -114,11 +114,12 @@ impl<'a> VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    VarAssign(Box<VarAssign<'a>>, TyVar),
+    FieldAccess(Box<FieldAccess<'a>>, TyVar),
     /// A conditional without an else clause always has type unit. With an else clause, the type of
     /// the conditional can be anything.
     Cond(Box<Cond<'a>>, TyVar),
     Call(CallExpr<'a>, TyVar),
-    VarAssign(Box<VarAssign<'a>>, TyVar),
     Return(Option<Box<Expr<'a>>>, TyVar),
     BStrLiteral(&'a [u8], TyVar),
     IntegerLiteral(i64, TyVar),
@@ -134,16 +135,20 @@ impl<'a> Expr<'a> {
     pub fn apply_subst(self, subst: &TypeSubst) -> ir::Expr<'a> {
         use Expr::*;
         match self {
+            VarAssign(assign, ty_var) => {
+                ir::Expr::VarAssign(Box::new(assign.apply_subst(subst)), ty_var.apply_subst(subst))
+            },
+
+            FieldAccess(access, ty_var) => {
+                ir::Expr::FieldAccess(Box::new(access.apply_subst(subst)), ty_var.apply_subst(subst))
+            },
+
             Cond(cond, ty_var) => {
                 ir::Expr::Cond(Box::new(cond.apply_subst(subst)), ty_var.apply_subst(subst))
             },
 
             Call(call, ty_var) => {
                 ir::Expr::Call(call.apply_subst(subst), ty_var.apply_subst(subst))
-            },
-
-            VarAssign(assign, ty_var) => {
-                ir::Expr::VarAssign(Box::new(assign.apply_subst(subst)), ty_var.apply_subst(subst))
             },
 
             Return(ret_expr, ty_var) => {
@@ -181,6 +186,26 @@ impl<'a> Expr<'a> {
     }
 }
 
+/// A field access in the form `<expr> . <ident>`
+#[derive(Debug)]
+pub struct FieldAccess<'a> {
+    /// The expression of the left-hand side of the field access
+    pub lhs: Expr<'a>,
+    /// The field being accessed
+    pub field: Ident<'a>,
+}
+
+impl<'a> FieldAccess<'a> {
+    /// Applies the given substitution to this field access and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::FieldAccess<'a> {
+        let Self {lhs, field} = self;
+        ir::FieldAccess {
+            lhs: lhs.apply_subst(subst),
+            field,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Cond<'a> {
     /// A list of (condition, body) that corresponds to:
@@ -207,7 +232,7 @@ impl<'a> Cond<'a> {
 
 #[derive(Debug)]
 pub struct CallExpr<'a> {
-    pub func_name: &'a IdentPath<'a>,
+    pub func_name: IdentPath<'a>,
     pub args: Vec<Expr<'a>>,
 }
 

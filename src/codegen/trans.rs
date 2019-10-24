@@ -129,13 +129,13 @@ fn gen_function(
     // Add each parameter to the mangler so it can be used from within the function body
     let cparams = params.iter().map(|ir::FuncParam {name, ty}| CFunctionParam {
         mangled_name: mangler.mangle_name(name).to_string(),
-        ty: lookup_type_name(ty, mod_scope),
+        ty: lookup_type_name(ty, &mangler, mod_scope),
     }).collect();
 
     let sig = CFunctionSignature {
         //TODO: Mangle function names
         mangled_name: name.to_string(),
-        return_type: lookup_type_name(return_type, mod_scope),
+        return_type: lookup_type_name(return_type, &mangler, mod_scope),
         params: cparams,
     };
 
@@ -335,7 +335,7 @@ fn gen_var_decl(
 
     Ok(CVarDecl {
         mangled_name: mangler.mangle_name(ident).to_string(),
-        ty: lookup_type_name(ty, mod_scope),
+        ty: lookup_type_name(ty, mangler, mod_scope),
         init_expr: CInitializerExpr::Expr(gen_expr(expr, prev_stmts, mangler, mod_scope)?)
     })
 }
@@ -349,11 +349,10 @@ fn gen_expr(
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
     Ok(match expr {
-        //TODO: Cond will need more complex code generation (e.g. fresh temporary variables)
-        //TODO: Probably want to do this by allowing gen_expr to append to &mut Vec<CStmt>
+        ir::Expr::VarAssign(assign, ty) => gen_var_assign(assign, *ty, prev_stmts, mangler, mod_scope)?,
+        ir::Expr::FieldAccess(access, ty) => gen_field_access(access, *ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Cond(cond, ty) => gen_cond_expr(cond, ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Call(call, _) => CExpr::Call(gen_call_expr(call, prev_stmts, mangler, mod_scope)?),
-        ir::Expr::VarAssign(assign, ty) => gen_var_assign(assign, *ty, prev_stmts, mangler, mod_scope)?,
         ir::Expr::Return(ret_expr, ty) => gen_return(ret_expr.as_ref().map(|x| x.as_ref()), *ty, prev_stmts, mangler, mod_scope)?,
         &ir::Expr::BStrLiteral(value, ty) => gen_bstr_literal(value, ty, mangler, mod_scope)?,
         &ir::Expr::IntegerLiteral(value, ty) => gen_int_literal(value, ty, mangler, mod_scope)?,
@@ -379,7 +378,7 @@ fn gen_cond_expr(
     let result_var_mangled_name = mangler.fresh_mangled_name();
     prev_stmts.push(CStmt::TempVarDecl(CTempVarDecl {
         mangled_name: result_var_mangled_name.clone(),
-        ty: lookup_type_name(ret_ty, mod_scope),
+        ty: lookup_type_name(ret_ty, mangler, mod_scope),
         init_expr: None,
     }));
 
@@ -433,6 +432,18 @@ fn gen_var_assign(
     gen_unit_literal(ty, mangler, mod_scope)
 }
 
+fn gen_field_access(
+    access: &ir::FieldAccess,
+    ty: TyId,
+    prev_stmts: &mut Vec<CStmt>,
+    mangler: &mut NameMangler,
+    mod_scope: &DeclMap,
+) -> Result<CExpr, Error> {
+    let ir::FieldAccess {lhs, field} = access;
+
+    unimplemented!()
+}
+
 fn gen_return(
     ret_expr: Option<&ir::Expr>,
     ty: TyId,
@@ -459,13 +470,13 @@ fn gen_bstr_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.bstr_literal_constructor
+        mangled_func_name: lit_constructors.bstr_literal_constructor
             .as_ref()
             .expect("bug: no byte string literal constructor defined for type that type checked to bstr")
-            .clone(),
+            .to_string(),
         args: vec![
             CExpr::NTStrLiteral(value.to_vec()),
             CExpr::IntegerLiteral(value.len() as i64),
@@ -479,13 +490,13 @@ fn gen_int_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.int_literal_constructor
+        mangled_func_name: lit_constructors.int_literal_constructor
             .as_ref()
             .expect("bug: no integer literal constructor defined for type that type checked to int")
-            .clone(),
+            .to_string(),
         args: vec![CExpr::IntegerLiteral(value)],
     }))
 }
@@ -496,13 +507,13 @@ fn gen_real_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.real_literal_constructor
+        mangled_func_name: lit_constructors.real_literal_constructor
             .as_ref()
             .expect("bug: no real literal constructor defined for type that type checked to real")
-            .clone(),
+            .to_string(),
         args: vec![CExpr::DoubleLiteral(value)],
     }))
 }
@@ -513,13 +524,13 @@ fn gen_complex_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.complex_literal_constructor
+        mangled_func_name: lit_constructors.complex_literal_constructor
             .as_ref()
             .expect("bug: no complex literal constructor defined for type that type checked to complex")
-            .clone(),
+            .to_string(),
         args: vec![CExpr::DoubleLiteral(value)],
     }))
 }
@@ -530,13 +541,13 @@ fn gen_bool_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.bool_literal_constructor
+        mangled_func_name: lit_constructors.bool_literal_constructor
             .as_ref()
             .expect("bug: no bool literal constructor defined for type that type checked to bool")
-            .clone(),
+            .to_string(),
         args: vec![CExpr::BoolLiteral(value)],
     }))
 }
@@ -547,17 +558,28 @@ fn gen_unit_literal(
     _mangler: &NameMangler,
     mod_scope: &DeclMap,
 ) -> Result<CExpr, Error> {
-    let extern_type = mod_scope.type_extern_info(ty);
+    let lit_constructors = mod_scope.type_lit_constructors(ty);
     Ok(CExpr::Call(CCallExpr {
         //TODO: Mangle function names
-        mangled_func_name: extern_type.unit_literal_constructor
+        mangled_func_name: lit_constructors.unit_literal_constructor
             .as_ref()
             .expect("bug: no unit literal constructor defined for type that type checked to ()")
-            .clone(),
+            .to_string(),
         args: Vec::new(),
     }))
 }
 
-fn lookup_type_name<'a>(ty: &TyId, mod_scope: &'a DeclMap) -> String {
-    mod_scope.type_extern_info(*ty).extern_name.clone()
+fn lookup_type_name<'a>(
+    &ty: &TyId,
+    mangler: &NameMangler,
+    mod_scope: &'a DeclMap,
+) -> String {
+    let name = *mod_scope.type_name(ty);
+    if mod_scope.type_is_extern(ty) {
+        // Use name verbatim
+        name
+    } else {
+        // Use mangled name
+        mangler.get(name)
+    }.to_string()
 }

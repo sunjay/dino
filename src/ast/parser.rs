@@ -304,18 +304,16 @@ fn precedence1(input: Input) -> IResult<Expr> {
         |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
             lhs,
             //TODO: Should be using trait methods
-            call: CallExpr {
-                func_name: IdentPath::from(match op {
-                    "==" => "eq",
-                    "!=" => "ne",
-                    "<" => "lt",
-                    ">" => "gt",
-                    "<=" => "le",
-                    ">=" => "ge",
-                    _ => unreachable!(),
-                }),
-                args: vec![rhs],
+            method_name: match op {
+                "==" => "eq",
+                "!=" => "ne",
+                "<" => "lt",
+                ">" => "gt",
+                "<=" => "le",
+                ">=" => "ge",
+                _ => unreachable!(),
             },
+            args: vec![rhs],
         })),
     )(input)
 }
@@ -328,14 +326,12 @@ fn precedence2(input: Input) -> IResult<Expr> {
         |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
             lhs,
             //TODO: Should be using trait methods
-            call: CallExpr {
-                func_name: IdentPath::from(match op {
-                    '+' => "add",
-                    '-' => "sub",
-                    _ => unreachable!(),
-                }),
-                args: vec![rhs],
+            method_name: match op {
+                '+' => "add",
+                '-' => "sub",
+                _ => unreachable!(),
             },
+            args: vec![rhs],
         })),
     )(input)
 }
@@ -348,15 +344,13 @@ fn precedence3(input: Input) -> IResult<Expr> {
         |lhs, op, rhs| Expr::MethodCall(Box::new(MethodCall {
             lhs,
             //TODO: Should be using trait methods
-            call: CallExpr {
-                func_name: IdentPath::from(match op {
-                    '*' => "mul",
-                    '/' => "div",
-                    '%' => "rem",
-                    _ => unreachable!(),
-                }),
-                args: vec![rhs],
+            method_name: match op {
+                '*' => "mul",
+                '/' => "div",
+                '%' => "rem",
+                _ => unreachable!(),
             },
+            args: vec![rhs],
         })),
     )(input)
 }
@@ -367,26 +361,24 @@ fn precedence4(input: Input) -> IResult<Expr> {
             tuple((one_of("-!"), wsc0, precedence5)),
             |(op, _, lhs)| Expr::MethodCall(Box::new(MethodCall {
                 //TODO: Should be using trait methods for operators
-                call: CallExpr {
-                    func_name: IdentPath::from(match op {
-                        // HACK: we can make type inference a bit easier for ourselves if we allow
-                        // numeric literals to just include their negative sign directly
-                        '-' => match lhs {
-                            Expr::IntegerLiteral(lit) => {
-                                return Expr::IntegerLiteral(IntegerLiteral {
-                                    value: -lit.value,
-                                    ..lit
-                                });
-                            },
-                            Expr::RealLiteral(value) => return Expr::RealLiteral(-value),
-                            Expr::ComplexLiteral(value) => return Expr::ComplexLiteral(-value),
-                            _ => "neg",
+                method_name: match op {
+                    // HACK: we can make type inference a bit easier for ourselves if we allow
+                    // numeric literals to just include their negative sign directly
+                    '-' => match lhs {
+                        Expr::IntegerLiteral(lit) => {
+                            return Expr::IntegerLiteral(IntegerLiteral {
+                                value: -lit.value,
+                                ..lit
+                            });
                         },
-                        '!' => "not",
-                        _ => unreachable!(),
-                    }),
-                    args: Vec::new(),
+                        Expr::RealLiteral(value) => return Expr::RealLiteral(-value),
+                        Expr::ComplexLiteral(value) => return Expr::ComplexLiteral(-value),
+                        _ => "neg",
+                    },
+                    '!' => "not",
+                    _ => unreachable!(),
                 },
+                args: Vec::new(),
                 lhs,
             })),
         ),
@@ -398,7 +390,7 @@ fn precedence4(input: Input) -> IResult<Expr> {
 
 fn precedence5(input: Input) -> IResult<Expr> {
     enum DotRhs<'a> {
-        MethodCall(CallExpr<'a>),
+        MethodCall {method_name: Ident<'a>, args: Vec<Expr<'a>>},
         FieldAccess(Ident<'a>),
     }
 
@@ -410,11 +402,16 @@ fn precedence5(input: Input) -> IResult<Expr> {
         precedence6,
         char('.'),
         alt((
-            map(func_call, DotRhs::MethodCall),
+            map(
+                tuple((ident, wsc0, func_args)),
+                |(method_name, _, args)| DotRhs::MethodCall {method_name, args},
+            ),
             map(ident, DotRhs::FieldAccess),
         )),
         |lhs, _, rhs| match rhs {
-            DotRhs::MethodCall(call) => Expr::MethodCall(Box::new(MethodCall {lhs, call})),
+            DotRhs::MethodCall {method_name, args} => {
+                Expr::MethodCall(Box::new(MethodCall {lhs, method_name, args}))
+            },
             DotRhs::FieldAccess(field) => Expr::FieldAccess(Box::new(FieldAccess {lhs, field})),
         },
     )(input)

@@ -83,9 +83,10 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    VarAssign(Box<VarAssign<'a>>, TyId),
+    FieldAccess(Box<FieldAccess<'a>>, TyId),
     Cond(Box<Cond<'a>>, TyId),
     Call(CallExpr<'a>, TyId),
-    VarAssign(Box<VarAssign<'a>>, TyId),
     Return(Option<Box<Expr<'a>>>, TyId),
     BStrLiteral(&'a [u8], TyId),
     IntegerLiteral(i64, TyId),
@@ -100,9 +101,10 @@ impl<'a> Expr<'a> {
     pub fn ty_id(&self) -> TyId {
         use Expr::*;
         match *self {
+            VarAssign(_, ty_id) |
+            FieldAccess(_, ty_id) |
             Cond(_, ty_id) |
             Call(_, ty_id) |
-            VarAssign(_, ty_id) |
             Return(_, ty_id) |
             BStrLiteral(_, ty_id) |
             IntegerLiteral(_, ty_id) |
@@ -113,6 +115,15 @@ impl<'a> Expr<'a> {
             Var(_, ty_id) => ty_id,
         }
     }
+}
+
+/// A field access in the form `<expr> . <ident>`
+#[derive(Debug)]
+pub struct FieldAccess<'a> {
+    /// The expression of the left-hand side of the field access
+    pub lhs: Expr<'a>,
+    /// The field being accessed
+    pub field: Ident<'a>,
 }
 
 #[derive(Debug)]
@@ -129,7 +140,7 @@ pub struct Cond<'a> {
 #[derive(Debug)]
 pub struct CallExpr<'a> {
     /// The name of the function to call
-    pub func_name: &'a IdentPath<'a>,
+    pub func_name: IdentPath<'a>,
     /// The argument expressions to pass to the function
     pub args: Vec<Expr<'a>>,
 }
