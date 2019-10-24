@@ -1,4 +1,3 @@
-use std::mem;
 use std::collections::HashMap;
 
 use crate::resolve::{TyId, DeclMap, TypeInfo, LiteralConstructors};
@@ -45,7 +44,6 @@ primitives! {
         // an empty string here.
         unit => "" => TypeInfo {
             name: "DUnit",
-            size: mem::size_of::<()>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 unit_literal_constructor: Some("__dino__DUnit_from_unit_literal"),
@@ -57,7 +55,6 @@ primitives! {
 
         bool => "bool" => TypeInfo {
             name: "DBool",
-            size: mem::size_of::<bool>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 bool_literal_constructor: Some("__dino__DBool_from_bool_literal"),
@@ -69,7 +66,6 @@ primitives! {
 
         int => "int" => TypeInfo {
             name: "DInt",
-            size: mem::size_of::<i64>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 int_literal_constructor: Some("__dino__DInt_from_int_literal"),
@@ -81,7 +77,6 @@ primitives! {
 
         real => "real" => TypeInfo {
             name: "DReal",
-            size: mem::size_of::<f64>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 int_literal_constructor: Some("__dino__DReal_from_int_literal"),
@@ -94,7 +89,6 @@ primitives! {
 
         complex => "complex" => TypeInfo {
             name: "DComplex",
-            size: 2 * mem::size_of::<f64>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 int_literal_constructor: Some("__dino__DComplex_from_int_literal"),
@@ -108,7 +102,6 @@ primitives! {
 
         bstr => "bstr" => TypeInfo {
             name: "DBStr",
-            size: mem::size_of::<*mut u8>() + mem::size_of::<usize>(),
             is_extern: true,
             constructors: LiteralConstructors {
                 bstr_literal_constructor: Some("__dino__DBStr_from_bstr_literal"),

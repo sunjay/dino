@@ -8,9 +8,6 @@ pub struct TypeInfo<'a> {
     /// The name of the type
     pub name: Ident<'a>,
 
-    /// The size of the type in bytes
-    pub size: usize,
-
     /// If true, the type name will be used verbatim during code generation
     pub is_extern: bool,
 
@@ -18,8 +15,6 @@ pub struct TypeInfo<'a> {
     pub constructors: LiteralConstructors<'a>,
 
     /// The fields of this type (if any)
-    ///
-    /// The sum of the sizes of these fields give you the total size of the type.
     ///
     /// Extern types are not required to declare their fields.
     pub fields: HashMap<Ident<'a>, Ty<'a>>,
@@ -36,7 +31,6 @@ impl<'a> TypeInfo<'a> {
     pub fn new(name: Ident<'a>) -> Self {
         Self {
             name,
-            size: 0,
             is_extern: false,
             constructors: LiteralConstructors::default(),
             fields: HashMap::default(),
