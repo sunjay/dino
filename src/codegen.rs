@@ -7,6 +7,7 @@
 //! All types here should directly map to concepts expressible in C. This is the last step in code
 //! generation and no further processing should be required in order to convert these types to C.
 
+mod mangler;
 mod trans;
 pub use trans::*;
 
