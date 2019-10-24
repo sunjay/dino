@@ -461,8 +461,9 @@ impl ConstraintSet {
         let field_ty = decls.field_type(lhs_ty, field)
             .context(UnresolvedField {field_name: *field, ty: lhs_ty})?;
 
-        let field_ty_id = lookup_type(decls, prims, field_ty)?;
-        self.ty_var_is_ty(return_type, field_ty_id);
+        let field_ty_id = lookup_type(decls, prims, field_ty)
+            .expect("bug: field types should have been checked by this point");
+        self.ty_var_is_ty(return_type, field_ty_id)?;
 
         Ok(tyir::FieldAccess {
             lhs,
