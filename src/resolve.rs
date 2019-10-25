@@ -6,7 +6,7 @@ mod type_info;
 pub use decl_map::*;
 pub use type_info::*;
 
-use snafu::Snafu;
+use snafu::{Snafu, OptionExt};
 
 use crate::ast;
 use crate::primitives::Primitives;
@@ -26,6 +26,10 @@ pub enum Error {
         /// The name of the repeated field
         duplicate: String,
     },
+    #[snafu(display("cannot find type '{}' in this scope", name))]
+    UnresolvedType {
+        name: String,
+    },
 }
 
 #[derive(Debug)]
@@ -36,13 +40,15 @@ pub struct ProgramDecls<'a> {
 }
 
 impl<'a> ProgramDecls<'a> {
-    pub fn new(prog: ast::Program<'a>) -> Result<Self, Error> {
+    /// Extracts the declarations from the given program
+    pub fn extract(prog: ast::Program<'a>) -> Result<Self, Error> {
         let ast::Program {top_level_module} = prog;
         let ast::Module {decls} = top_level_module;
 
         let mut top_level_decls = DeclMap::default();
         let prims = Primitives::new(&mut top_level_decls);
 
+        let mut impls = Vec::new();
         for decl in decls {
             match decl {
                 ast::Decl::Struct(struct_decl) => {
@@ -63,8 +69,26 @@ impl<'a> ProgramDecls<'a> {
                     let type_info = TypeInfo::new(name, fields);
                     top_level_decls.insert_type(name, type_info)?;
                 },
-                ast::Decl::Impl(impl_block) => unimplemented!(),
+                ast::Decl::Impl(impl_block) => impls.push(impl_block),
                 ast::Decl::Function(func) => top_level_decls.insert_func(func)?,
+            }
+        }
+
+        // Need to insert impls in a second pass so that all the types that these impls are for
+        // have definitely been inserted by this point
+        for impl_block in impls {
+            let ast::Impl {self_ty, methods} = impl_block;
+            let ty = match self_ty {
+                ast::Ty::Unit => prims.unit(),
+                ast::Ty::SelfType => return Err(Error::UnresolvedType {
+                    name: "Self".to_string(),
+                }),
+                ast::Ty::Named(ty_name) => top_level_decls.type_id(&ty_name)
+                    .with_context(|| UnresolvedType {name: ty_name.to_string()})?,
+            };
+
+            for func in methods {
+                top_level_decls.insert_method(ty, func.name, func)?;
             }
         }
 

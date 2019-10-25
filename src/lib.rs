@@ -51,7 +51,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
         .with_context(|| IOError {path: path.to_path_buf()})?;
     let program = ast::Program::parse(&input_program)
         .with_context(|| ParseError {path: path.to_path_buf()})?;
-    let mut decls = resolve::ProgramDecls::new(program)
+    let mut decls = resolve::ProgramDecls::extract(program)
         .with_context(|| ResolveError {path: path.to_path_buf()})?;
     insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(&decls)
