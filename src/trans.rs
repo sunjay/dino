@@ -24,7 +24,7 @@ pub enum Error {
 /// Generates an executable program from the given IR
 pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CExecutableProgram, Error> {
     let ir::Program {top_level_module} = prog;
-    let ir::Module {functions} = top_level_module;
+    let ir::Module {types, functions} = top_level_module;
 
     let ProgramDecls {top_level_decls: mod_scope, prims} = program_scope;
 

@@ -10,7 +10,7 @@ use snafu::Snafu;
 use rayon::prelude::*;
 
 use crate::{ast, ir};
-use crate::resolve::{ProgramDecls, DeclMap, TyId};
+use crate::resolve::{ProgramDecls, DeclMap, TyId, TypeInfo};
 use crate::primitives::Primitives;
 
 use constraints::ConstraintSet;
@@ -90,6 +90,14 @@ fn infer_and_check_module<'a>(
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
 ) -> Result<ir::Module<'a>, Error> {
+    // Able to use par_bridge here because types can be checked in any order
+    let types = mod_decls.types()
+        .par_bridge()
+        // No need to check external types
+        .filter(|ty| !ty.is_extern)
+        .map(|ty| check_ty_decl(ty, mod_decls, prims))
+        .collect::<Result<Vec<_>, _>>()?;
+
     //TODO: Type check methods
 
     // Able to use par_bridge here because functions can be type checked in any order
@@ -97,12 +105,18 @@ fn infer_and_check_module<'a>(
         .par_bridge()
         // No need to check external functions
         .filter(|func| !func.is_extern)
-        .map(|func| {
-            infer_and_check_func(func, mod_decls, prims)
-        })
+        .map(|func| infer_and_check_func(func, mod_decls, prims))
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(ir::Module {functions})
+    Ok(ir::Module {types, functions})
+}
+
+fn check_ty_decl<'a>(
+    ty: &'a TypeInfo,
+    mod_decls: &'a DeclMap<'a>,
+    prims: &Primitives,
+) -> Result<ir::Struct<'a>, Error> {
+    unimplemented!()
 }
 
 fn infer_and_check_func<'a>(

@@ -6,6 +6,8 @@
 //!     * Every call knows all its types and operators have been desugared
 //! * All declaration names are unique within any given module
 
+use std::collections::HashMap;
+
 pub use crate::ast::{Ident, IdentPath};
 
 use crate::resolve::TyId;
@@ -17,7 +19,16 @@ pub struct Program<'a> {
 
 #[derive(Debug)]
 pub struct Module<'a> {
+    pub types: Vec<Struct<'a>>,
     pub functions: Vec<Function<'a>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Struct<'a> {
+    /// The name of the struct
+    pub name: Ident<'a>,
+    /// The fields of the struct
+    pub fields: HashMap<Ident<'a>, TyId>,
 }
 
 #[derive(Debug)]
