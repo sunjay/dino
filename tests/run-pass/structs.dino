@@ -29,6 +29,10 @@ impl Counter {
     fn decr(self) {
         self.count = self.count - 1;
     }
+
+    fn add(self, other: Self) {
+        self.count = self.count + other.count;
+    }
 }
 
 struct Game {
@@ -85,6 +89,7 @@ impl Game {
 }
 
 fn test_counter() {
+    print_bstr(b"counter");
     let counter = Counter::new();
     print_int(counter.value());
 
@@ -108,11 +113,20 @@ fn test_counter() {
     }
     print_int(counter.value());
 
-    counter.incr_by(34 - 93);
+    counter.incr_by(34);
     print_int(counter.value());
+
+    print_bstr(b"counter2");
+    let counter2 = Counter::new();
+    counter2.incr_by(counter.value() / 2);
+    print_int(counter2.value());
+    counter2.add(counter);
+    print_int(counter.value());
+    print_int(counter2.value());
 }
 
 fn test_game() {
+    print_bstr(b"game");
     let game = Game::new();
 
     game.team_a_scores();
