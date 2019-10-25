@@ -17,12 +17,7 @@ pub struct Program<'a> {
 
 #[derive(Debug)]
 pub struct Module<'a> {
-    pub decls: Vec<Decl<'a>>,
-}
-
-#[derive(Debug)]
-pub enum Decl<'a> {
-    Function(Function<'a>),
+    pub functions: Vec<Function<'a>>,
 }
 
 #[derive(Debug)]

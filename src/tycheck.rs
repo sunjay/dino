@@ -93,15 +93,16 @@ fn infer_and_check_module<'a>(
     //TODO: Type check methods
 
     // Able to use par_bridge here because functions can be type checked in any order
-    let decls = mod_decls.functions()
+    let functions = mod_decls.functions()
         .par_bridge()
         // No need to check external functions
         .filter(|func| !func.is_extern)
         .map(|func| {
-            infer_and_check_func(func, mod_decls, prims).map(ir::Decl::Function)
+            infer_and_check_func(func, mod_decls, prims)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(ir::Module {decls})
+
+    Ok(ir::Module {functions})
 }
 
 fn infer_and_check_func<'a>(
