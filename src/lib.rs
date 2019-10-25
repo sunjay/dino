@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod codegen;
+pub mod trans;
 pub mod ir;
 pub mod resolve;
 pub mod primitives;
@@ -40,7 +41,7 @@ pub enum Error {
     #[snafu(display("In '{}': {}", path.display(), source))]
     CodeGenerationError {
         path: PathBuf,
-        source: codegen::Error,
+        source: trans::Error,
     },
 }
 
@@ -56,7 +57,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(&decls)
         .with_context(|| TypeError {path: path.to_path_buf()})?;
-    let code = codegen::executable(&program_ir, &decls)
+    let code = trans::executable(&program_ir, &decls)
         .with_context(|| CodeGenerationError {path: path.to_path_buf()})?;
 
     Ok(code)

@@ -1,13 +1,14 @@
 //! Translates IR into generated code
 
-use super::*;
+mod mangler;
 
 use snafu::Snafu;
 
 use crate::ir;
 use crate::resolve::{TyId, ProgramDecls, DeclMap};
+use crate::codegen::*;
 
-use super::mangler::NameMangler;
+use mangler::NameMangler;
 
 /// Code generation errors
 #[derive(Debug, Snafu)]
