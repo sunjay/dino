@@ -2,6 +2,9 @@ use std::collections::HashMap;
 
 use crate::ast::{Ident, Function, Ty};
 
+pub type Fields<'a> = HashMap<Ident<'a>, Ty<'a>>;
+pub type Methods<'a> = HashMap<Ident<'a>, Function<'a>>;
+
 /// Information about a type
 #[derive(Debug)]
 pub struct TypeInfo<'a> {
@@ -17,23 +20,24 @@ pub struct TypeInfo<'a> {
     /// The fields of this type (if any)
     ///
     /// Extern types are not required to declare their fields.
-    pub fields: HashMap<Ident<'a>, Ty<'a>>,
+    pub fields: Fields<'a>,
 
     /// The methods provided by this type.
     ///
     /// The keys of the map are the method names (e.g. `add`) whereas the `name` field of
     /// the `Function` can be anything. If the Function is extern, this `name` field will
     /// be used in the generated code.
-    pub methods: HashMap<Ident<'a>, Function<'a>>,
+    pub methods: Methods<'a>,
 }
 
 impl<'a> TypeInfo<'a> {
-    pub fn new(name: Ident<'a>) -> Self {
+    /// Creates a new (non-extern) type with the given fields
+    pub fn new(name: Ident<'a>, fields: Fields<'a>) -> Self {
         Self {
             name,
             is_extern: false,
             constructors: LiteralConstructors::default(),
-            fields: HashMap::default(),
+            fields,
             methods: HashMap::default(),
         }
     }

@@ -28,9 +28,9 @@ pub enum Error {
         source: ast::ParseError,
     },
     #[snafu(display("In '{}': {}", path.display(), source))]
-    DuplicateDecl {
+    ResolveError {
         path: PathBuf,
-        source: resolve::DuplicateDecl,
+        source: resolve::Error,
     },
     #[snafu(display("In '{}': {}", path.display(), source))]
     TypeError {
@@ -52,7 +52,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     let program = ast::Program::parse(&input_program)
         .with_context(|| ParseError {path: path.to_path_buf()})?;
     let mut decls = resolve::ProgramDecls::new(program)
-        .with_context(|| DuplicateDecl {path: path.to_path_buf()})?;
+        .with_context(|| ResolveError {path: path.to_path_buf()})?;
     insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(&decls)
         .with_context(|| TypeError {path: path.to_path_buf()})?;

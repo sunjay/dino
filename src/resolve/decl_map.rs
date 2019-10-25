@@ -1,12 +1,10 @@
-use std::fmt;
 use std::collections::{HashSet, HashMap};
 use std::borrow::Borrow;
-use std::error::Error;
 use std::hash::{Hash, Hasher};
 
 use crate::ast::{Function, FuncSig, Ident, Ty};
 
-use super::{TypeInfo, LiteralConstructors};
+use super::{TypeInfo, LiteralConstructors, Error};
 
 // Allows functions to be looked up by name without requiring us to use a HashMap and duplicating
 // the name in the key.
@@ -42,19 +40,6 @@ impl<'a> PartialEq<str> for FunctionEntry<'a> {
 
 impl<'a> Eq for FunctionEntry<'a> {}
 
-#[derive(Debug)]
-pub struct DuplicateDecl {
-    duplicate: String,
-}
-
-impl fmt::Display for DuplicateDecl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "the name '{}' is defined multiple times", self.duplicate)
-    }
-}
-
-impl Error for DuplicateDecl {}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TyId(usize);
 
@@ -68,13 +53,13 @@ pub struct DeclMap<'a> {
 
 impl<'a> DeclMap<'a> {
     /// Inserts a new function declaration
-    pub fn insert_func(&mut self, func: Function<'a>) -> Result<(), DuplicateDecl> {
+    pub fn insert_func(&mut self, func: Function<'a>) -> Result<(), Error> {
         let name = func.name;
         let func_entry = FunctionEntry {func};
 
         //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
         if !self.functions.insert(func_entry) {
-            return Err(DuplicateDecl {
+            return Err(Error::DuplicateDecl {
                 duplicate: name.to_string(),
             });
         }
@@ -90,10 +75,10 @@ impl<'a> DeclMap<'a> {
         &mut self,
         ty_name: Ident<'a>,
         type_info: TypeInfo<'a>,
-    ) -> Result<TyId, DuplicateDecl> {
+    ) -> Result<TyId, Error> {
         let id = TyId(self.types.len());
         if self.type_ids.insert(ty_name, id).is_some() {
-            return Err(DuplicateDecl {
+            return Err(Error::DuplicateDecl {
                 duplicate: ty_name.to_string(),
             });
         }
@@ -108,14 +93,14 @@ impl<'a> DeclMap<'a> {
         id: TyId,
         method_name: Ident<'a>,
         method: Function<'a>,
-    ) -> Result<(), DuplicateDecl> {
+    ) -> Result<(), Error> {
         let TyId(id) = id;
         // unwrap() is safe because it should be impossible to create an invalid TyId
         let methods = &mut self.types.get_mut(id).unwrap().methods;
 
         //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
         if methods.insert(method_name, method).is_some() {
-            return Err(DuplicateDecl {
+            return Err(Error::DuplicateDecl {
                 duplicate: method_name.to_string(),
             });
         }

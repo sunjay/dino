@@ -43,16 +43,16 @@ pub struct Struct<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField<'a> {
-    name: Ident<'a>,
-    ty: Ty<'a>,
+    pub name: Ident<'a>,
+    pub ty: Ty<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Impl<'a> {
     /// The Self type of this impl block
-    self_ty: Ty<'a>,
+    pub self_ty: Ty<'a>,
     /// The method decls of this impl block
-    methods: Vec<Function<'a>>,
+    pub methods: Vec<Function<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
