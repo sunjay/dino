@@ -23,13 +23,18 @@ pub struct Module<'a> {
     pub functions: Vec<Function<'a>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Struct<'a> {
     /// The name of the struct
     pub name: Ident<'a>,
     /// The fields of the struct
-    pub fields: HashMap<Ident<'a>, TyId>,
+    pub fields: Fields<'a>,
+    /// The methods of the struct
+    pub methods: Methods<'a>,
 }
+
+pub type Fields<'a> = HashMap<Ident<'a>, TyId>;
+pub type Methods<'a> = HashMap<Ident<'a>, Function<'a>>;
 
 #[derive(Debug)]
 pub struct Function<'a> {

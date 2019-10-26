@@ -59,14 +59,27 @@ pub struct ConstraintSet {
 impl ConstraintSet {
     /// Generates a constraint set for the given function declaration. Any fresh type variables
     /// created are annotated inline into the returned `tyir::Function`
-    pub fn generate<'a>(
+    pub fn function<'a>(
         func: &'a ast::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
-        let func = FunctionConstraintGenerator::generate(func, decls, prims, &mut constraints)?;
+        let func = FunctionConstraintGenerator::generate(None, func, decls, prims, &mut constraints)?;
         Ok((constraints, func))
+    }
+
+    /// Generates a constraint set for the given method declaration. Any fresh type variables
+    /// created are annotated inline into the returned `tyir::Function`
+    pub fn method<'a>(
+        self_ty: TyId,
+        func: &'a ast::Function<'a>,
+        decls: &'a DeclMap<'a>,
+        prims: &Primitives,
+    ) -> Result<(Self, tyir::Function<'a>), Error> {
+        let mut constraints = Self::default();
+        let method = FunctionConstraintGenerator::generate(Some(self_ty), func, decls, prims, &mut constraints)?;
+        Ok((constraints, method))
     }
 
     /// Attempts to solve the constraint set and return the solution as a substitution map
@@ -131,6 +144,7 @@ impl ConstraintSet {
 
 #[derive(Debug)]
 struct FunctionConstraintGenerator<'a, 'b, 'c> {
+    self_ty: Option<TyId>,
     decls: &'a DeclMap<'a>,
     prims: &'b Primitives,
     constraints: &'c mut ConstraintSet,
@@ -140,6 +154,7 @@ struct FunctionConstraintGenerator<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     pub fn generate(
+        self_ty: Option<TyId>,
         func: &'a ast::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &'b Primitives,
@@ -147,6 +162,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     ) -> Result<tyir::Function<'a>, Error> {
         let func_return_type = constraints.fresh_type_var();
         let mut generator = Self {
+            self_ty,
             decls,
             prims,
             constraints,

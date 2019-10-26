@@ -6,7 +6,7 @@ mod constraints;
 mod solve;
 mod tyir;
 
-use snafu::Snafu;
+use snafu::{Snafu, OptionExt};
 use rayon::prelude::*;
 
 use crate::{ast, ir};
@@ -94,11 +94,9 @@ fn infer_and_check_module<'a>(
     let types = mod_decls.types()
         .par_bridge()
         // No need to check external types
-        .filter(|ty| !ty.is_extern)
-        .map(|ty| check_ty_decl(ty, mod_decls, prims))
+        .filter(|(_, ty_info)| !ty_info.is_extern)
+        .map(|(ty_id, ty_info)| check_ty_decl(ty_id, ty_info, mod_decls, prims))
         .collect::<Result<Vec<_>, _>>()?;
-
-    //TODO: Type check methods
 
     // Able to use par_bridge here because functions can be type checked in any order
     let functions = mod_decls.functions()
@@ -112,11 +110,44 @@ fn infer_and_check_module<'a>(
 }
 
 fn check_ty_decl<'a>(
-    ty: &'a TypeInfo,
+    self_ty: TyId,
+    ty_info: &'a TypeInfo,
     mod_decls: &'a DeclMap<'a>,
     prims: &Primitives,
 ) -> Result<ir::Struct<'a>, Error> {
-    unimplemented!()
+    let TypeInfo {name, is_extern, constructors: _, fields, methods} = ty_info;
+    assert!(!is_extern, "bug: should not be type checking extern type");
+
+    // Ensure that all field types actually exist
+    let fields = fields.iter().map(|(&field_name, ty)| Ok(match ty {
+        ast::Ty::Unit => (field_name, prims.unit()),
+        ast::Ty::SelfType => (field_name, self_ty),
+        &ast::Ty::Named(ty_name) => {
+            let ty_id = mod_decls.type_id(&ty_name)
+                .with_context(|| UnresolvedType {name: ty_name})?;
+            (field_name, ty_id)
+        },
+    })).collect::<Result<ir::Fields, _>>()?;
+
+    // Type check methods
+    let methods = methods.iter().map(|(&method_name, method)| {
+        let method = infer_and_check_method(self_ty, method, mod_decls, prims)?;
+        Ok((method_name, method))
+    }).collect::<Result<ir::Methods, _>>()?;
+
+    Ok(ir::Struct {name, fields, methods})
+}
+
+fn infer_and_check_method<'a>(
+    self_ty: TyId,
+    method: &'a ast::Function<'a>,
+    mod_decls: &'a DeclMap<'a>,
+    prims: &Primitives,
+) -> Result<ir::Function<'a>, Error> {
+    // `ty_ir_method` is a copy of the function's AST with any generated type variables placed inline
+    let (constraints, ty_ir_method) = ConstraintSet::method(self_ty, method, mod_decls, prims)?;
+    let solution = constraints.solve(prims)?;
+    Ok(ty_ir_method.apply_subst(&solution))
 }
 
 fn infer_and_check_func<'a>(
@@ -125,7 +156,7 @@ fn infer_and_check_func<'a>(
     prims: &Primitives,
 ) -> Result<ir::Function<'a>, Error> {
     // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
-    let (constraints, ty_ir_func) = ConstraintSet::generate(func, mod_decls, prims)?;
+    let (constraints, ty_ir_func) = ConstraintSet::function(func, mod_decls, prims)?;
     let solution = constraints.solve(prims)?;
     Ok(ty_ir_func.apply_subst(&solution))
 }

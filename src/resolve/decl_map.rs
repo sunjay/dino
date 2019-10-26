@@ -159,8 +159,8 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns an iterator that goes through each function in the map
-    pub fn types(&self) -> impl Iterator<Item=&TypeInfo<'a>> {
-        self.types.iter()
+    pub fn types(&self) -> impl Iterator<Item=(TyId, &TypeInfo<'a>)> {
+        self.types.iter().enumerate().map(|(id, ty_info)| (TyId(id), ty_info))
     }
 
     /// Returns an iterator that goes through each function in the map

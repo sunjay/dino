@@ -84,7 +84,7 @@ impl<'a> ProgramDecls<'a> {
                     name: "Self".to_string(),
                 }),
                 ast::Ty::Named(ty_name) => top_level_decls.type_id(&ty_name)
-                    .with_context(|| UnresolvedType {name: ty_name.to_string()})?,
+                    .with_context(|| UnresolvedType {name: ty_name})?,
             };
 
             for func in methods {
