@@ -2,6 +2,27 @@
 
 Programming language / compiler experiments.
 
+## Dependencies
+
+This project uses the [Boehm-Demers-Weiser conservative garbage collector][gc].
+To build this project, you will need to clone and build that library.
+
+The commands below should be run in the root directory of this project (the
+location of the main `Cargo.toml` file).
+
+```bash
+$ git clone git://github.com/ivmai/bdwgc.git
+$ cd bdwgc
+$ ./autogen.sh
+$ ./configure --enable-static
+$ make -j
+```
+
+Notice that `--enable-static` is used to ensure that `libgc.a` is produced by
+the build.
+
+[gc]: https://www.hboehm.info/gc
+
 ## Building & Running
 
 You need to have the `dino-runtime` and `dino-std` libraries built before
