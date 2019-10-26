@@ -684,7 +684,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     fn lookup_type(&self, ty: &ast::Ty) -> Result<TyId, Error> {
         match ty {
             ast::Ty::Unit => Ok(self.prims.unit()),
-            ast::Ty::SelfType => unimplemented!(),
+            ast::Ty::SelfType => self.self_ty.context(UnresolvedType {name: "Self"}),
             ast::Ty::Named(ty) => self.decls.type_id(ty).context(UnresolvedType {name: *ty}),
         }
     }
