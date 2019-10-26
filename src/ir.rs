@@ -28,13 +28,13 @@ pub struct Struct<'a> {
     /// The name of the struct
     pub name: Ident<'a>,
     /// The fields of the struct
-    pub fields: Fields<'a>,
+    pub fields: FieldTys<'a>,
     /// The methods of the struct
-    pub methods: Methods<'a>,
+    pub methods: MethodDecls<'a>,
 }
 
-pub type Fields<'a> = HashMap<Ident<'a>, TyId>;
-pub type Methods<'a> = HashMap<Ident<'a>, Function<'a>>;
+pub type FieldTys<'a> = HashMap<Ident<'a>, TyId>;
+pub type MethodDecls<'a> = HashMap<Ident<'a>, Function<'a>>;
 
 #[derive(Debug)]
 pub struct Function<'a> {
@@ -99,6 +99,7 @@ pub enum Expr<'a> {
     Cond(Box<Cond<'a>>, TyId),
     Call(CallExpr<'a>, TyId),
     Return(Option<Box<Expr<'a>>>, TyId),
+    StructLiteral(StructLiteral<'a>, TyId),
     BStrLiteral(&'a [u8], TyId),
     IntegerLiteral(i64, TyId),
     RealLiteral(f64, TyId),
@@ -117,6 +118,7 @@ impl<'a> Expr<'a> {
             Cond(_, ty_id) |
             Call(_, ty_id) |
             Return(_, ty_id) |
+            StructLiteral(_, ty_id) |
             BStrLiteral(_, ty_id) |
             IntegerLiteral(_, ty_id) |
             RealLiteral(_, ty_id) |
@@ -170,3 +172,12 @@ pub struct CallExpr<'a> {
     /// The argument expressions to pass to the function
     pub args: Vec<Expr<'a>>,
 }
+
+#[derive(Debug)]
+pub struct StructLiteral<'a> {
+    pub ty_id: TyId,
+    pub field_values: Fields<'a>,
+}
+
+/// The name of the field and the expression being assigned to the field
+pub type Fields<'a> = HashMap<Ident<'a>, Expr<'a>>;

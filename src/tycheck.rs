@@ -127,13 +127,13 @@ fn check_ty_decl<'a>(
                 .with_context(|| UnresolvedType {name: ty_name})?;
             (field_name, ty_id)
         },
-    })).collect::<Result<ir::Fields, _>>()?;
+    })).collect::<Result<ir::FieldTys, _>>()?;
 
     // Type check methods
     let methods = methods.iter().map(|(&method_name, method)| {
         let method = infer_and_check_method(self_ty, method, mod_decls, prims)?;
         Ok((method_name, method))
-    }).collect::<Result<ir::Methods, _>>()?;
+    }).collect::<Result<ir::MethodDecls, _>>()?;
 
     Ok(ir::Struct {name, fields, methods})
 }

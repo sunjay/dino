@@ -359,7 +359,8 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             },
 
             ast::Expr::StructLiteral(struct_lit) => {
-                unimplemented!()
+                self.append_struct_literal(struct_lit, return_type, scope)
+                    .map(|struct_lit| tyir::Expr::StructLiteral(struct_lit, return_type))
             },
 
             ast::Expr::BStrLiteral(value) => {
@@ -692,6 +693,17 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
                 None
             },
         })
+    }
+
+    /// Appends constraints for the given struct literal
+    fn append_struct_literal<'s>(
+        &mut self,
+        struct_lit: &'a ast::StructLiteral<'a>,
+        // The type expected from the struct literal
+        return_type: TyVar,
+        scope: &mut Scope<'a, 's>,
+    ) -> Result<tyir::StructLiteral<'a>, Error> {
+        unimplemented!()
     }
 
     /// Resolves all of the types in a function signature

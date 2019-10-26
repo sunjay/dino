@@ -245,6 +245,7 @@ impl<'a> FunctionCodeGenerator<'a> {
             ir::Expr::Cond(cond, ty) => self.gen_cond_expr(cond, ty, prev_stmts)?,
             ir::Expr::Call(call, _) => CExpr::Call(self.gen_call_expr(call, prev_stmts)?),
             ir::Expr::Return(ret_expr, ty) => self.gen_return(ret_expr.as_ref().map(|x| x.as_ref()), *ty, prev_stmts)?,
+            ir::Expr::StructLiteral(struct_lit, ty) => self.gen_struct_literal(struct_lit, *ty, prev_stmts)?,
             &ir::Expr::BStrLiteral(value, ty) => self.gen_bstr_literal(value, ty)?,
             &ir::Expr::IntegerLiteral(value, ty) => self.gen_int_literal(value, ty)?,
             &ir::Expr::RealLiteral(value, ty) => self.gen_real_literal(value, ty)?,
@@ -354,6 +355,20 @@ impl<'a> FunctionCodeGenerator<'a> {
 
         // We can then produce a unit value since that is always the result of a return expression
         self.gen_unit_literal(ty)
+    }
+
+    fn gen_struct_literal(
+        &mut self,
+        struct_lit: &ir::StructLiteral,
+        ty: TyId,
+        prev_stmts: &mut Vec<CStmt>,
+    ) -> Result<CExpr, Error> {
+        let ir::StructLiteral {ty_id, field_values} = struct_lit;
+
+        // The struct literal must be generated in a separate temporary variable because we need to
+        // initialize each field
+
+        unimplemented!()
     }
 
     fn gen_bstr_literal(

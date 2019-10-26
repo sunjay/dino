@@ -205,16 +205,16 @@ pub struct CallExpr<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructLiteral<'a> {
-    name: NamedTy<'a>,
-    field_values: Vec<StructFieldValue<'a>>,
+    pub name: NamedTy<'a>,
+    pub field_values: Vec<StructFieldValue<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructFieldValue<'a> {
     /// The name of the field
-    name: Ident<'a>,
+    pub name: Ident<'a>,
     /// The expression being assigned to the field
-    value: Expr<'a>,
+    pub value: Expr<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,7 +225,7 @@ pub struct IntegerLiteral<'a> {
     pub type_hint: Option<&'a str>,
 }
 
-/// An type explicitly named with an identifier or path (as opposited to (), [T], etc.)
+/// A type explicitly named with an identifier or path (as opposited to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy<'a> {
     SelfType,

@@ -1,6 +1,8 @@
 //! An intermediate representation used during type checking to provide a way to store fresh type
 //! variables and type IDs directly without having to invent a way to uniquely address AST nodes.
 
+use std::collections::HashMap;
+
 use crate::ir;
 use crate::ast::{Ident, IdentPath};
 use crate::resolve::TyId;
@@ -121,6 +123,7 @@ pub enum Expr<'a> {
     Cond(Box<Cond<'a>>, TyVar),
     Call(CallExpr<'a>, TyVar),
     Return(Option<Box<Expr<'a>>>, TyVar),
+    StructLiteral(StructLiteral<'a>, TyVar),
     BStrLiteral(&'a [u8], TyVar),
     IntegerLiteral(i64, TyVar),
     RealLiteral(f64, TyVar),
@@ -153,6 +156,10 @@ impl<'a> Expr<'a> {
 
             Return(ret_expr, ty_var) => {
                 ir::Expr::Return(ret_expr.map(|expr| Box::new(expr.apply_subst(subst))), ty_var.apply_subst(subst))
+            },
+
+            StructLiteral(struct_lit, ty_var) => {
+                ir::Expr::StructLiteral(struct_lit.apply_subst(subst), ty_var.apply_subst(subst))
             },
 
             BStrLiteral(value, ty_var) => {
@@ -288,6 +295,28 @@ impl<'a> CallExpr<'a> {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct StructLiteral<'a> {
+    pub ty_id: TyId,
+    pub field_values: Fields<'a>,
+}
+
+impl<'a> StructLiteral<'a> {
+    /// Applies the given substitution to this struct literal and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::StructLiteral<'a> {
+        let Self {ty_id, field_values} = self;
+        ir::StructLiteral {
+            ty_id,
+            field_values: field_values.into_iter().map(|(field_name, rhs)| {
+                (field_name, rhs.apply_subst(subst))
+            }).collect(),
+        }
+    }
+}
+
+/// The name of the field and the expression being assigned to the field
+pub type Fields<'a> = HashMap<Ident<'a>, Expr<'a>>;
 
 impl TyVar {
     /// Applies the given substitution to this type and returns the corresponding type ID
