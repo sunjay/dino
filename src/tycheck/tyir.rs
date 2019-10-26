@@ -186,6 +186,48 @@ impl<'a> Expr<'a> {
     }
 }
 
+/// Expressions that can be on the left-hand side of assignment
+#[derive(Debug)]
+pub enum LValueExpr<'a> {
+    FieldAccess(FieldAccess<'a>, TyVar),
+    Var(Ident<'a>, TyVar),
+}
+
+impl<'a> LValueExpr<'a> {
+    /// Applies the given substitution to this expression and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::LValueExpr<'a> {
+        use LValueExpr::*;
+        match self {
+            FieldAccess(access, ty_var) => {
+                ir::LValueExpr::FieldAccess(access.apply_subst(subst), ty_var.apply_subst(subst))
+            },
+
+            Var(var_name, ty_var) => {
+                ir::LValueExpr::Var(var_name, ty_var.apply_subst(subst))
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct VarAssign<'a> {
+    /// The left-hand expression to assign a value to
+    pub lhs: LValueExpr<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
+}
+
+impl<'a> VarAssign<'a> {
+    /// Applies the given substitution to this function call and returns the corresponding IR
+    pub fn apply_subst(self, subst: &TypeSubst) -> ir::VarAssign<'a> {
+        let Self {lhs, expr} = self;
+        ir::VarAssign {
+            lhs: lhs.apply_subst(subst),
+            expr: expr.apply_subst(subst),
+        }
+    }
+}
+
 /// A field access in the form `<expr> . <ident>`
 #[derive(Debug)]
 pub struct FieldAccess<'a> {
@@ -243,25 +285,6 @@ impl<'a> CallExpr<'a> {
         ir::CallExpr {
             func_name,
             args: args.into_iter().map(|expr| expr.apply_subst(subst)).collect(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct VarAssign<'a> {
-    /// The identifier to assign a value to
-    pub ident: Ident<'a>,
-    /// The expression for the value to assign to the variable
-    pub expr: Expr<'a>,
-}
-
-impl<'a> VarAssign<'a> {
-    /// Applies the given substitution to this function call and returns the corresponding IR
-    pub fn apply_subst(self, subst: &TypeSubst) -> ir::VarAssign<'a> {
-        let Self {ident, expr} = self;
-        ir::VarAssign {
-            ident,
-            expr: expr.apply_subst(subst),
         }
     }
 }

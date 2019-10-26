@@ -128,6 +128,21 @@ impl<'a> Expr<'a> {
     }
 }
 
+/// Expressions that can be on the left-hand side of assignment
+#[derive(Debug)]
+pub enum LValueExpr<'a> {
+    FieldAccess(FieldAccess<'a>, TyId),
+    Var(Ident<'a>, TyId),
+}
+
+#[derive(Debug)]
+pub struct VarAssign<'a> {
+    /// The left-hand expression to assign a value to
+    pub lhs: LValueExpr<'a>,
+    /// The expression for the value to assign to the variable
+    pub expr: Expr<'a>,
+}
+
 /// A field access in the form `<expr> . <ident>`
 #[derive(Debug)]
 pub struct FieldAccess<'a> {
@@ -154,12 +169,4 @@ pub struct CallExpr<'a> {
     pub func_name: IdentPath<'a>,
     /// The argument expressions to pass to the function
     pub args: Vec<Expr<'a>>,
-}
-
-#[derive(Debug)]
-pub struct VarAssign<'a> {
-    /// The identifier to assign a value to
-    pub ident: Ident<'a>,
-    /// The expression for the value to assign to the variable
-    pub expr: Expr<'a>,
 }

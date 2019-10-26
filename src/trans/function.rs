@@ -306,15 +306,21 @@ impl<'a> FunctionCodeGenerator<'a> {
         ty: TyId,
         prev_stmts: &mut Vec<CStmt>,
     ) -> Result<CExpr, Error> {
-        let ir::VarAssign {ident, expr} = assign;
+        let ir::VarAssign {lhs, expr} = assign;
 
-        // C doesn't support assignment in expression position, so the assignment must be lifted into
-        // a statement
-        let assign = CStmt::VarAssign(CVarAssign {
-            mangled_name: self.mangler.get(ident).to_string(),
-            init_expr: CInitializerExpr::Expr(self.gen_expr(expr, prev_stmts)?),
-        });
-        prev_stmts.push(assign);
+        // C doesn't support assignment in expression position, so the assignment must be lifted
+        // into a statement
+        match lhs {
+            ir::LValueExpr::FieldAccess(access, _) => unimplemented!(),
+
+            ir::LValueExpr::Var(ident, _) => {
+                let assign = CStmt::VarAssign(CVarAssign {
+                    mangled_name: self.mangler.get(ident).to_string(),
+                    init_expr: CInitializerExpr::Expr(self.gen_expr(expr, prev_stmts)?),
+                });
+                prev_stmts.push(assign);
+            },
+        }
 
         // We can then produce a unit value since that is always the result of an assignment
         self.gen_unit_literal(ty)

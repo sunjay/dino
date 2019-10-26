@@ -630,17 +630,27 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         // The return type of a variable assignment is ()
         self.constraints.ty_var_is_ty(return_type, self.prims.unit())?;
 
-        match lhs {
-            ast::LValueExpr::FieldAccess(access) => unimplemented!(),
-            ast::LValueExpr::Var(ident) => {
-                // The type of the right-hand expression of the assignment must match the type of the
-                // variable being assigned to
-                let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
-                let expr = self.append_expr(expr, var_ty_var, scope)?;
-
-                Ok(tyir::VarAssign {ident, expr})
+        // Get the type variable for the lhs expression
+        let (lhs, lvalue_ty_var) = match lhs {
+            ast::LValueExpr::FieldAccess(access) => {
+                let field_ty_var = self.constraints.fresh_type_var();
+                let access = self.append_field_access(access, field_ty_var, scope)?;
+                let field_lvalue = tyir::LValueExpr::FieldAccess(access, field_ty_var);
+                (field_lvalue, field_ty_var)
             },
-        }
+
+            ast::LValueExpr::Var(ident) => {
+                let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
+                let var_lvalue = tyir::LValueExpr::Var(ident, var_ty_var);
+                (var_lvalue, var_ty_var)
+            },
+        };
+
+        // The type of the right-hand expression of the assignment must match the type of
+        // the lvalue on the left
+        let expr = self.append_expr(expr, lvalue_ty_var, scope)?;
+
+        Ok(tyir::VarAssign {lhs, expr})
     }
 
     /// Appends constraints for the given return expression
