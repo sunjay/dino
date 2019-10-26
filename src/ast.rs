@@ -67,17 +67,6 @@ pub struct Function<'a> {
     pub is_extern: bool,
 }
 
-impl<'a> Function<'a> {
-    pub fn new_extern(name: &'a str, sig: FuncSig<'a>) -> Self {
-        Self {
-            name,
-            sig,
-            body: Block::default(),
-            is_extern: true,
-        }
-    }
-}
-
 /// The type signature of a free function
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSig<'a> {

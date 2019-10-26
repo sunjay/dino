@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::ast::{Ident, Function, Ty};
+use crate::ast::{Ident, Ty};
+use super::Function;
 
 pub type Fields<'a> = HashMap<Ident<'a>, Ty<'a>>;
 pub type Methods<'a> = HashMap<Ident<'a>, Function<'a>>;
@@ -38,7 +39,7 @@ impl<'a> TypeInfo<'a> {
             is_extern: false,
             constructors: LiteralConstructors::default(),
             fields,
-            methods: HashMap::default(),
+            methods: Methods::default(),
         }
     }
 }

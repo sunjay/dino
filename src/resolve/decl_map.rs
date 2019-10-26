@@ -2,9 +2,10 @@ use std::collections::{HashSet, HashMap};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{Function, FuncSig, Ident, Ty};
+use crate::ast::{Ident, Ty};
+use crate::ir;
 
-use super::{TypeInfo, LiteralConstructors, Error};
+use super::{TypeInfo, Function, LiteralConstructors, Error};
 
 // Allows functions to be looked up by name without requiring us to use a HashMap and duplicating
 // the name in the key.
@@ -149,7 +150,7 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns the method signature corresponding to the given type and name, if any
-    pub fn method_sig(&self, id: TyId, method_name: &Ident<'a>) -> Option<&FuncSig<'a>> {
+    pub fn method_sig(&self, id: TyId, method_name: &Ident<'a>) -> Option<&ir::FuncSig<'a>> {
         self.method(id, method_name).map(|func| &func.sig)
     }
 

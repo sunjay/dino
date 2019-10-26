@@ -65,285 +65,287 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
 
 fn insert_prelude(decls: &mut resolve::ProgramDecls) {
     //TODO: Figure out how to do this properly without hard coding things
-    use crate::ast::*;
+
+    use crate::ir::{FuncSig, FuncParam};
+    use crate::resolve::Function;
 
     let prims = &decls.prims;
     let decls = &mut decls.top_level_decls;
 
     decls.insert_func(Function::new_extern("unit_eq", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Unit},
-            FuncParam {name: "right", ty: Ty::Unit},
+            FuncParam {name: "left", ty: prims.unit()},
+            FuncParam {name: "right", ty: prims.unit()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_unit", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Unit},
+            FuncParam {name: "value", ty: prims.unit()},
         ],
     })).unwrap();
 
     decls.insert_func(Function::new_extern("bool_eq", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bool")},
-            FuncParam {name: "right", ty: Ty::Named("bool")},
+            FuncParam {name: "left", ty: prims.bool()},
+            FuncParam {name: "right", ty: prims.bool()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bool_and", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bool")},
-            FuncParam {name: "right", ty: Ty::Named("bool")},
+            FuncParam {name: "left", ty: prims.bool()},
+            FuncParam {name: "right", ty: prims.bool()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bool_or", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bool")},
-            FuncParam {name: "right", ty: Ty::Named("bool")},
+            FuncParam {name: "left", ty: prims.bool()},
+            FuncParam {name: "right", ty: prims.bool()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bool_not", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("bool")},
+            FuncParam {name: "value", ty: prims.bool()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_bool", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("bool")},
+            FuncParam {name: "value", ty: prims.bool()},
         ],
     })).unwrap();
 
     decls.insert_method(prims.int(), "eq", Function::new_extern("int__eq", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "gt", Function::new_extern("int__gt", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "gte", Function::new_extern("int__gte", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "lt", Function::new_extern("int__lt", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "lte", Function::new_extern("int__lte", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
 
     decls.insert_method(prims.int(), "add", Function::new_extern("int__add", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "other", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "other", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "sub", Function::new_extern("int__sub", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "mul", Function::new_extern("int__mul", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "div", Function::new_extern("int__div", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "rem", Function::new_extern("int__rem", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
-            FuncParam {name: "right", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
+            FuncParam {name: "right", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_method(prims.int(), "neg", Function::new_extern("int__neg", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "self", ty: Ty::Named("int")},
+            FuncParam {name: "self", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_int", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("int")},
+            FuncParam {name: "value", ty: prims.int()},
         ],
     })).unwrap();
 
     decls.insert_func(Function::new_extern("add_real", FuncSig {
-        return_type: Ty::Named("real"),
+        return_type: prims.real(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("real")},
-            FuncParam {name: "right", ty: Ty::Named("real")},
+            FuncParam {name: "left", ty: prims.real()},
+            FuncParam {name: "right", ty: prims.real()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("sub_real", FuncSig {
-        return_type: Ty::Named("real"),
+        return_type: prims.real(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("real")},
-            FuncParam {name: "right", ty: Ty::Named("real")},
+            FuncParam {name: "left", ty: prims.real()},
+            FuncParam {name: "right", ty: prims.real()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_real", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("real")},
+            FuncParam {name: "value", ty: prims.real()},
         ],
     })).unwrap();
 
     decls.insert_func(Function::new_extern("add_complex", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("complex")},
-            FuncParam {name: "right", ty: Ty::Named("complex")},
+            FuncParam {name: "left", ty: prims.complex()},
+            FuncParam {name: "right", ty: prims.complex()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("add_real_complex", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("real")},
-            FuncParam {name: "right", ty: Ty::Named("complex")},
+            FuncParam {name: "left", ty: prims.real()},
+            FuncParam {name: "right", ty: prims.complex()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("add_complex_real", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("complex")},
-            FuncParam {name: "right", ty: Ty::Named("real")},
+            FuncParam {name: "left", ty: prims.complex()},
+            FuncParam {name: "right", ty: prims.real()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("sub_complex", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("complex")},
-            FuncParam {name: "right", ty: Ty::Named("complex")},
+            FuncParam {name: "left", ty: prims.complex()},
+            FuncParam {name: "right", ty: prims.complex()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("sub_real_complex", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("real")},
-            FuncParam {name: "right", ty: Ty::Named("complex")},
+            FuncParam {name: "left", ty: prims.real()},
+            FuncParam {name: "right", ty: prims.complex()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("sub_complex_real", FuncSig {
-        return_type: Ty::Named("complex"),
+        return_type: prims.complex(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("complex")},
-            FuncParam {name: "right", ty: Ty::Named("real")},
+            FuncParam {name: "left", ty: prims.complex()},
+            FuncParam {name: "right", ty: prims.real()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_complex", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("complex")},
+            FuncParam {name: "value", ty: prims.complex()},
         ],
     })).unwrap();
 
     decls.insert_func(Function::new_extern("bstr_len", FuncSig {
-        return_type: Ty::Named("int"),
+        return_type: prims.int(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("bstr")},
+            FuncParam {name: "value", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_eq", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_gt", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_gte", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_lt", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_lte", FuncSig {
-        return_type: Ty::Named("bool"),
+        return_type: prims.bool(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_concat", FuncSig {
-        return_type: Ty::Named("bstr"),
+        return_type: prims.bstr(),
         params: vec![
-            FuncParam {name: "left", ty: Ty::Named("bstr")},
-            FuncParam {name: "right", ty: Ty::Named("bstr")},
+            FuncParam {name: "left", ty: prims.bstr()},
+            FuncParam {name: "right", ty: prims.bstr()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_slice", FuncSig {
-        return_type: Ty::Named("bstr"),
+        return_type: prims.bstr(),
         params: vec![
-            FuncParam {name: "string", ty: Ty::Named("bstr")},
-            FuncParam {name: "start", ty: Ty::Named("int")},
-            FuncParam {name: "end", ty: Ty::Named("int")},
+            FuncParam {name: "string", ty: prims.bstr()},
+            FuncParam {name: "start", ty: prims.int()},
+            FuncParam {name: "end", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("bstr_get", FuncSig {
-        return_type: Ty::Named("bstr"),
+        return_type: prims.bstr(),
         params: vec![
-            FuncParam {name: "string", ty: Ty::Named("bstr")},
-            FuncParam {name: "index", ty: Ty::Named("int")},
+            FuncParam {name: "string", ty: prims.bstr()},
+            FuncParam {name: "index", ty: prims.int()},
         ],
     })).unwrap();
     decls.insert_func(Function::new_extern("print_bstr", FuncSig {
-        return_type: Ty::Unit,
+        return_type: prims.unit(),
         params: vec![
-            FuncParam {name: "value", ty: Ty::Named("bstr")},
+            FuncParam {name: "value", ty: prims.bstr()},
         ],
     })).unwrap();
 
     decls.insert_func(Function::new_extern("read_line_bstr", FuncSig {
-        return_type: Ty::Named("bstr"),
+        return_type: prims.bstr(),
         params: Vec::new(),
     })).unwrap();
 }

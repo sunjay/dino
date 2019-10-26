@@ -6,7 +6,7 @@ use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
 use crate::resolve::{DeclMap, TyId};
 use crate::primitives::Primitives;
-use crate::{ast, ir};
+use crate::{resolve, ast, ir};
 
 use super::{
     Error,
@@ -173,7 +173,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     }
 
     /// Appends constrains for the given function
-    fn append_func(&mut self, func: &'a ast::Function<'a>) -> Result<tyir::Function<'a>, Error> {
+    fn append_func(&mut self, func: &'a resolve::Function<'a>) -> Result<tyir::Function<'a>, Error> {
         let ast::Function {name, sig, body, is_extern} = func;
         assert!(!is_extern, "bug: attempt to type check an extern function");
 
@@ -589,7 +589,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given function call given the signature
     fn append_func_call_sig<'s>(
         &mut self,
-        sig: &ast::FuncSig,
+        sig: &ir::FuncSig,
         // The function name to call, not necessarily the original function/method name
         func_name: ast::IdentPath<'a>,
         args: &'a [ast::Expr<'a>],
@@ -742,18 +742,6 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         }
 
         Ok(tyir::StructLiteral {ty_id: struct_ty, field_values})
-    }
-
-    /// Resolves all of the types in a function signature
-    fn resolve_sig(&self, sig: &'a ast::FuncSig<'a>) -> Result<ir::FuncSig<'a>, Error> {
-        let ast::FuncSig {return_type, params} = sig;
-        let return_type = self.lookup_type(return_type)?;
-        let params = params.iter().map(|param| {
-            let ast::FuncParam {name, ty} = param;
-            Ok(ir::FuncParam {name, ty: self.lookup_type(ty)?})
-        }).collect::<Result<Vec<_>, _>>()?;
-
-        Ok(ir::FuncSig {return_type, params})
     }
 
     /// Resolves a single type to either a declared type or a primitive

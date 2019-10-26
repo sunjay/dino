@@ -1,9 +1,11 @@
 //! Name resolution code. Takes the AST and extracts all the named items.
 
 mod decl_map;
+mod function;
 mod type_info;
 
 pub use decl_map::*;
+pub use function::*;
 pub use type_info::*;
 
 use snafu::{Snafu, OptionExt};
@@ -48,8 +50,8 @@ impl<'a> ProgramDecls<'a> {
         let mut top_level_decls = DeclMap::default();
         let prims = Primitives::new(&mut top_level_decls);
 
-        let mut impls = Vec::new();
-        for decl in decls {
+        // Do a first pass and insert all the types so they are available for functions/impls
+        for decl in &decls {
             match decl {
                 ast::Decl::Struct(struct_decl) => {
                     let ast::Struct {name, fields: parsed_fields} = struct_decl;
@@ -58,7 +60,7 @@ impl<'a> ProgramDecls<'a> {
                     let mut fields = Fields::new();
                     for field in parsed_fields {
                         let ast::StructField {name: field_name, ty} = field;
-                        if fields.insert(field_name, ty).is_some() {
+                        if fields.insert(field_name, *ty).is_some() {
                             return Err(Error::DuplicateField {
                                 type_name: name.to_string(),
                                 duplicate: field_name.to_string(),
@@ -69,26 +71,38 @@ impl<'a> ProgramDecls<'a> {
                     let type_info = TypeInfo::new(name, fields);
                     top_level_decls.insert_type(name, type_info)?;
                 },
-                ast::Decl::Impl(impl_block) => impls.push(impl_block),
-                ast::Decl::Function(func) => top_level_decls.insert_func(func)?,
+
+                // Ignore in this pass
+                ast::Decl::Impl(_) |
+                ast::Decl::Function(_) => {},
             }
         }
 
-        // Need to insert impls in a second pass so that all the types that these impls are for
-        // have definitely been inserted by this point
-        for impl_block in impls {
-            let ast::Impl {self_ty, methods} = impl_block;
-            let ty = match self_ty {
-                ast::Ty::Unit => prims.unit(),
-                ast::Ty::SelfType => return Err(Error::UnresolvedType {
-                    name: "Self".to_string(),
-                }),
-                ast::Ty::Named(ty_name) => top_level_decls.type_id(&ty_name)
-                    .with_context(|| UnresolvedType {name: ty_name})?,
-            };
+        // Insert everything else, now that the types are there
+        for decl in decls {
+            match decl {
+                // Already handled in the first pass
+                ast::Decl::Struct(_) => {},
 
-            for func in methods {
-                top_level_decls.insert_method(ty, func.name, func)?;
+                ast::Decl::Impl(impl_block) => {
+                    let ast::Impl {self_ty, methods} = impl_block;
+                    let ty = match self_ty {
+                        ast::Ty::Unit => prims.unit(),
+                        ast::Ty::SelfType => return Err(Error::UnresolvedType {
+                            name: "Self".to_string(),
+                        }),
+                        ast::Ty::Named(ty_name) => top_level_decls.type_id(&ty_name)
+                            .with_context(|| UnresolvedType {name: ty_name})?,
+                    };
+
+                    for func in methods {
+                        top_level_decls.insert_method(ty, func.name, func)?;
+                    }
+                },
+
+                ast::Decl::Function(func) => {
+                    top_level_decls.insert_func(func)?
+                },
             }
         }
 
