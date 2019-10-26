@@ -409,7 +409,13 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             },
 
             &ast::Expr::SelfLiteral => {
-                unimplemented!()
+                let name = "self";
+                let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
+                // Assert that the type of the variable must be equal to the type expected from the
+                // expression
+                self.constraints.ty_var_equals(var_ty_var, return_type)?;
+
+                Ok(tyir::Expr::Var(name, var_ty_var))
             },
 
             &ast::Expr::Var(name) => {
@@ -453,14 +459,24 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             return Err(Error::UnexpectedAssociatedFunction {});
         }
 
-        // Using the func.name like this works for extern methods. Not sure what user-defined
-        // methods will look like just yet. Maybe this is a hack?
-        assert!(func.is_extern,
-            "TODO: Only methods with extern declarations are currently supported");
-        let func_name = func.name;
+        let func_name = if func.is_extern {
+            // Using the func.name like this works for extern methods but not user-defined methods
+            ast::IdentPath::from(func.name)
+
+        } else {
+            // If there is a self type, use that as `Type::method`
+            match self.self_ty {
+                Some(self_ty) => {
+                    let &ty_name = self.decls.type_name(self_ty);
+                    ast::IdentPath::from(vec![ty_name, func.name])
+                },
+
+                None => ast::IdentPath::from(func.name),
+            }
+        };
 
         // Append the `self` argument as the lhs expression
-        self.append_func_call_sig(&func.sig, ast::IdentPath::from(func_name), args, Some(lhs),
+        self.append_func_call_sig(&func.sig, func_name, args, Some(lhs),
             return_type, scope)
     }
 

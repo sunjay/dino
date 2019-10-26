@@ -262,6 +262,12 @@ impl<'a> From<Ident<'a>> for IdentPath<'a> {
     }
 }
 
+impl<'a> From<Vec<Ident<'a>>> for IdentPath<'a> {
+    fn from(components: Vec<Ident<'a>>) -> Self {
+        Self {components}
+    }
+}
+
 impl<'a, 'b> From<&'b IdentPath<'a>> for String {
     fn from(path: &'b IdentPath<'a>) -> String {
         path.to_string()
