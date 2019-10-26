@@ -595,7 +595,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         args: &'a [ast::Expr<'a>],
         // An extra argument to prepend on to the list of arguments passed to the call
         // Used to implement methods with a `self` parameter
-        extra_first_arg: Option<tyir::Expr<'a>>,
+        mut extra_first_arg: Option<tyir::Expr<'a>>,
         // The type expected from the call expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
@@ -618,15 +618,23 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         let ir::FuncSig {return_type: call_return_type, params} = self.resolve_sig(sig)?;
         self.constraints.ty_var_is_ty(return_type, call_return_type)?;
 
-        let args = extra_first_arg.map(Ok).into_iter().chain(args.iter().zip(params).map(|(arg, param)| {
+        let mut args = args.iter();
+        let args = params.iter().map(|param| {
             let arg_ty_var = self.constraints.fresh_type_var();
 
+            // Includes the extra first argument up to once, only for the first param
+            let arg = extra_first_arg.take().map(Ok).unwrap_or_else(|| {
+                // This unwrap() is safe here because we already checked the number of args
+                let arg = args.next().unwrap();
+                self.append_expr(arg, arg_ty_var, scope)
+            })?;
+
             // Assert that each argument matches the corresponding parameter type
-            let ir::FuncParam {name: _, ty: param_ty} = param;
+            let &ir::FuncParam {name: _, ty: param_ty} = param;
             self.constraints.ty_var_is_ty(arg_ty_var, param_ty)?;
 
-            self.append_expr(arg, arg_ty_var, scope)
-        })).collect::<Result<Vec<_>, _>>()?;
+            Ok(arg)
+        }).collect::<Result<Vec<_>, _>>()?;
 
         Ok(tyir::CallExpr {
             func_name,
