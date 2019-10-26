@@ -76,6 +76,11 @@ pub enum Error {
     InvalidRealLitType {
         actual: TyId,
     },
+    #[snafu(display("field `{}` specified more than once", duplicate))]
+    DuplicateField {
+        /// The name of the repeated field
+        duplicate: String,
+    },
 }
 
 pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {

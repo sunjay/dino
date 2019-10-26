@@ -703,7 +703,37 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::StructLiteral<'a>, Error> {
-        unimplemented!()
+        let ast::StructLiteral {name, field_values: parsed_fields} = struct_lit;
+
+        let struct_ty = match name {
+            ast::NamedTy::SelfType => self.self_ty.context(UnresolvedType {name: "Self"})?,
+            ast::NamedTy::Named(name) => self.decls.type_id(name).context(UnresolvedType {name: *name})?,
+        };
+        // The return type of this expression is a value of the struct type
+        self.constraints.ty_var_is_ty(return_type, struct_ty)?;
+
+        // Use a loop to explicitly check for duplicate fields
+        let mut field_values = tyir::Fields::new();
+        for field in parsed_fields {
+            let ast::StructFieldValue {name: field_name, value} = field;
+            let field_ty = self.decls.field_type(struct_ty, field_name)
+                .context(UnresolvedField {field_name: *field_name, ty: struct_ty})?;
+            let field_ty_id = self.lookup_type(field_ty)
+                .expect("bug: field types should have been checked by this point");
+
+            // The type of the value expression must equal the field type
+            let rhs_ty_var = self.constraints.fresh_type_var();
+            self.constraints.ty_var_is_ty(rhs_ty_var, field_ty_id)?;
+            let value = self.append_expr(value, rhs_ty_var, scope)?;
+
+            if field_values.insert(field_name, value).is_some() {
+                return Err(Error::DuplicateField {
+                    duplicate: field_name.to_string(),
+                });
+            }
+        }
+
+        Ok(tyir::StructLiteral {ty_id: struct_ty, field_values})
     }
 
     /// Resolves all of the types in a function signature
