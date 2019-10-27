@@ -46,6 +46,10 @@ pub struct Function<'a> {
 #[derive(Debug)]
 pub struct FuncSig<'a> {
     pub return_type: TyId,
+    /// A list of the function parameters (order matters)
+    ///
+    /// The parameters are assumed to be deduplicated by this point,
+    /// so none of them will share the same name
     pub params: Vec<FuncParam<'a>>,
 }
 

@@ -1,45 +1,8 @@
-use std::collections::{HashSet, HashMap};
-use std::borrow::Borrow;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 
-use crate::ast::{Ident, Ty};
 use crate::ir;
 
-use super::{TypeInfo, Function, LiteralConstructors, Error};
-
-// Allows functions to be looked up by name without requiring us to use a HashMap and duplicating
-// the name in the key.
-#[derive(Debug)]
-struct FunctionEntry<'a> {
-    func: Function<'a>,
-}
-
-impl<'a> Hash for FunctionEntry<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.func.name.hash(state)
-    }
-}
-
-impl<'a> Borrow<Ident<'a>> for FunctionEntry<'a> {
-    fn borrow(&self) -> &Ident<'a> {
-        &self.func.name
-    }
-}
-
-// Don't want all of Function to need to implement PartialEq
-impl<'a> PartialEq for FunctionEntry<'a> {
-    fn eq(&self, other: &FunctionEntry<'a>) -> bool {
-        self.func.name == other.func.name
-    }
-}
-
-impl<'a> PartialEq<str> for FunctionEntry<'a> {
-    fn eq(&self, other: &str) -> bool {
-        self.func.name == other
-    }
-}
-
-impl<'a> Eq for FunctionEntry<'a> {}
+use super::{TypeInfo, FunctionInfo, LiteralConstructors, Error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TyId(usize);
@@ -47,25 +10,26 @@ pub struct TyId(usize);
 /// The declarations in a module, indexed by name
 #[derive(Debug, Default)]
 pub struct DeclMap<'a> {
-    functions: HashSet<FunctionEntry<'a>>,
-    types: Vec<TypeInfo<'a>>,
-    type_ids: HashMap<Ident<'a>, TyId>,
+    functions: HashMap<ir::Ident<'a>, FunctionInfo<'a>>,
+    /// A mapping from type ID (index) to the type info.
+    /// This is None for each user defined type during the first pass of name resolution.
+    /// Lookups may rely on this being Some(TypeInfo).
+    types: Vec<Option<TypeInfo<'a>>>,
+    type_ids: HashMap<ir::Ident<'a>, TyId>,
 }
 
 impl<'a> DeclMap<'a> {
-    /// Inserts a new function declaration
-    pub fn insert_func(&mut self, func: Function<'a>) -> Result<(), Error> {
-        let name = func.name;
-        let func_entry = FunctionEntry {func};
-
-        //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
-        if !self.functions.insert(func_entry) {
+    /// Reserves a type ID for the given type name without inserting any type info for it
+    pub fn reserve_type(&mut self, ty_name: ir::Ident<'a>) -> Result<TyId, Error> {
+        if let Some(_) = self.type_id(&ty_name) {
             return Err(Error::DuplicateDecl {
-                duplicate: name.to_string(),
+                duplicate: ty_name.to_string(),
             });
         }
 
-        Ok(())
+        let id = TyId(self.types.len());
+        self.types.push(None);
+        Ok(id)
     }
 
     /// Inserts a new type and returns its type ID
@@ -74,33 +38,56 @@ impl<'a> DeclMap<'a> {
     /// it can be useful for extern types to have different values for each.
     pub fn insert_type(
         &mut self,
-        ty_name: Ident<'a>,
+        ty_name: ir::Ident<'a>,
         type_info: TypeInfo<'a>,
     ) -> Result<TyId, Error> {
-        let id = TyId(self.types.len());
-        if self.type_ids.insert(ty_name, id).is_some() {
+        let id = match self.type_id(&ty_name) {
+            // Type was probably previously reserved
+            Some(id) => id,
+            None => TyId(self.types.len()),
+        };
+
+        // It's an error to overwrite type info that was already previously present
+        // However, if the type was reserved (i.e. self.types[id.0] == None), this is fine.
+        if self.type_ids.insert(ty_name, id).is_some() && self.types[id.0].is_some() {
             return Err(Error::DuplicateDecl {
                 duplicate: ty_name.to_string(),
             });
         }
 
-        self.types.push(type_info);
+        let TyId(idx) = id;
+        if idx == self.types.len() {
+            self.types.push(Some(type_info));
+        } else if idx < self.types.len() {
+            self.types[idx] = Some(type_info);
+        } else { // idx > self.types.len()
+            unreachable!();
+        }
         Ok(id)
+    }
+
+    /// Inserts a new function declaration
+    pub fn insert_func(&mut self, func_info: FunctionInfo<'a>) -> Result<(), Error> {
+        let func_name = func_info.name;
+        if self.functions.insert(func_name, func_info).is_some() {
+            return Err(Error::DuplicateDecl {
+                duplicate: func_name.to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     /// Inserts a new method for the given type
     pub fn insert_method(
         &mut self,
         id: TyId,
-        method_name: Ident<'a>,
-        method: Function<'a>,
+        method_name: ir::Ident<'a>,
+        method_info: FunctionInfo<'a>,
     ) -> Result<(), Error> {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        let methods = &mut self.types.get_mut(id).unwrap().methods;
+        let methods = &mut self.type_info_mut(id).methods;
 
-        //TODO: Disallow duplicate parameter names (either here or somewhere else in the code)
-        if methods.insert(method_name, method).is_some() {
+        if methods.insert(method_name, method_info).is_some() {
             return Err(Error::DuplicateDecl {
                 duplicate: method_name.to_string(),
             });
@@ -110,62 +97,56 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Returns the ID of the given type name
-    pub fn type_id(&self, ty: &Ident<'a>) -> Option<TyId> {
+    pub fn type_id(&self, ty: &ir::Ident<'a>) -> Option<TyId> {
         self.type_ids.get(ty).copied()
     }
 
     /// Returns the name of the given type ID
-    pub fn type_name(&self, id: TyId) -> &Ident<'a> {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        &self.types.get(id).unwrap().name
+    pub fn type_name(&self, id: TyId) -> &ir::Ident {
+        &self.type_info(id).name
     }
 
     /// Returns true if this type is extern
     pub fn type_is_extern(&self, id: TyId) -> bool {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        self.types.get(id).unwrap().is_extern
+        self.type_info(id).is_extern
     }
 
     /// Returns the literal constructors of the given type ID
     pub fn type_lit_constructors(&self, id: TyId) -> &LiteralConstructors {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        &self.types.get(id).unwrap().constructors
+        &self.type_info(id).constructors
     }
 
     /// Returns the field type corresponding to the given name, if any
-    pub fn field_type(&self, id: TyId, field_name: &Ident<'a>) -> Option<&Ty<'a>> {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        self.types.get(id).unwrap().fields.get(field_name)
+    pub fn field_type(&self, ty_id: TyId, field_name: &ir::Ident<'a>) -> Option<TyId> {
+        self.type_info(ty_id).fields.get(field_name).copied()
     }
 
     /// Returns the method function decl corresponding to the given name, if any
-    pub fn method(&self, id: TyId, method_name: &Ident<'a>) -> Option<&Function<'a>> {
-        let TyId(id) = id;
-        // unwrap() is safe because it should be impossible to create an invalid TyId
-        self.types.get(id).unwrap().methods.get(method_name)
+    pub fn method(&self, id: TyId, method_name: &ir::Ident<'a>) -> Option<&FunctionInfo<'a>> {
+        self.type_info(id).methods.get(method_name)
     }
 
     /// Returns the method signature corresponding to the given type and name, if any
-    pub fn method_sig(&self, id: TyId, method_name: &Ident<'a>) -> Option<&ir::FuncSig<'a>> {
+    pub fn method_sig(&self, id: TyId, method_name: &ir::Ident<'a>) -> Option<&ir::FuncSig<'a>> {
         self.method(id, method_name).map(|func| &func.sig)
     }
 
     /// Returns the function signature corresponding to the given name, if any
-    pub fn func_sig(&self, func_name: &Ident<'a>) -> Option<&FuncSig<'a>> {
-        self.functions.get(func_name).map(|entry| &entry.func.sig)
+    pub fn func_sig(&self, func_name: &ir::Ident<'a>) -> Option<&ir::FuncSig<'a>> {
+        self.functions.get(func_name).map(|entry| &entry.sig)
     }
 
-    /// Returns an iterator that goes through each function in the map
-    pub fn types(&self) -> impl Iterator<Item=(TyId, &TypeInfo<'a>)> {
-        self.types.iter().enumerate().map(|(id, ty_info)| (TyId(id), ty_info))
+    /// Gets the type info for the given ID
+    fn type_info(&self, id: TyId) -> &'a TypeInfo<'a> {
+        let TyId(id) = id;
+        &self.types[id]
+            .expect("bug: not all reserved type IDs were initialized to type info")
     }
 
-    /// Returns an iterator that goes through each function in the map
-    pub fn functions(&self) -> impl Iterator<Item=&Function<'a>> {
-        self.functions.iter().map(|ty_info| &ty_info.func)
+    /// Gets the type info for the given ID
+    fn type_info_mut(&mut self, id: TyId) -> &mut TypeInfo {
+        let TyId(id) = id;
+        &mut self.types[id]
+            .expect("bug: not all reserved type IDs were initialized with type info")
     }
 }
