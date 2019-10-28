@@ -21,13 +21,16 @@ pub struct DeclMap<'a> {
 impl<'a> DeclMap<'a> {
     /// Reserves a type ID for the given type name without inserting any type info for it
     pub fn reserve_type(&mut self, ty_name: ir::Ident<'a>) -> Result<TyId, Error> {
-        if let Some(_) = self.type_id(&ty_name) {
+        let id = TyId(self.types.len());
+
+        // It's an error to overwrite type info that was already previously present
+        // However, if the type was reserved (i.e. self.types[id.0] == None), this is fine.
+        if self.type_ids.insert(ty_name, id).is_some() && self.types[id.0].is_some() {
             return Err(Error::DuplicateDecl {
                 duplicate: ty_name.to_string(),
             });
         }
 
-        let id = TyId(self.types.len());
         self.types.push(None);
         Ok(id)
     }

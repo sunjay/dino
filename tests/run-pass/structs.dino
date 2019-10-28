@@ -127,7 +127,7 @@ fn test_counter() {
 
 fn test_game() {
     print_bstr(b"game");
-    let game = Game::new();
+    let game = Game::new(b"team rocket", b"team taco");
 
     game.team_a_scores();
     game.team_b_scores();

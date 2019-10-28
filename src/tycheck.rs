@@ -167,20 +167,4 @@ impl<'a> ModuleTycheck<'a> {
         let solution = constraints.solve(self.prims)?;
         Ok(ty_ir_func.apply_subst(&solution))
     }
-
-    fn resolve_ty(&self, ty: &ast::Ty<'a>, self_ty: Option<TyId>) -> Result<TyId, Error> {
-        match ty {
-            ast::Ty::Unit => Ok(self.prims.unit()),
-
-            ast::Ty::SelfType => match self_ty {
-                Some(ty_id) => Ok(ty_id),
-                None => return Err(Error::UnresolvedType {
-                    name: "Self".to_string(),
-                }),
-            },
-
-            &ast::Ty::Named(ty_name) => self.decls.type_id(&ty_name)
-                .with_context(|| UnresolvedType {name: ty_name}),
-        }
-    }
 }
