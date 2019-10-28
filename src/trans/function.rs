@@ -290,11 +290,18 @@ impl<'a> FunctionCodeGenerator<'a> {
     ) -> Result<CCallExpr, Error> {
         let ir::CallExpr {func_name, args} = expr;
 
+        let func_name = match &func_name.components[..] {
+            [type_name, method] => format!("{}__{}", type_name, method),
+            [func_name] => func_name.to_string(),
+            [] => unreachable!(),
+            _ => unimplemented!(),
+        };
+
         //TODO: In order to preserve execution order, calls should be lifted into a temporary variable
         // and the expression returned from here should be a CExpr::Var(temp_var)
         Ok(CCallExpr {
             //TODO: Mangle function names
-            mangled_func_name: func_name.to_string(),
+            mangled_func_name: func_name,
             args: args.iter()
                 .map(|expr| self.gen_expr(expr, prev_stmts))
                 .collect::<Result<Vec<_>, _>>()?,
@@ -311,6 +318,7 @@ impl<'a> FunctionCodeGenerator<'a> {
 
         // C doesn't support assignment in expression position, so the assignment must be lifted
         // into a statement
+        dbg!(assign);
         match lhs {
             ir::LValueExpr::FieldAccess(access, _) => unimplemented!(),
 
