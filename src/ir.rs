@@ -27,10 +27,24 @@ pub struct Module<'a> {
 pub struct Struct<'a> {
     /// The name of the struct
     pub name: Ident<'a>,
-    /// The fields of the struct
+    /// True if the type is meant to be linked in externally
+    pub is_extern: bool,
+    /// The fields of the struct (ignored if `is_extern` is true)
     pub fields: FieldTys<'a>,
     /// The methods of the struct
     pub methods: MethodDecls<'a>,
+}
+
+impl<'a> Struct<'a> {
+    /// Creates a new (non-extern) struct with the given fields
+    pub fn new(name: Ident<'a>, fields: FieldTys<'a>) -> Self {
+        Self {
+            name,
+            is_extern: false,
+            fields,
+            methods: MethodDecls::default(),
+        }
+    }
 }
 
 pub type FieldTys<'a> = HashMap<Ident<'a>, TyId>;
@@ -43,7 +57,7 @@ pub struct Function<'a> {
     pub body: Block<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncSig<'a> {
     pub return_type: TyId,
     /// A list of the function parameters (order matters)
@@ -53,7 +67,7 @@ pub struct FuncSig<'a> {
     pub params: Vec<FuncParam<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncParam<'a> {
     pub name: Ident<'a>,
     pub ty: TyId,

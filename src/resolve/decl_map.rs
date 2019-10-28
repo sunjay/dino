@@ -137,16 +137,16 @@ impl<'a> DeclMap<'a> {
     }
 
     /// Gets the type info for the given ID
-    fn type_info(&self, id: TyId) -> &'a TypeInfo<'a> {
+    fn type_info(&self, id: TyId) -> &TypeInfo<'a> {
         let TyId(id) = id;
-        &self.types[id]
+        self.types.get(id).unwrap().as_ref()
             .expect("bug: not all reserved type IDs were initialized to type info")
     }
 
     /// Gets the type info for the given ID
-    fn type_info_mut(&mut self, id: TyId) -> &mut TypeInfo {
+    fn type_info_mut(&mut self, id: TyId) -> &mut TypeInfo<'a> {
         let TyId(id) = id;
-        &mut self.types[id]
+        self.types.get_mut(id).unwrap().as_mut()
             .expect("bug: not all reserved type IDs were initialized with type info")
     }
 }

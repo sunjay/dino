@@ -8,7 +8,7 @@ pub use decl_map::*;
 pub use func_info::*;
 pub use type_info::*;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use snafu::{Snafu, OptionExt};
 
@@ -42,6 +42,17 @@ pub enum Error {
     },
 }
 
+/// The declarations of a module with function signatures and type fields resolved
+#[derive(Debug, Default)]
+pub struct ModuleDecls<'a> {
+    /// A mapping of type ID to its struct
+    pub types: HashMap<TyId, ir::Struct<'a>>,
+    /// A mapping of the Self type to its resolved methods
+    pub methods: HashMap<TyId, Vec<(ir::FuncSig<'a>, &'a ast::Function<'a>)>>,
+    /// A list of functions and their resolved signatures
+    pub functions: Vec<(ir::FuncSig<'a>, &'a ast::Function<'a>)>,
+}
+
 #[derive(Debug)]
 pub struct ProgramDecls<'a> {
     /// The top-level declarations in the program
@@ -51,19 +62,20 @@ pub struct ProgramDecls<'a> {
 
 impl<'a> ProgramDecls<'a> {
     /// Extracts the declarations from the given program
-    pub fn extract(prog: &ast::Program<'a>) -> Result<Self, Error> {
+    pub fn extract(prog: &'a ast::Program<'a>) -> Result<(Self, ModuleDecls<'a>), Error> {
         let mut top_level_decls = DeclMap::default();
         let prims = Primitives::new(&mut top_level_decls);
-        let program_decls = Self {top_level_decls, prims};
+        let mut program_decls = Self {top_level_decls, prims};
 
         let ast::Program {top_level_module} = prog;
         let ast::Module {decls} = top_level_module;
 
+        let mut module_decls = ModuleDecls::default();
         program_decls.reserve_types(&decls)?;
-        program_decls.resolve_fields(&decls)?;
-        program_decls.resolve_funcs_methods(&decls)?;
+        program_decls.resolve_fields(&decls, &mut module_decls)?;
+        program_decls.resolve_funcs_methods(&decls, &mut module_decls)?;
 
-        Ok(program_decls)
+        Ok((program_decls, module_decls))
     }
 
     /// Reserves type IDs for the declared types
@@ -89,7 +101,11 @@ impl<'a> ProgramDecls<'a> {
     /// Attempts to resolve all the field types in each struct
     ///
     /// Assumes that all types (user-defined or otherwise) have been given a type ID at this point.
-    fn resolve_fields(&mut self, decls: &[ast::Decl<'a>]) -> Result<(), Error> {
+    fn resolve_fields(
+        &mut self,
+        decls: &[ast::Decl<'a>],
+        module_decls: &mut ModuleDecls<'a>,
+    ) -> Result<(), Error> {
         for decl in decls {
             match decl {
                 ast::Decl::Struct(struct_decl) => {
@@ -112,6 +128,8 @@ impl<'a> ProgramDecls<'a> {
                         }
                     }
 
+                    module_decls.types.insert(self_ty, ir::Struct::new(name, fields.clone()));
+
                     let type_info = TypeInfo::new(name, fields);
                     self.top_level_decls.insert_type(name, type_info)?;
                 },
@@ -128,17 +146,22 @@ impl<'a> ProgramDecls<'a> {
     /// Stores all of the function/method signatures for all declared types
     ///
     /// Assumes that all types (user-defined or otherwise) have been inserted at this point.
-    fn resolve_funcs_methods(&mut self, decls: &[ast::Decl<'a>]) -> Result<(), Error> {
+    fn resolve_funcs_methods(
+        &mut self,
+        decls: &'a [ast::Decl<'a>],
+        module_decls: &mut ModuleDecls<'a>,
+    ) -> Result<(), Error> {
         // Insert everything else, now that the types are there
         for decl in decls {
             match decl {
-                // Already handled in the first pass
+                // Already handled in another pass
                 ast::Decl::Struct(_) => {},
 
-                ast::Decl::Impl(impl_block) => self.resolve_impl_block(impl_block)?,
+                ast::Decl::Impl(impl_block) => self.resolve_impl_block(impl_block, module_decls)?,
 
                 ast::Decl::Function(func) => {
                     let func_info = self.resolve_function(func, None)?;
+                    module_decls.functions.push((func_info.sig.clone(), func));
                     self.top_level_decls.insert_func(func_info)?;
                 },
             }
@@ -147,12 +170,20 @@ impl<'a> ProgramDecls<'a> {
         Ok(())
     }
 
-    fn resolve_impl_block(&mut self, impl_block: &ast::Impl<'a>) -> Result<(), Error> {
+    fn resolve_impl_block(
+        &mut self,
+        impl_block: &'a ast::Impl<'a>,
+        module_decls: &mut ModuleDecls<'a>,
+    ) -> Result<(), Error> {
         let ast::Impl {self_ty, methods} = impl_block;
         let self_ty = self.resolve_ty(self_ty, None)?;
 
+        // Multiple impl blocks for the same type are allowed, so we have to be careful here
+        // to not overwrite a previous impl block
+        let method_decls = module_decls.methods.entry(self_ty).or_default();
         for func in methods {
             let func_info = self.resolve_function(func, Some(self_ty))?;
+            method_decls.push((func_info.sig.clone(), func));
             self.top_level_decls.insert_method(self_ty, func.name, func_info)?;
         }
 
@@ -175,7 +206,7 @@ impl<'a> ProgramDecls<'a> {
         let return_type = self.resolve_ty(return_type, self_ty)?;
 
         // Ensure that parameter names are unique
-        let param_names = HashSet::new();
+        let mut param_names = HashSet::new();
         let params = params.iter().map(|param| {
             let ast::FuncParam {name, ty} = param;
 

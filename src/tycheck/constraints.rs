@@ -6,7 +6,7 @@ use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
 use crate::resolve::{DeclMap, TyId};
 use crate::primitives::Primitives;
-use crate::{resolve, ast, ir};
+use crate::{ast, ir};
 
 use super::{
     Error,
@@ -60,12 +60,13 @@ impl ConstraintSet {
     /// Generates a constraint set for the given function declaration. Any fresh type variables
     /// created are annotated inline into the returned `tyir::Function`
     pub fn function<'a>(
+        sig: ir::FuncSig<'a>,
         func: &'a ast::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
-        let func = FunctionConstraintGenerator::generate(None, func, decls, prims, &mut constraints)?;
+        let func = FunctionConstraintGenerator::generate(None, sig, func, decls, prims, &mut constraints)?;
         Ok((constraints, func))
     }
 
@@ -73,12 +74,13 @@ impl ConstraintSet {
     /// created are annotated inline into the returned `tyir::Function`
     pub fn method<'a>(
         self_ty: TyId,
+    sig: ir::FuncSig<'a>,
         func: &'a ast::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
         let mut constraints = Self::default();
-        let method = FunctionConstraintGenerator::generate(Some(self_ty), func, decls, prims, &mut constraints)?;
+        let method = FunctionConstraintGenerator::generate(Some(self_ty), sig, func, decls, prims, &mut constraints)?;
         Ok((constraints, method))
     }
 
@@ -155,6 +157,7 @@ struct FunctionConstraintGenerator<'a, 'b, 'c> {
 impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     pub fn generate(
         self_ty: Option<TyId>,
+        sig: ir::FuncSig<'a>,
         func: &'a ast::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &'b Primitives,
@@ -169,15 +172,18 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             func_return_type,
         };
 
-        generator.append_func(func)
+        generator.append_func(sig, func)
     }
 
     /// Appends constrains for the given function
-    fn append_func(&mut self, func: &'a resolve::Function<'a>) -> Result<tyir::Function<'a>, Error> {
-        let ast::Function {name, sig, body, is_extern} = func;
+    fn append_func(
+        &mut self,
+        sig: ir::FuncSig<'a>,
+        func: &'a ast::Function<'a>,
+    ) -> Result<tyir::Function<'a>, Error> {
+        let ast::Function {name, sig: _, body, is_extern} = func;
         assert!(!is_extern, "bug: attempt to type check an extern function");
 
-        let sig = self.resolve_sig(sig)?;
         let ir::FuncSig {return_type: func_return_type, ref params} = sig;
 
         // Assert that the function body block returns the expected type
@@ -505,10 +511,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
 
         let field_ty = self.decls.field_type(lhs_ty, field)
             .context(UnresolvedField {field_name: *field, ty: lhs_ty})?;
-
-        let field_ty_id = self.lookup_type(field_ty)
-            .expect("bug: field types should have been checked by this point");
-        self.constraints.ty_var_is_ty(return_type, field_ty_id)?;
+        self.constraints.ty_var_is_ty(return_type, field_ty)?;
 
         Ok(tyir::FieldAccess {
             lhs,
@@ -615,8 +618,8 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         }
 
         // Assert that the return type of this expression is the same as the function return type
-        let ir::FuncSig {return_type: call_return_type, params} = self.resolve_sig(sig)?;
-        self.constraints.ty_var_is_ty(return_type, call_return_type)?;
+        let ir::FuncSig {return_type: call_return_type, params} = sig;
+        self.constraints.ty_var_is_ty(return_type, *call_return_type)?;
 
         let mut args = args.iter();
         let args = params.iter().map(|param| {
@@ -726,12 +729,10 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             let ast::StructFieldValue {name: field_name, value} = field;
             let field_ty = self.decls.field_type(struct_ty, field_name)
                 .context(UnresolvedField {field_name: *field_name, ty: struct_ty})?;
-            let field_ty_id = self.lookup_type(field_ty)
-                .expect("bug: field types should have been checked by this point");
 
             // The type of the value expression must equal the field type
             let rhs_ty_var = self.constraints.fresh_type_var();
-            self.constraints.ty_var_is_ty(rhs_ty_var, field_ty_id)?;
+            self.constraints.ty_var_is_ty(rhs_ty_var, field_ty)?;
             let value = self.append_expr(value, rhs_ty_var, scope)?;
 
             if field_values.insert(field_name, value).is_some() {

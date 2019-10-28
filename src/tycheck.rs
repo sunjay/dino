@@ -6,11 +6,14 @@ mod constraints;
 mod solve;
 mod tyir;
 
+use std::sync::RwLock;
+use std::collections::HashMap;
+
 use snafu::{Snafu, OptionExt};
 use rayon::prelude::*;
 
 use crate::{ast, ir};
-use crate::resolve::{ProgramDecls, DeclMap, TyId, TypeInfo};
+use crate::resolve::{ModuleDecls, ProgramDecls, DeclMap, TyId};
 use crate::primitives::Primitives;
 
 use constraints::ConstraintSet;
@@ -83,85 +86,101 @@ pub enum Error {
     },
 }
 
-pub fn infer_and_check<'a>(decls: &'a ProgramDecls<'a>) -> Result<ir::Program<'a>, Error> {
+pub fn infer_and_check<'a>(
+    module_decls: ModuleDecls<'a>,
+    decls: &'a ProgramDecls<'a>,
+) -> Result<ir::Program<'a>, Error> {
     let ProgramDecls {top_level_decls, prims} = decls;
 
-    let top_level_module = infer_and_check_module(top_level_decls, prims)?;
+    let mod_tycheck = ModuleTycheck {
+        decls: top_level_decls,
+        prims,
+    };
+    let top_level_module = mod_tycheck.infer_and_check_module(module_decls)?;
 
     Ok(ir::Program {top_level_module})
 }
 
-fn infer_and_check_module<'a>(
-    mod_decls: &'a DeclMap<'a>,
-    prims: &Primitives,
-) -> Result<ir::Module<'a>, Error> {
-    // Able to use par_bridge here because types can be checked in any order
-    let types = mod_decls.types()
-        .par_bridge()
-        // No need to check external types
-        .filter(|(_, ty_info)| !ty_info.is_extern)
-        .map(|(ty_id, ty_info)| check_ty_decl(ty_id, ty_info, mod_decls, prims))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // Able to use par_bridge here because functions can be type checked in any order
-    let functions = mod_decls.functions()
-        .par_bridge()
-        // No need to check external functions
-        .filter(|func| !func.is_extern)
-        .map(|func| infer_and_check_func(func, mod_decls, prims))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(ir::Module {types, functions})
+#[derive(Debug)]
+struct ModuleTycheck<'a> {
+    decls: &'a DeclMap<'a>,
+    prims: &'a Primitives,
 }
 
-fn check_ty_decl<'a>(
-    self_ty: TyId,
-    ty_info: &'a TypeInfo,
-    mod_decls: &'a DeclMap<'a>,
-    prims: &Primitives,
-) -> Result<ir::Struct<'a>, Error> {
-    let TypeInfo {name, is_extern, constructors: _, fields, methods} = ty_info;
-    assert!(!is_extern, "bug: should not be type checking extern type");
+impl<'a> ModuleTycheck<'a> {
+    fn infer_and_check_module(
+        &self,
+        module_decls: ModuleDecls<'a>,
+    ) -> Result<ir::Module<'a>, Error> {
+        let ModuleDecls {types, methods, functions} = module_decls;
 
-    // Ensure that all field types actually exist
-    let fields = fields.iter().map(|(&field_name, ty)| Ok(match ty {
-        ast::Ty::Unit => (field_name, prims.unit()),
-        ast::Ty::SelfType => (field_name, self_ty),
-        &ast::Ty::Named(ty_name) => {
-            let ty_id = mod_decls.type_id(&ty_name)
-                .with_context(|| UnresolvedType {name: ty_name})?;
-            (field_name, ty_id)
-        },
-    })).collect::<Result<ir::FieldTys, _>>()?;
+        // Able to use concurrency here because types can be checked in any order
 
-    // Type check methods
-    let methods = methods.iter().map(|(&method_name, method)| {
-        let method = infer_and_check_method(self_ty, method, mod_decls, prims)?;
-        Ok((method_name, method))
-    }).collect::<Result<ir::MethodDecls, _>>()?;
+        // Creates a map of type name to its ir::Struct where the struct can be accessed concurrently
+        let types = types.into_par_iter()
+            .map(|(ty_id, struct_decl)| (ty_id, RwLock::new(struct_decl)))
+            .collect::<HashMap<_, _>>();
 
-    Ok(ir::Struct {name, fields, methods})
-}
+        methods.into_par_iter().map(|(self_ty, methods)| {
+            let types = &types;
+            methods.into_par_iter().map(move |(sig, method)| {
+                let method = self.infer_and_check_method(self_ty, sig, method)?;
+                //TODO: Is method.name right here??
+                let mut type_data = types[&self_ty].write().expect("bug: lock was poisoned");
+                type_data.methods.insert(method.name, method);
+                Ok(())
+            })
+        }).flatten().collect::<Result<(), _>>()?;
 
-fn infer_and_check_method<'a>(
-    self_ty: TyId,
-    method: &'a ast::Function<'a>,
-    mod_decls: &'a DeclMap<'a>,
-    prims: &Primitives,
-) -> Result<ir::Function<'a>, Error> {
-    // `ty_ir_method` is a copy of the function's AST with any generated type variables placed inline
-    let (constraints, ty_ir_method) = ConstraintSet::method(self_ty, method, mod_decls, prims)?;
-    let solution = constraints.solve(prims)?;
-    Ok(ty_ir_method.apply_subst(&solution))
-}
+        let functions = functions.into_par_iter()
+            // No need to check external functions
+            .filter(|(_, func)| !func.is_extern)
+            .map(|(sig, func)| self.infer_and_check_func(sig, func))
+            .collect::<Result<Vec<_>, _>>()?;
 
-fn infer_and_check_func<'a>(
-    func: &'a ast::Function<'a>,
-    mod_decls: &'a DeclMap<'a>,
-    prims: &Primitives,
-) -> Result<ir::Function<'a>, Error> {
-    // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
-    let (constraints, ty_ir_func) = ConstraintSet::function(func, mod_decls, prims)?;
-    let solution = constraints.solve(prims)?;
-    Ok(ty_ir_func.apply_subst(&solution))
+        let types = types.into_par_iter()
+            .map(|(_, struct_decl)| struct_decl.into_inner().expect("bug: lock was poisoned"))
+            .collect();
+
+        Ok(ir::Module {types, functions})
+    }
+
+    fn infer_and_check_method(
+        &self,
+        self_ty: TyId,
+        sig: ir::FuncSig<'a>,
+        method: &'a ast::Function<'a>,
+    ) -> Result<ir::Function<'a>, Error> {
+        // `ty_ir_method` is a copy of the function's AST with any generated type variables placed inline
+        let (constraints, ty_ir_method) = ConstraintSet::method(self_ty, sig, method, self.decls, self.prims)?;
+        let solution = constraints.solve(self.prims)?;
+        Ok(ty_ir_method.apply_subst(&solution))
+    }
+
+    fn infer_and_check_func(
+        &self,
+        sig: ir::FuncSig<'a>,
+        func: &'a ast::Function<'a>,
+    ) -> Result<ir::Function<'a>, Error> {
+        // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
+        let (constraints, ty_ir_func) = ConstraintSet::function(sig, func, self.decls, self.prims)?;
+        let solution = constraints.solve(self.prims)?;
+        Ok(ty_ir_func.apply_subst(&solution))
+    }
+
+    fn resolve_ty(&self, ty: &ast::Ty<'a>, self_ty: Option<TyId>) -> Result<TyId, Error> {
+        match ty {
+            ast::Ty::Unit => Ok(self.prims.unit()),
+
+            ast::Ty::SelfType => match self_ty {
+                Some(ty_id) => Ok(ty_id),
+                None => return Err(Error::UnresolvedType {
+                    name: "Self".to_string(),
+                }),
+            },
+
+            &ast::Ty::Named(ty_name) => self.decls.type_id(&ty_name)
+                .with_context(|| UnresolvedType {name: ty_name}),
+        }
+    }
 }
