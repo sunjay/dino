@@ -475,12 +475,7 @@ impl<'a> FunctionCodeGenerator<'a> {
         &ty: &TyId,
     ) -> String {
         let name = *self.mod_scope.type_name(ty);
-        if self.mod_scope.type_is_extern(ty) {
-            // Use name verbatim
-            name
-        } else {
-            // Use mangled name
-            self.mangler.get(name)
-        }.to_string()
+        //TODO: Mangle generated struct names
+        name.to_string()
     }
 }

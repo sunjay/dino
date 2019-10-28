@@ -9,7 +9,7 @@ mod tyir;
 use std::sync::RwLock;
 use std::collections::HashMap;
 
-use snafu::{Snafu, OptionExt};
+use snafu::Snafu;
 use rayon::prelude::*;
 
 use crate::{ast, ir};
