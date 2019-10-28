@@ -318,7 +318,6 @@ impl<'a> FunctionCodeGenerator<'a> {
 
         // C doesn't support assignment in expression position, so the assignment must be lifted
         // into a statement
-        dbg!(assign);
         match lhs {
             ir::LValueExpr::FieldAccess(access, _) => unimplemented!(),
 
