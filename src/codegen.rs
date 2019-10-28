@@ -9,6 +9,7 @@
 
 use std::fmt;
 
+use crate::gc_lib::GC_LIB_HEADER_FILENAME;
 use crate::runtime::RUNTIME_HEADER_FILENAME;
 use crate::dino_std::DINO_STD_HEADER_FILENAME;
 
@@ -24,7 +25,8 @@ pub struct CExecutableProgram {
 
 impl fmt::Display for CExecutableProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "#include \"{}\"\n", RUNTIME_HEADER_FILENAME)?;
+        writeln!(f, "#include \"{}\"", GC_LIB_HEADER_FILENAME)?;
+        writeln!(f, "#include \"{}\"", RUNTIME_HEADER_FILENAME)?;
         writeln!(f, "#include \"{}\"\n", DINO_STD_HEADER_FILENAME)?;
 
         let Self {functions, entry_point} = self;

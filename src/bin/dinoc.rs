@@ -41,6 +41,7 @@ fn main() -> Result<(), Terminator> {
     let tmp_dir = TempDir::new()?;
 
     // Write out the runtime and std libraries and associated header files
+    dino::gc_lib::write_gc_lib_files(tmp_dir.path())?;
     dino::runtime::write_runtime_files(tmp_dir.path())?;
     dino::dino_std::write_std_files(tmp_dir.path())?;
 
@@ -68,6 +69,7 @@ fn main() -> Result<(), Terminator> {
         .arg("-g")
         .arg(code_file_path)
         // Must link AFTER source code or else the linker will discard all the symbols
+        .arg(format!("-l{}", dino::gc_lib::GC_LIB_LIB_NAME))
         .arg(format!("-l{}", dino::runtime::RUNTIME_LIB_NAME))
         .arg(format!("-l{}", dino::dino_std::DINO_STD_LIB_NAME))
         .arg(format!("-L{}", tmp_dir.path().display()))

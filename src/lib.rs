@@ -7,6 +7,7 @@ pub mod primitives;
 pub mod tycheck;
 pub mod runtime;
 pub mod dino_std;
+pub mod gc_lib;
 
 use std::fs;
 use std::io;
