@@ -471,15 +471,9 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             ast::IdentPath::from(func.name)
 
         } else {
-            // If there is a self type, use that as `Type::method`
-            match self.self_ty {
-                Some(self_ty) => {
-                    let &ty_name = self.decls.type_name(self_ty);
-                    ast::IdentPath::from(vec![ty_name, func.name])
-                },
-
-                None => ast::IdentPath::from(func.name),
-            }
+            // Use the lhs type to call the method as `Type::method`
+            let &ty_name = self.decls.type_name(lhs_ty);
+            ast::IdentPath::from(vec![ty_name, func.name])
         };
 
         // Append the `self` argument as the lhs expression
