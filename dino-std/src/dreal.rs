@@ -1,4 +1,12 @@
+use lazy_static::lazy_static;
+
+use crate::unique::Unique;
+use crate::alloc::{alloc_no_ptr, alloc_static};
 use crate::dunit::DUnit;
+
+lazy_static! {
+    static ref ZERO: Unique<DReal> = unsafe { alloc_static(DReal(0.0)) };
+}
 
 /// The dino real number type
 ///
@@ -6,48 +14,45 @@ use crate::dunit::DUnit;
 #[repr(transparent)]
 pub struct DReal(f64);
 
-impl From<f64> for DReal {
-    fn from(x: f64) -> Self {
-        DReal(x)
-    }
-}
-
 impl DReal {
-    pub fn zero() -> Self {
-        DReal(0.0)
+    fn new(value: f64) -> Unique<Self> {
+        unsafe {
+            alloc_no_ptr(DReal(value))
+        }
+    }
+
+    pub fn zero() -> Unique<Self> {
+        *ZERO
     }
 }
 
 /// Creates a new DReal from an integer literal
 #[no_mangle]
-pub extern fn __dino__DReal_from_int_literal(value: i64) -> DReal {
-    DReal(value as f64)
+pub extern fn __dino__DReal_from_int_literal(value: i64) -> Unique<DReal> {
+    DReal::new(value as f64)
 }
 
 /// Creates a new DReal from a real number literal
 #[no_mangle]
-pub extern fn __dino__DReal_from_real_literal(value: f64) -> DReal {
-    DReal(value)
+pub extern fn __dino__DReal_from_real_literal(value: f64) -> Unique<DReal> {
+    DReal::new(value)
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn add_real(x: DReal, y: DReal) -> DReal {
-    DReal(x.0 + y.0)
+pub extern fn add_real(x: &DReal, y: &DReal) -> Unique<DReal> {
+    DReal::new(x.0 + y.0)
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn sub_real(x: DReal, y: DReal) -> DReal {
-    DReal(x.0 - y.0)
+pub extern fn sub_real(x: &DReal, y: &DReal) -> Unique<DReal> {
+    DReal::new(x.0 - y.0)
 }
 
-//TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
-pub extern fn print_real(x: DReal) -> DUnit {
+pub extern fn print_real(x: &DReal) -> Unique<DUnit> {
     unsafe {
         super::printf(b"%g\n\0" as *const u8, x.0);
     }
 
-    DUnit::default()
+    DUnit::new()
 }

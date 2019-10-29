@@ -18,6 +18,7 @@ panic = "abort"
 
 [dependencies]
 panic-halt = "0.2.0"
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
 
 [dependencies.libc]
 version = "0.2"
