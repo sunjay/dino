@@ -4,7 +4,7 @@ mod dunit;
 mod dbool;
 mod dint;
 mod dreal;
-// mod dcomplex;
+mod dcomplex;
 // mod dbstr;
 
 mod unique;
@@ -14,7 +14,7 @@ pub use dunit::*;
 pub use dbool::*;
 pub use dint::*;
 pub use dreal::*;
-// pub use dcomplex::*;
+pub use dcomplex::*;
 // pub use dbstr::*;
 
 // Needed to define #[panic_handler]

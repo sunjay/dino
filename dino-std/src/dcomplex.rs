@@ -1,3 +1,5 @@
+use crate::unique::Unique;
+use crate::alloc::alloc_struct;
 use crate::dunit::DUnit;
 use crate::dreal::{self, DReal};
 
@@ -6,97 +8,90 @@ use crate::dreal::{self, DReal};
 /// Two 64-bit floating point numbers
 #[repr(C)]
 pub struct DComplex {
-    real: DReal,
-    imag: DReal,
+    real: Unique<DReal>,
+    imag: Unique<DReal>,
 }
 
 /// Creates a new DComplex from an integer literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_int_literal(value: i64) -> DComplex {
-    DComplex {
+pub extern fn __dino__DComplex_from_int_literal(value: i64) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
         real: dreal::__dino__DReal_from_int_literal(value),
         imag: DReal::zero(),
-    }
+    }) }
 }
 
 /// Creates a new DComplex from a real number literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_real_literal(value: f64) -> DComplex {
-    DComplex {
+pub extern fn __dino__DComplex_from_real_literal(value: f64) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
         real: dreal::__dino__DReal_from_real_literal(value),
         imag: DReal::zero(),
-    }
+    }) }
 }
 
 /// Creates a new DComplex from a complex number literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_complex_literal(value: f64) -> DComplex {
-    DComplex {
+pub extern fn __dino__DComplex_from_complex_literal(value: f64) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
         real: DReal::zero(),
         imag: dreal::__dino__DReal_from_real_literal(value),
-    }
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn add_complex(x: DComplex, y: DComplex) -> DComplex {
-    DComplex {
-        real: dreal::add_real(x.real, y.real),
-        imag: dreal::add_real(x.imag, y.imag),
-    }
+pub extern fn add_complex(x: &DComplex, y: &DComplex) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::add_real(x.real.as_ref(), y.real.as_ref()),
+        imag: dreal::add_real(x.imag.as_ref(), y.imag.as_ref()),
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn add_real_complex(x: DReal, y: DComplex) -> DComplex {
-    DComplex {
-        real: dreal::add_real(x, y.real),
+pub extern fn add_real_complex(x: &DReal, y: &DComplex) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::add_real(x, y.real.as_ref()),
         imag: y.imag,
-    }
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn add_complex_real(x: DComplex, y: DReal) -> DComplex {
-    DComplex {
-        real: dreal::add_real(x.real, y),
+pub extern fn add_complex_real(x: &DComplex, y: &DReal) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::add_real(x.real.as_ref(), y),
         imag: x.imag,
-    }
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn sub_complex(x: DComplex, y: DComplex) -> DComplex {
-    DComplex {
-        real: dreal::sub_real(x.real, y.real),
-        imag: dreal::sub_real(x.imag, y.imag),
-    }
+pub extern fn sub_complex(x: &DComplex, y: &DComplex) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::sub_real(x.real.as_ref(), y.real.as_ref()),
+        imag: dreal::sub_real(x.imag.as_ref(), y.imag.as_ref()),
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn sub_real_complex(x: DReal, y: DComplex) -> DComplex {
-    DComplex {
-        real: dreal::sub_real(x, y.real),
+pub extern fn sub_real_complex(x: &DReal, y: &DComplex) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::sub_real(x, y.real.as_ref()),
         imag: y.imag,
-    }
+    }) }
 }
 
-//TODO: These parameters will eventually be pointers (since the values are meant to be borrowed).
 #[no_mangle]
-pub extern fn sub_complex_real(x: DComplex, y: DReal) -> DComplex {
-    DComplex {
-        real: dreal::sub_real(x.real, y),
+pub extern fn sub_complex_real(x: &DComplex, y: &DReal) -> Unique<DComplex> {
+    unsafe { alloc_struct(DComplex {
+        real: dreal::sub_real(x.real.as_ref(), y),
         imag: x.imag,
-    }
+    }) }
 }
 
-//TODO: This parameter will eventually be a pointer (since the value is meant to be borrowed).
 #[no_mangle]
-pub extern fn print_complex(x: DComplex) -> DUnit {
+pub extern fn print_complex(x: &DComplex) -> Unique<DUnit> {
     unsafe {
-        super::printf(b"%g + %gi\n\0" as *const u8, x.real, x.imag);
+        super::printf(b"%g + %gi\n\0" as *const u8, x.real.as_ref(), x.imag.as_ref());
     }
 
-    DUnit::default()
+    DUnit::new()
 }
