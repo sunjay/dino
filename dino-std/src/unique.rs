@@ -27,6 +27,7 @@ use core::fmt;
 ///
 /// Unlike `*mut T`, `Unique<T>` is covariant over `T`. This should always be correct
 /// for any type which upholds Unique's aliasing requirements.
+#[repr(transparent)]
 pub struct Unique<T: ?Sized> {
     pointer: NonNull<T>,
     // NOTE: this marker has no consequences for variance, but is necessary
