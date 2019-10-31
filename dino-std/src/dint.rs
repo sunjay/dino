@@ -17,8 +17,12 @@ impl DInt {
         }
     }
 
-    pub fn value<T: From<i64>>(self) -> T {
-        T::from(self.0)
+    pub fn value(self) -> i64 {
+        self.0
+    }
+
+    pub fn map(self, f: impl FnOnce(i64) -> i64) -> Self {
+        DInt(f(self.0))
     }
 }
 
