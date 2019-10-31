@@ -14,7 +14,51 @@ use crate::runtime::RUNTIME_HEADER_FILENAME;
 use crate::dino_std::DINO_STD_HEADER_FILENAME;
 
 #[derive(Debug)]
+pub struct CStruct {
+    /// The mangled name of the struct.
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub mangled_name: String,
+    pub fields: Vec<CStructField>,
+}
+
+impl fmt::Display for CStruct {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {mangled_name, fields} = self;
+
+        writeln!(f, "struct {} {{", mangled_name)?;
+
+        for field in fields {
+            writeln!(f, "{},", field)?;
+        }
+
+        write!(f, "}}")
+    }
+}
+
+#[derive(Debug)]
+pub struct CStructField {
+    /// The mangled name of the struct field.
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub mangled_name: String,
+    /// The type of the struct field
+    pub ty: String,
+}
+
+impl fmt::Display for CStructField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {mangled_name, ty} = self;
+        write!(f, "{}: {}", mangled_name, ty)
+    }
+}
+
+#[derive(Debug)]
 pub struct CExecutableProgram {
+    /// The structs generated for the program
+    pub structs: Vec<CStruct>,
     /// The list of functions, not including the entry point
     ///
     /// Each of these MUST have a unique name
@@ -29,7 +73,11 @@ impl fmt::Display for CExecutableProgram {
         writeln!(f, "#include \"{}\"", RUNTIME_HEADER_FILENAME)?;
         writeln!(f, "#include \"{}\"\n", DINO_STD_HEADER_FILENAME)?;
 
-        let Self {functions, entry_point} = self;
+        let Self {structs, functions, entry_point} = self;
+
+        for struct_decl in structs {
+            writeln!(f, "{}", struct_decl)?;
+        }
 
         // Output forward declarations so we don't have to worry about outputting the functions in
         // a specific order

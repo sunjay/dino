@@ -28,15 +28,29 @@ pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CE
 
     let ProgramDecls {top_level_decls: mod_scope, prims} = program_scope;
 
+    let mut structs = Vec::new();
+    let methods = gen_types(types, mod_scope, prims, &mut structs)?;
+
     let mut entry_point = None;
-    let functions = gen_functions(functions, mod_scope, prims, &mut entry_point)?;
+    let mut functions = gen_functions(functions, mod_scope, prims, &mut entry_point)?;
+    functions.extend(methods);
 
     let entry_point = match entry_point {
         Some(entry_point) => entry_point,
         None => return Err(Error::NoEntryPoint),
     };
 
-    Ok(CExecutableProgram {functions, entry_point})
+    Ok(CExecutableProgram {structs, functions, entry_point})
+}
+
+/// Returns the functions generated for the methods of all the types
+fn gen_types(
+    types: &[ir::Struct],
+    mod_scope: &DeclMap,
+    prims: &Primitives,
+    structs: &mut Vec<CStruct>,
+) -> Result<Vec<CFunction>, Error> {
+    unimplemented!()
 }
 
 fn gen_functions(
