@@ -12,18 +12,18 @@ pub use crate::ast::{Ident, IdentPath};
 
 use crate::resolve::TyId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program<'a> {
     pub top_level_module: Module<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Module<'a> {
     pub types: Vec<Struct<'a>>,
     pub functions: Vec<Function<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Struct<'a> {
     /// The name of the struct
     pub name: Ident<'a>,
@@ -50,7 +50,7 @@ impl<'a> Struct<'a> {
 pub type FieldTys<'a> = HashMap<Ident<'a>, TyId>;
 pub type MethodDecls<'a> = HashMap<Ident<'a>, Function<'a>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function<'a> {
     pub name: Ident<'a>,
     pub sig: FuncSig<'a>,
@@ -73,7 +73,7 @@ pub struct FuncParam<'a> {
     pub ty: TyId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block<'a> {
     pub stmts: Vec<Stmt<'a>>,
     /// The final statement of the block, used as the return value of the block
@@ -84,7 +84,7 @@ pub struct Block<'a> {
     pub ret_ty: TyId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt<'a> {
     Cond(Cond<'a>),
     WhileLoop(WhileLoop<'a>),
@@ -92,7 +92,7 @@ pub enum Stmt<'a> {
     Expr(Expr<'a>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhileLoop<'a> {
     /// The condition for which the loop is expected to continue
     pub cond: Expr<'a>,
@@ -100,7 +100,7 @@ pub struct WhileLoop<'a> {
     pub body: Block<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
     pub ident: Ident<'a>,
@@ -110,7 +110,7 @@ pub struct VarDecl<'a> {
     pub expr: Expr<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr<'a> {
     VarAssign(Box<VarAssign<'a>>, TyId),
     FieldAccess(Box<FieldAccess<'a>>, TyId),
@@ -149,13 +149,13 @@ impl<'a> Expr<'a> {
 }
 
 /// Expressions that can be on the left-hand side of assignment
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LValueExpr<'a> {
     FieldAccess(FieldAccess<'a>, TyId),
     Var(Ident<'a>, TyId),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarAssign<'a> {
     /// The left-hand expression to assign a value to
     pub lhs: LValueExpr<'a>,
@@ -164,7 +164,7 @@ pub struct VarAssign<'a> {
 }
 
 /// A field access in the form `<expr> . <ident>`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FieldAccess<'a> {
     /// The expression of the left-hand side of the field access
     pub lhs: Expr<'a>,
@@ -172,7 +172,7 @@ pub struct FieldAccess<'a> {
     pub field: Ident<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cond<'a> {
     /// A list of (condition, body) that corresponds to:
     /// if cond1 { body1 } else if cond2 { body2 } ...
@@ -183,7 +183,7 @@ pub struct Cond<'a> {
     pub else_body: Option<Block<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallExpr<'a> {
     /// The name of the function to call
     pub func_name: IdentPath<'a>,
@@ -191,7 +191,7 @@ pub struct CallExpr<'a> {
     pub args: Vec<Expr<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructLiteral<'a> {
     pub ty_id: TyId,
     pub field_values: Fields<'a>,

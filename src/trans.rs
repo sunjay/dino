@@ -47,10 +47,33 @@ pub fn executable(prog: &ir::Program, program_scope: &ProgramDecls) -> Result<CE
 fn gen_types(
     types: &[ir::Struct],
     mod_scope: &DeclMap,
-    prims: &Primitives,
+    _prims: &Primitives,
     structs: &mut Vec<CStruct>,
 ) -> Result<Vec<CFunction>, Error> {
-    unimplemented!()
+    types.iter().map(|struct_decl| {
+        let ir::Struct {name, is_extern: _, fields, methods} = struct_decl;
+
+        //TODO: Mangle struct names based on `is_extern`
+        let struct_mangled_name = name.to_string();
+        structs.push(CStruct {
+            mangled_name: struct_mangled_name.clone(),
+            fields: fields.iter().map(|(name, &ty_id)| CStructField {
+                //TODO: Mangle struct field names
+                mangled_name: name.to_string(),
+                //TODO: Get mangled name
+                ty: mod_scope.type_name(ty_id).to_string(),
+            }).collect(),
+        });
+
+        methods.iter().map(move |(method_name, func)| {
+            let func = ir::Function {
+                //TODO: Figure out a better way to generate this name
+                name: &format!("{}__{}", struct_mangled_name, method_name),
+                ..func.clone()
+            };
+            FunctionCodeGenerator::generate(&func, mod_scope)
+        })
+    }).flatten().collect()
 }
 
 fn gen_functions(
