@@ -162,14 +162,7 @@ impl<'a> FunctionCodeGenerator<'a> {
         let (cond, body) = conds.first().expect("bug: codegen received empty conditional");
         let cond_expr = self.gen_expr(cond, prev_stmts)?;
         // Coerce the result of the condition into a boolean
-        let cond_expr = CExpr::Call(CCallExpr {
-            //TODO: Mangle function names
-            mangled_func_name: self.mod_scope.type_lit_constructors(cond.ty_id()).coerce_bool
-                .as_ref()
-                .expect("bug: no bool coercion defined for type that type checked to bool")
-                .to_string(),
-            args: vec![cond_expr],
-        });
+        let cond_expr = self.gen_bool_coercion(cond_expr, cond.ty_id());
 
         let if_body = self.gen_block(body, block_behaviour.clone())?;
 
@@ -204,6 +197,8 @@ impl<'a> FunctionCodeGenerator<'a> {
             let mut else_if_stmts = Vec::new();
 
             let cond_expr = self.gen_expr(cond, &mut else_if_stmts)?;
+            // Coerce the result of the condition into a boolean
+            let cond_expr = self.gen_bool_coercion(cond_expr, cond.ty_id());
             let if_body = self.gen_block(body, block_behaviour.clone())?;
 
             else_if_stmts.push(CStmt::Cond(CCond {cond_expr, if_body, else_body}));
@@ -224,6 +219,8 @@ impl<'a> FunctionCodeGenerator<'a> {
         // of the loop body so that it can be generated over and over again
         let mut cond_stmts = Vec::new();
         let cond_expr = self.gen_expr(cond, &mut cond_stmts)?;
+        // Coerce the result of the condition into a boolean
+        let cond_expr = self.gen_bool_coercion(cond_expr, cond.ty_id());
         // Stop looping if the condition is false
         cond_stmts.push(CStmt::Cond(CCond {
             cond_expr,
@@ -499,6 +496,23 @@ impl<'a> FunctionCodeGenerator<'a> {
                 .to_string(),
             args: Vec::new(),
         }))
+    }
+
+    /// Coerce an expression to a boolean
+    fn gen_bool_coercion(
+        &self,
+        expr: CExpr,
+        ty: TyId,
+    ) -> CExpr {
+        let lit_constructors = self.mod_scope.type_lit_constructors(ty);
+        CExpr::Call(CCallExpr {
+            //TODO: Mangle function names
+            mangled_func_name: lit_constructors.coerce_bool
+                .as_ref()
+                .expect("bug: no bool coercion defined for type that type checked to bool")
+                .to_string(),
+            args: vec![expr],
+        })
     }
 
     fn lookup_type_name(
