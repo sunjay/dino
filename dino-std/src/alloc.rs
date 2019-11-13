@@ -29,6 +29,18 @@ extern {
     pub(crate) fn gc_malloc_uncollectable(nbytes: libc::size_t) -> *mut libc::c_void;
 }
 
+/// Allocates an array of pointers to the given type. The array will be zero-initialized and then
+/// a pointer to that array will be returned.
+pub(crate) unsafe fn alloc_array<T>(len: usize) -> Unique<Unique<T>> {
+    let value_ptr = gc_malloc(mem::size_of::<Unique<T>>()) as *mut Unique<T>;
+    if value_ptr.is_null() {
+        //TODO: Error handling: ran out of memory
+        libc::exit(1);
+    }
+
+    Unique::new_unchecked(value_ptr)
+}
+
 /// Allocates a value of the given type, initializes it, and then returns the pointer to that value
 ///
 /// Note that this value can contain other pointers
