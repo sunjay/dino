@@ -27,6 +27,12 @@ pub extern fn __dino__DBool_from_bool_literal(value: bool) -> Unique<DBool> {
     DBool::new(value)
 }
 
+/// Creates a C bool from a DBool
+#[no_mangle]
+pub extern fn __dino__DBool_coerce_bool(x: &DBool) -> bool {
+    x.0
+}
+
 #[no_mangle]
 pub extern fn bool_eq(x: &DBool, y: &DBool) -> Unique<DBool> {
     DBool::new(x.0 == y.0)
