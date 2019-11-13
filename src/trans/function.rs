@@ -38,7 +38,7 @@ impl<'a> FunctionCodeGenerator<'a> {
         // Add each parameter to the mangler so it can be used from within the function body
         let cparams = params.iter().map(|ir::FuncParam {name, ty}| CFunctionParam {
             mangled_name: self.mangler.mangle_name(name).to_string(),
-            ty: self.lookup_type_name(ty),
+            ty: CTy::pointer(self.lookup_type_name(ty)),
         }).collect();
 
         let sig = CFunctionSignature {
@@ -161,6 +161,16 @@ impl<'a> FunctionCodeGenerator<'a> {
         // It guaranteed that there is at least one condition
         let (cond, body) = conds.first().expect("bug: codegen received empty conditional");
         let cond_expr = self.gen_expr(cond, prev_stmts)?;
+        // Coerce the result of the condition into a boolean
+        let cond_expr = CExpr::Call(CCallExpr {
+            //TODO: Mangle function names
+            mangled_func_name: self.mod_scope.type_lit_constructors(cond.ty_id()).coerce_bool
+                .as_ref()
+                .expect("bug: no bool coercion defined for type that type checked to bool")
+                .to_string(),
+            args: vec![cond_expr],
+        });
+
         let if_body = self.gen_block(body, block_behaviour.clone())?;
 
         // Put any else-ifs into the else body
@@ -227,7 +237,7 @@ impl<'a> FunctionCodeGenerator<'a> {
 
         Ok(CVarDecl {
             mangled_name: self.mangler.mangle_name(ident).to_string(),
-            ty: self.lookup_type_name(ty),
+            ty: CTy::pointer(self.lookup_type_name(ty)),
             init_expr: CInitializerExpr::Expr(self.gen_expr(expr, prev_stmts)?)
         })
     }
@@ -269,7 +279,7 @@ impl<'a> FunctionCodeGenerator<'a> {
         let result_var_mangled_name = self.mangler.fresh_mangled_name();
         prev_stmts.push(CStmt::TempVarDecl(CTempVarDecl {
             mangled_name: result_var_mangled_name.clone(),
-            ty: self.lookup_type_name(ret_ty),
+            ty: CTy::pointer(self.lookup_type_name(ret_ty)),
             init_expr: None,
         }));
 

@@ -27,13 +27,13 @@ impl fmt::Display for CStruct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {mangled_name, fields} = self;
 
-        writeln!(f, "struct {} {{", mangled_name)?;
+        writeln!(f, "typedef struct {{")?;
 
         for field in fields {
             writeln!(f, "{},", field)?;
         }
 
-        write!(f, "}}")
+        write!(f, "}} {}", mangled_name)
     }
 }
 
@@ -45,7 +45,7 @@ pub struct CStructField {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type of the struct field
-    pub ty: String,
+    pub ty: CTy,
 }
 
 impl fmt::Display for CStructField {
@@ -109,7 +109,8 @@ impl fmt::Display for CEntryPoint {
 
         // The dino entry point returns unit, but the C entry point needs to return int.
         // This generates a special function which is then called from the C entry point.
-        writeln!(f, "DUnit __dino__main(void) {{")?;
+        //TODO: Do not hard code DUnit here
+        writeln!(f, "DUnit* __dino__main(void) {{")?;
         writeln!(f, "{}", body)?;
         writeln!(f, "}}")?;
 
@@ -175,7 +176,7 @@ pub struct CFunctionParam {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type of the function parameter
-    pub ty: String,
+    pub ty: CTy,
 }
 
 impl fmt::Display for CFunctionParam {
@@ -261,7 +262,7 @@ pub struct CVarDecl {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type of the variable
-    pub ty: String,
+    pub ty: CTy,
     /// The initializer expression for this variable
     pub init_expr: CInitializerExpr,
 }
@@ -303,7 +304,7 @@ pub struct CTempVarDecl {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type of the variable
-    pub ty: String,
+    pub ty: CTy,
     /// The initializer expression for this variable
     pub init_expr: Option<CInitializerExpr>,
 }
@@ -383,6 +384,8 @@ impl fmt::Display for CExpr {
 #[derive(Debug)]
 pub struct CCond {
     /// The conditional expression that will be branched on
+    ///
+    /// Note that this expression should evaluate to a C bool value
     pub cond_expr: CExpr,
     /// The statements to execute if the condition is true
     pub if_body: CStmts,
@@ -427,6 +430,27 @@ impl fmt::Display for CCallExpr {
         let Self {mangled_func_name, args} = self;
         write!(f, "{}({})", mangled_func_name, Commas {values: args, empty: ""})?;
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum CTy {
+    Named {mangled_name: String},
+    Pointer(Box<CTy>),
+}
+
+impl CTy {
+    pub fn pointer(mangled_name: String) -> Self {
+        CTy::Pointer(Box::new(CTy::Named {mangled_name}))
+    }
+}
+
+impl fmt::Display for CTy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CTy::Named {mangled_name} => write!(f, "{}", mangled_name),
+            CTy::Pointer(ty) => write!(f, "{}*", ty),
+        }
     }
 }
 

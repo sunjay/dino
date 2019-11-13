@@ -61,7 +61,7 @@ fn gen_types(
                 //TODO: Mangle struct field names
                 mangled_name: name.to_string(),
                 //TODO: Get mangled name
-                ty: mod_scope.type_name(ty_id).to_string(),
+                ty: CTy::pointer(mod_scope.type_name(ty_id).to_string()),
             }).collect(),
         });
 

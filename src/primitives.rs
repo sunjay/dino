@@ -58,6 +58,7 @@ primitives! {
             is_extern: true,
             constructors: LiteralConstructors {
                 bool_literal_constructor: Some("__dino__DBool_from_bool_literal"),
+                coerce_bool: Some("__dino__DBool_coerce_bool"),
                 ..LiteralConstructors::default()
             },
             fields: HashMap::default(),

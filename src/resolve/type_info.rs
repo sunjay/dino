@@ -61,6 +61,10 @@ pub struct LiteralConstructors<'a> {
     ///
     /// Only required if a boolean literal (true, false) may type check to this type
     pub bool_literal_constructor: Option<ir::Ident<'a>>,
+    /// (optional) A function that returns a bool when given a value of the extern type
+    ///
+    /// Only required if a boolean literal (true, false) may type check to this type
+    pub coerce_bool: Option<ir::Ident<'a>>,
 
     /// (optional) A function that takes an int64_t and returns a value of the extern type
     ///
