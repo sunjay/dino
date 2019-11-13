@@ -1,3 +1,4 @@
+use std::env;
 use std::io::Write;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,13 @@ fn main() -> Result<(), Terminator> {
     // Default output path is the input path without its stem
     let output_path = output_path.as_ref().map(|p| p.as_path())
         .unwrap_or_else(|| Path::new(program_stem));
+    // Append the current directory to the output path if necessary
+    let output_path = if output_path.is_absolute() {
+        output_path.to_path_buf()
+    } else {
+        let current_dir = env::current_dir().map_err(|_| "Could not access current directory")?;
+        current_dir.join(output_path)
+    };
 
     //TODO: Add proper logging
     //TODO: Add support for outputing the generated C code (CLI flag)
@@ -62,6 +70,7 @@ fn main() -> Result<(), Terminator> {
         "-Wno-unused-value"];
     // Run the C compiler and copy the result back
     let status = Command::new("clang")
+        .current_dir(tmp_dir.path())
         .arg("-std=c99")
         // Maximum optimization level
         .arg("-O3")
@@ -69,10 +78,13 @@ fn main() -> Result<(), Terminator> {
         .arg("-g")
         .arg(code_file_path)
         // Must link AFTER source code or else the linker will discard all the symbols
-        .arg(format!("-l{}", dino::gc_lib::GC_LIB_LIB_NAME))
-        .arg(format!("-l{}", dino::runtime::RUNTIME_LIB_NAME))
+        // These must be linked in *reverse* dependency order
         .arg(format!("-l{}", dino::dino_std::DINO_STD_LIB_NAME))
-        .arg(format!("-L{}", tmp_dir.path().display()))
+        .arg(format!("-l{}", dino::runtime::RUNTIME_LIB_NAME))
+        .arg(format!("-l{}", dino::gc_lib::GC_LIB_LIB_NAME))
+        .arg("-lpthread")
+        // Search for libraries in the current directory (the temp dir)
+        .arg("-L.")
         .arg("-o")
         .arg(output_path)
         .status()?;
