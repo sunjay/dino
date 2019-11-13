@@ -44,7 +44,7 @@ impl<'a> FunctionCodeGenerator<'a> {
         let sig = CFunctionSignature {
             //TODO: Mangle function names
             mangled_name: name.to_string(),
-            return_type: self.lookup_type_name(return_type),
+            return_type: CTy::pointer(self.lookup_type_name(return_type)),
             params: cparams,
         };
 

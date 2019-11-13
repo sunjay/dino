@@ -147,7 +147,7 @@ pub struct CFunctionSignature {
     /// what it was in the original program to something more appropriate for code generation.
     pub mangled_name: String,
     /// The type returned from the function
-    pub return_type: String,
+    pub return_type: CTy,
     /// The parameters of the function
     pub params: Vec<CFunctionParam>,
 }
