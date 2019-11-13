@@ -75,7 +75,7 @@ impl<'a> FunctionCodeGenerator<'a> {
                     CStmt::Cond(self.gen_cond_stmt(cond, &mut cstmts, BlockBehaviour::Ignore)?)
                 },
                 ir::Stmt::WhileLoop(wloop) => {
-                    CStmt::WhileLoop(self.gen_while_loop(wloop, &mut cstmts)?)
+                    CStmt::Loop(self.gen_while_loop(wloop, &mut cstmts)?)
                 },
                 ir::Stmt::VarDecl(var_decl) => {
                     CStmt::VarDecl(self.gen_var_decl(var_decl, &mut cstmts)?)
@@ -216,16 +216,30 @@ impl<'a> FunctionCodeGenerator<'a> {
     fn gen_while_loop(
         &mut self,
         wloop: &ir::WhileLoop,
-        prev_stmts: &mut Vec<CStmt>,
-    ) -> Result<CWhileLoop, Error> {
+        _prev_stmts: &mut Vec<CStmt>,
+    ) -> Result<CInfiniteLoop, Error> {
         let ir::WhileLoop {cond, body} = wloop;
 
-        let cond = self.gen_expr(cond, prev_stmts)?;
+        // We want the entire conditional expression, including any generated prev_stmts to be part
+        // of the loop body so that it can be generated over and over again
+        let mut cond_stmts = Vec::new();
+        let cond_expr = self.gen_expr(cond, &mut cond_stmts)?;
+        // Stop looping if the condition is false
+        cond_stmts.push(CStmt::Cond(CCond {
+            cond_expr,
+            // This is somewhat hacky, but it works
+            if_body: CStmts::default(),
+            else_body: Some(CStmts(vec![CStmt::BreakLoop])),
+        }));
+
         // Ignore the result of the body because it is currently guaranteed to be unit. We don't
         // support returning values from loops yet.
-        let body = self.gen_block(body, BlockBehaviour::Ignore)?;
+        let while_body = self.gen_block(body, BlockBehaviour::Ignore)?;
 
-        Ok(CWhileLoop {cond, body})
+        // The body of the loop is the conditional expression statements plus the while loop body
+        let mut body = CStmts(cond_stmts);
+        body.extend(while_body);
+        Ok(CInfiniteLoop {body})
     }
 
     fn gen_var_decl(
