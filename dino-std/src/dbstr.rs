@@ -141,25 +141,30 @@ pub extern fn print_bstr(s: &DBStr) -> Unique<DUnit> {
     DUnit::new()
 }
 
-// #[no_mangle]
-// pub extern fn read_line_bstr() -> Unique<DBStr> {
-//     //TODO: Free memory allocated by getline
-//     // See: http://man7.org/linux/man-pages/man3/getline.3.html
-//     let mut data = ptr::null_mut();
-//     // Note that the allocated buffer length can often be much bigger than the actual length of
-//     // characters on the line
-//     let mut buffer_len = 0usize;
-//     //TODO: lock stdin
-//     let length = unsafe { getline(&mut data as *mut _, &mut buffer_len as *mut _, super::stdin) };
-//     if length == -1 {
-//         //TODO: Error handling
-//         unsafe { libc::exit(0); }
-//     }
-//
-//     // Ignore the trailing newline. Note that because the newline is always read, `length` is
-//     // guaranteed to be greater than or equal to 1 before this line.
-//     let length = (length - 1) as usize;
-//     //TODO: We should truncate the data buffer to save memory if buffer_len >> length
-//
-//     DBStr {data: data as *mut u8, length}
-// }
+#[no_mangle]
+pub extern fn read_line_bstr() -> Unique<DBStr> {
+    // See: http://man7.org/linux/man-pages/man3/getline.3.html
+    let mut data = ptr::null_mut();
+    // Note that the allocated buffer length can often be much bigger than the actual length of
+    // characters on the line
+    let mut buffer_len = 0usize;
+    //TODO: lock stdin
+    let length = unsafe { libc::getline(
+        &mut data as *mut _,
+        &mut buffer_len as *mut _,
+        super::stdin,
+    ) };
+
+    if length == -1 {
+        //TODO: Error handling
+        unsafe { libc::exit(0); }
+    }
+
+    // Ignore the trailing newline. Note that because the newline is always read, `length` is
+    // guaranteed to be greater than or equal to 1 before this line.
+    let length = (length - 1) as usize;
+
+    //TODO: Free memory allocated by getline
+    //TODO: We should make sure the data buffer has size min(length, buffer_len) to save memory
+    DBStr::copy_ptr(data as *mut u8, length)
+}
