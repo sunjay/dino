@@ -23,6 +23,7 @@ fn compile_fail() -> io::Result<()> {
             return Ok(());
         }
 
+        println!("[compile-fail] Compiling {}", entry_path.display());
         match compile(&entry_path) {
             Ok(_) => {
                 panic!("Compile should have failed for '{}'", entry.path().display());
@@ -65,6 +66,7 @@ fn run_pass() -> io::Result<()> {
             return Ok(());
         }
 
+        println!("[run-pass] Compiling {}", entry_path.display());
         match compile(&entry_path) {
             Ok(exec_path) => {
                 // Check for an input file
@@ -75,6 +77,7 @@ fn run_pass() -> io::Result<()> {
                     Stdio::null()
                 };
 
+                println!("[run-pass] Running executable for {} ({})", entry_path.display(), exec_path.display());
                 // Test running the program
                 let output = Command::new(&exec_path).stdin(stdin).output()
                     .unwrap_or_else(|err| panic!("Failed to run program generated for '{}': {}", entry_path.display(), err));
