@@ -736,6 +736,9 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
             }
         }
 
+        //TODO: Validate that the number of de-duplicated field_values is exactly equal to the
+        // number of fields in the struct decl
+
         Ok(tyir::StructLiteral {ty_id: struct_ty, field_values})
     }
 
