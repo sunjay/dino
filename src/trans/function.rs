@@ -106,7 +106,7 @@ impl<'a> FunctionCodeGenerator<'a> {
             BlockBehaviour::Return => CStmt::Return(last_stmt_expr),
             BlockBehaviour::Ignore => CStmt::Expr(last_stmt_expr),
             BlockBehaviour::StoreVar {mangled_name} => CStmt::VarAssign(CVarAssign {
-                    mangled_name,
+                    lvalue: CLValue::Var {mangled_name},
                     init_expr: CInitializerExpr::Expr(last_stmt_expr),
             }),
         });
@@ -262,7 +262,9 @@ impl<'a> FunctionCodeGenerator<'a> {
     ) -> Result<CExpr, Error> {
         Ok(match expr {
             ir::Expr::VarAssign(assign, ty) => self.gen_var_assign(assign, *ty, prev_stmts)?,
-            ir::Expr::FieldAccess(access, ty) => self.gen_field_access(access, *ty, prev_stmts)?,
+            ir::Expr::FieldAccess(access, ty) => {
+                CExpr::FieldAccess(Box::new(self.gen_field_access(access, *ty, prev_stmts)?))
+            },
             ir::Expr::Cond(cond, ty) => self.gen_cond_expr(cond, ty, prev_stmts)?,
             ir::Expr::Call(call, _) => CExpr::Call(self.gen_call_expr(call, prev_stmts)?),
             ir::Expr::Return(ret_expr, ty) => self.gen_return(ret_expr.as_ref().map(|x| x.as_ref()), *ty, prev_stmts)?,
@@ -337,19 +339,24 @@ impl<'a> FunctionCodeGenerator<'a> {
     ) -> Result<CExpr, Error> {
         let ir::VarAssign {lhs, expr} = assign;
 
-        // C doesn't support assignment in expression position, so the assignment must be lifted
-        // into a statement
-        match lhs {
-            ir::LValueExpr::FieldAccess(access, _) => unimplemented!(),
+        let lvalue = match lhs {
+            ir::LValueExpr::FieldAccess(access, ty) => {
+                CLValue::FieldAccess(self.gen_field_access(access, *ty, prev_stmts)?)
+            },
 
             ir::LValueExpr::Var(ident, _) => {
-                let assign = CStmt::VarAssign(CVarAssign {
-                    mangled_name: self.mangler.get(ident).to_string(),
-                    init_expr: CInitializerExpr::Expr(self.gen_expr(expr, prev_stmts)?),
-                });
-                prev_stmts.push(assign);
+                let mangled_name = self.mangler.get(ident).to_string();
+                CLValue::Var {mangled_name}
             },
-        }
+        };
+
+        // C doesn't support assignment in expression position, so the assignment must be lifted
+        // into a statement
+        let assign = CStmt::VarAssign(CVarAssign {
+            lvalue,
+            init_expr: CInitializerExpr::Expr(self.gen_expr(expr, prev_stmts)?),
+        });
+        prev_stmts.push(assign);
 
         // We can then produce a unit value since that is always the result of an assignment
         self.gen_unit_literal(ty)
@@ -358,12 +365,16 @@ impl<'a> FunctionCodeGenerator<'a> {
     fn gen_field_access(
         &mut self,
         access: &ir::FieldAccess,
-        ty: TyId,
+        _ty: TyId,
         prev_stmts: &mut Vec<CStmt>,
-    ) -> Result<CExpr, Error> {
+    ) -> Result<CFieldAccess, Error> {
         let ir::FieldAccess {lhs, field} = access;
 
-        unimplemented!()
+        let lhs = self.gen_expr(lhs, prev_stmts)?;
+        //TODO: Mangle struct field names
+        let field_mangled_name = field.to_string();
+
+        Ok(CFieldAccess {lhs, field_mangled_name})
     }
 
     fn gen_return(

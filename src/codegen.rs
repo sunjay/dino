@@ -273,19 +273,60 @@ impl fmt::Display for CInfiniteLoop {
 
 #[derive(Debug)]
 pub struct CVarAssign {
-    /// The mangled name of the variable to assign to.
-    ///
-    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
-    /// what it was in the original program to something more appropriate for code generation.
-    pub mangled_name: String,
+    pub lvalue: CLValue,
     /// The initializer expression for this variable
     pub init_expr: CInitializerExpr,
 }
 
 impl fmt::Display for CVarAssign {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {mangled_name, init_expr} = self;
-        write!(f, "{} = {}", mangled_name, init_expr)
+        let Self {lvalue, init_expr} = self;
+        write!(f, "{} = {}", lvalue, init_expr)
+    }
+}
+
+#[derive(Debug)]
+pub enum CLValue {
+    FieldAccess(CFieldAccess),
+    Var {
+        /// The mangled name of the variable to assign to.
+        ///
+        /// In this case, "mangled" just refers to the fact that the symbol name has been changed
+        /// from what it was in the original program to something more appropriate for code
+        /// generation.
+        mangled_name: String,
+    },
+}
+
+impl fmt::Display for CLValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CLValue::*;
+        match self {
+            FieldAccess(access) => write!(f, "{}", access),
+            Var {mangled_name} => write!(f, "{}", mangled_name),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CFieldAccess {
+    /// The expression of the left-hand side of the field access
+    ///
+    /// This expression is assumed to evaluate to a pointer
+    //TODO: Enforce that this is a pointer with the type system using an enum that limits which
+    //  variants of CExpr can be used here
+    pub lhs: CExpr,
+    /// The mangled name of the field.
+    ///
+    /// In this case, "mangled" just refers to the fact that the symbol name has been changed from
+    /// what it was in the original program to something more appropriate for code generation.
+    pub field_mangled_name: String,
+}
+
+impl fmt::Display for CFieldAccess {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {lhs, field_mangled_name} = self;
+        write!(f, "{}->{}", lhs, field_mangled_name)
     }
 }
 
@@ -358,6 +399,7 @@ impl fmt::Display for CInitializerExpr {
 #[derive(Debug)]
 pub enum CExpr {
     Call(CCallExpr),
+    FieldAccess(Box<CFieldAccess>),
     /// A null-terminated C byte string literal with the given data.
     /// The data is allowed to contain null characters.
     //TODO: Avoid having to copy the data into a Vec
@@ -373,6 +415,7 @@ impl fmt::Display for CExpr {
         use CExpr::*;
         match self {
             Call(call) => write!(f, "{}", call),
+            FieldAccess(access) => write!(f, "{}", access),
             NTStrLiteral(data) => {
                 write!(f, "(const unsigned char *)\"")?;
                 for &ch in data {
