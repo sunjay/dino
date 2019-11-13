@@ -11,6 +11,7 @@ lazy_static! {
 /// The dino real number type
 ///
 /// A 64-bit floating point number
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct DReal(f64);
 
@@ -23,6 +24,10 @@ impl DReal {
 
     pub fn zero() -> Unique<Self> {
         *ZERO
+    }
+
+    pub fn value(self) -> f64 {
+        self.0
     }
 }
 

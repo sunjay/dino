@@ -88,10 +88,10 @@ pub extern fn sub_complex_real(x: &DComplex, y: &DReal) -> Unique<DComplex> {
 }
 
 #[no_mangle]
-pub extern fn print_complex(x: &DComplex) -> Unique<DUnit> {
-    unsafe {
-        super::printf(b"%g + %gi\n\0" as *const u8, x.real.as_ref(), x.imag.as_ref());
-    }
+pub unsafe extern fn print_complex(x: &DComplex) -> Unique<DUnit> {
+    let real = x.real.as_ref().value();
+    let imag = x.imag.as_ref().value();
+    super::printf(b"%g + %gi\n\0" as *const u8, real, imag);
 
     DUnit::new()
 }
