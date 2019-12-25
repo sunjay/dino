@@ -404,10 +404,21 @@ impl<'a> FunctionCodeGenerator<'a> {
     ) -> Result<CExpr, Error> {
         let ir::StructLiteral {ty_id, field_values} = struct_lit;
 
+        let struct_mangled_name = self.lookup_type_name(&ty);
         // The struct literal must be generated in a separate temporary variable because we need to
         // initialize each field
+        let struct_var_mangled_name = self.mangler.fresh_mangled_name();
+        prev_stmts.push(CStmt::TempVarDecl(CTempVarDecl {
+            mangled_name: struct_var_mangled_name.clone(),
+            ty: CTy::Named {mangled_name: struct_mangled_name.clone()},
+            init_expr: None,
+        }));
 
-        unimplemented!()
+        Ok(CExpr::Call(CCallExpr {
+            //TODO: Figure out a better way to get this name without hard-coding it
+            mangled_func_name: format!("init_{}", struct_mangled_name),
+            args: vec![CExpr::Var(struct_var_mangled_name)]
+        }))
     }
 
     fn gen_bstr_literal(

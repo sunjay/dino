@@ -3,6 +3,8 @@
 mod mangler;
 mod function;
 
+use std::iter;
+
 use snafu::Snafu;
 
 use crate::ir;
@@ -65,14 +67,25 @@ fn gen_types(
             }).collect(),
         });
 
-        methods.iter().map(move |(method_name, func)| {
+        let methods = methods.iter().map(move |(method_name, func)| {
             let func = ir::Function {
                 //TODO: Figure out a better way to generate this name
                 name: &format!("{}__{}", struct_mangled_name, method_name),
                 ..func.clone()
             };
             FunctionCodeGenerator::generate(&func, mod_scope)
-        })
+        });
+
+        iter::once({
+            // Generate a constructor that takes a value of this struct and puts it on the heap
+            //let constructor = ir::Function {
+            //    //TODO: Figure out a better way to generate this name and store it with the struct
+            //    // for use later on in code generation
+            //    name: &format!("init_{}", struct_mangled_name),
+            //};
+            //FunctionCodeGenerator::generate(&constructor, mod_scope)
+            unimplemented!()
+        }).chain(methods)
     }).flatten().collect()
 }
 
