@@ -41,11 +41,12 @@ pub fn parse_module(input: &str) -> Result<Module, Error> {
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     };
 
-    Ok(match inp {
-        "" => module,
-        // Should never reach this case because the parser should ensure that all input is consumed
-        _ => unreachable!(),
-    })
+    if inp.input_len() != 0 {
+        // The parser should have ensured that all input is consumed
+        unreachable!()
+    }
+
+    Ok(module)
 }
 
 fn module(input: Input) -> IResult<Module> {
@@ -544,7 +545,7 @@ fn integer_literal(input: Input) -> IResult<IntegerLiteral> {
     map_res(
         tuple((
             recognize(tuple((
-                opt(alt((char('+'), char('-')))),
+                opt(one_of("+-")),
                 digit1,
                 // Cannot end in something that would result in a real number literal
                 not(one_of("eEjJI")),
@@ -570,7 +571,7 @@ fn integer_literal(input: Input) -> IResult<IntegerLiteral> {
 
 fn real_or_complex_literal(input: Input) -> IResult<Expr> {
     map(
-        tuple((double, opt(alt((char('j'), char('J'), char('i'), char('I')))))),
+        tuple((double, opt(one_of("jJiI")))),
         |(value, complex)| if complex.is_some() {
             Expr::ComplexLiteral(value)
         } else {
@@ -586,8 +587,8 @@ fn bool_literal(input: Input) -> IResult<bool> {
     ))(input)
 }
 
-fn unit_literal(input: Input) -> IResult<()> {
-    map(tag("()"), |_| ())(input)
+fn unit_literal(input: Input) -> IResult<Input> {
+    tag("()")(input)
 }
 
 fn ident_path(input: Input) -> IResult<IdentPath> {
