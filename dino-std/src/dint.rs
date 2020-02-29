@@ -1,5 +1,5 @@
 use crate::unique::Unique;
-use crate::alloc::alloc_no_ptr;
+use crate::runtime::alloc_no_ptr;
 use crate::dunit::DUnit;
 use crate::dbool::DBool;
 
@@ -12,9 +12,7 @@ pub struct DInt(i64);
 
 impl DInt {
     pub fn new(value: i64) -> Unique<Self> {
-        unsafe {
-            alloc_no_ptr(DInt(value))
-        }
+        alloc_no_ptr(DInt(value))
     }
 
     pub fn value(self) -> i64 {

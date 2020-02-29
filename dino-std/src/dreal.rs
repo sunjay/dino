@@ -1,11 +1,11 @@
 use lazy_static::lazy_static;
 
 use crate::unique::Unique;
-use crate::alloc::{alloc_no_ptr, alloc_static};
+use crate::runtime::{alloc_no_ptr, alloc_static};
 use crate::dunit::DUnit;
 
 lazy_static! {
-    static ref ZERO: Unique<DReal> = unsafe { alloc_static(DReal(0.0)) };
+    static ref ZERO: Unique<DReal> = alloc_static(DReal(0.0));
 }
 
 /// The dino real number type
@@ -17,9 +17,7 @@ pub struct DReal(f64);
 
 impl DReal {
     fn new(value: f64) -> Unique<Self> {
-        unsafe {
-            alloc_no_ptr(DReal(value))
-        }
+        alloc_no_ptr(DReal(value))
     }
 
     pub fn zero() -> Unique<Self> {

@@ -8,7 +8,7 @@ mod dcomplex;
 mod dbstr;
 
 mod unique;
-mod alloc;
+mod runtime;
 
 pub use dunit::*;
 pub use dbool::*;

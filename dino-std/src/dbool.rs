@@ -1,14 +1,14 @@
 use lazy_static::lazy_static;
 
 use crate::unique::Unique;
-use crate::alloc::alloc_static;
+use crate::runtime::alloc_static;
 use crate::dunit::DUnit;
 
 // Avoid re-allocating the same values over and over again by reusing the two possible values of
 // this type
 lazy_static! {
-    static ref TRUE: Unique<DBool> = unsafe { alloc_static(DBool(true)) };
-    static ref FALSE: Unique<DBool> = unsafe { alloc_static(DBool(false)) };
+    static ref TRUE: Unique<DBool> = alloc_static(DBool(true));
+    static ref FALSE: Unique<DBool> = alloc_static(DBool(false));
 }
 
 /// The dino boolean type

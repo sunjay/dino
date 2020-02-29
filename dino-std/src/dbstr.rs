@@ -5,7 +5,7 @@ use core::cmp::Ordering;
 use libc::c_char;
 
 use crate::unique::Unique;
-use crate::alloc::{alloc_struct, gc_malloc_no_ptr};
+use crate::runtime::{alloc_struct, __dino__alloc_value};
 use crate::dbool::DBool;
 use crate::dunit::DUnit;
 use crate::dint::DInt;
@@ -19,10 +19,10 @@ pub struct DBStr {
 
 impl DBStr {
     pub fn new() -> Unique<DBStr> {
-        unsafe { alloc_struct(DBStr {
+        alloc_struct(DBStr {
             data: Unique::empty(),
             length: 0,
-        }) }
+        })
     }
 }
 
@@ -56,13 +56,15 @@ impl DBStr {
             return DBStr::new();
         }
 
-        let data = unsafe { gc_malloc_no_ptr(length) } as *mut c_char;
-        //TODO: Check if returned ptr is NULL
-        unsafe { ptr::copy(input_data, data, length) }
-        unsafe { alloc_struct(Self {
-            data: Unique::new_unchecked(data),
-            length,
-        }) }
+        unsafe {
+            let data = __dino__alloc_value(length) as *mut c_char;
+            //TODO: Check if returned ptr is NULL
+            ptr::copy(input_data, data, length);
+            alloc_struct(Self {
+                data: Unique::new_unchecked(data),
+                length,
+            })
+        }
     }
 }
 
@@ -109,14 +111,15 @@ pub extern fn bstr_concat(s1: &DBStr, s2: &DBStr) -> Unique<DBStr> {
         return DBStr::new();
     }
 
-    let data = unsafe { gc_malloc_no_ptr(length) } as *mut c_char;
-    //TODO: Check if returned ptr is NULL
-    unsafe { ptr::copy(s1.data.as_ptr(), data, s1.length) }
-    unsafe { ptr::copy(s2.data.as_ptr(), data.add(s1.length), s2.length) }
-    unsafe { alloc_struct(DBStr {
-        data: Unique::new_unchecked(data),
-        length,
-    }) }
+    let data = unsafe {
+        let data = __dino__alloc_value(length) as *mut c_char;
+        //TODO: Check if returned ptr is NULL
+        ptr::copy(s1.data.as_ptr(), data, s1.length);
+        ptr::copy(s2.data.as_ptr(), data.add(s1.length), s2.length);
+        Unique::new_unchecked(data)
+    };
+
+    alloc_struct(DBStr {data, length})
 }
 
 #[no_mangle]
