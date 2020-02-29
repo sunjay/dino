@@ -3,7 +3,7 @@
 //! All types here should directly map to concepts expressible in C. This is the last step in code
 //! generation and no further processing should be required in order to convert these types to C.
 
-use std::sync::Arc;
+use crate::symbol_table::{SymbolTable, GenId};
 
 /// Represents a complete C program with an optional entry point (for executables)
 ///
@@ -156,4 +156,22 @@ pub enum CAssignValue {
     },
 }
 
-pub type CIdent = Arc<String>;
+/// The ID of an identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CIdent(usize);
+
+/// Symbol table for C identifiers
+pub type CSymbols = SymbolTable<String, CIdent, CIdentGen>;
+
+#[derive(Debug, Default)]
+pub struct CIdentGen {
+    next: usize,
+}
+
+impl GenId<CIdent> for CIdentGen {
+    fn next_id(&mut self) -> CIdent {
+        let id = self.next;
+        self.next += 1;
+        CIdent(id)
+    }
+}

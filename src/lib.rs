@@ -10,6 +10,7 @@ pub mod dino_std;
 pub mod gc_lib;
 
 pub mod cir;
+pub mod symbol_table;
 
 use std::fs;
 use std::io;

@@ -1,21 +1,21 @@
 //! Just for testing -- DELETE ME
 
-use std::sync::Arc;
-
 use dino::cir::*;
 
 fn main() {
-    let type_dint = Arc::new("DInt".to_string());
-    let type_dbstr = Arc::new("DBStr".to_string());
+    let mut syms = CSymbols::default();
 
-    let struct_counter = Arc::new("structs_98e3__Counter_0f34".to_string());
-    let field_count = Arc::new("count".to_string());
+    let type_dint = syms.insert("DInt".to_string());
+    let type_dbstr = syms.insert("DBStr".to_string());
 
-    let struct_game = Arc::new("structs_98e3__Game_93f2".to_string());
-    let field_team_a_name = Arc::new("team_a_name".to_string());
-    let field_team_a = Arc::new("team_a".to_string());
-    let field_team_b_name = Arc::new("team_b_name".to_string());
-    let field_team_b = Arc::new("team_b".to_string());
+    let struct_counter = syms.insert("structs_98e3__Counter_0f34".to_string());
+    let field_count = syms.insert("count".to_string());
+
+    let struct_game = syms.insert("structs_98e3__Game_93f2".to_string());
+    let field_team_a_name = syms.insert("team_a_name".to_string());
+    let field_team_a = syms.insert("team_a".to_string());
+    let field_team_b_name = syms.insert("team_b_name".to_string());
+    let field_team_b = syms.insert("team_b".to_string());
 
     let structs = vec![
         CStruct {
@@ -51,9 +51,9 @@ fn main() {
         },
     ];
 
-    let dino_out = Arc::new("__dino__out".to_string());
+    let dino_out = syms.insert("__dino__out".to_string());
 
-    let constructor_struct_counter = Arc::new("__dino__constructor__structs_98e3__Counter_0f34".to_string());
+    let constructor_struct_counter = syms.insert("__dino__constructor__structs_98e3__Counter_0f34".to_string());
 
     let functions = vec![
         CFunction {
