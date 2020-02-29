@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::hash::Hash;
 use std::collections::HashMap;
 
@@ -7,34 +7,52 @@ pub trait GenId<Id> {
     fn next_id(&mut self) -> Id;
 }
 
+/// Represents a type that can be used as an ID
+pub trait SymId: Hash + Eq + Copy {
+    type Gen: GenId<Self> + Default;
+}
+
 /// Represents a general symbol table that maps symbol names to unique IDs and back
-#[derive(Debug)]
-pub struct SymbolTable<Sym, Id, Gen>
+pub struct SymbolTable<Sym, Id>
     where Sym: Hash + Eq,
-          Id: Hash + Eq + Copy,
+          Id: SymId,
 {
     symbols: HashMap<Id, Sym>,
     ids: HashMap<Sym, Id>,
-    id_gen: Gen,
+    id_gen: <Id as SymId>::Gen,
 }
 
-impl<Sym, Id, Gen> Default for SymbolTable<Sym, Id, Gen>
+impl<Sym, Id> fmt::Debug for SymbolTable<Sym, Id>
+    where Sym: Hash + Eq + fmt::Debug,
+          Id: SymId + fmt::Debug,
+          <Id as SymId>::Gen: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {symbols, ids, id_gen} = self;
+        f.debug_struct("SymbolTable")
+            .field("symbols", symbols)
+            .field("ids", ids)
+            .field("id_gen", id_gen)
+            .finish()
+    }
+}
+
+impl<Sym, Id> Default for SymbolTable<Sym, Id>
     where Sym: Hash + Eq,
-          Id: Hash + Eq + Copy,
-          Gen: Default,
+          Id: SymId,
 {
     fn default() -> Self {
         Self {
             symbols: HashMap::default(),
             ids: HashMap::default(),
-            id_gen: Gen::default(),
+            id_gen: Default::default(),
         }
     }
 }
 
-impl<Sym, Id, Gen> SymbolTable<Sym, Id, Gen>
+impl<Sym, Id> SymbolTable<Sym, Id>
     where Sym: Hash + Eq,
-          Id: Hash + Eq + Copy,
+          Id: SymId,
 {
     /// Inserts a new symbol into the symbol table and returns its ID
     ///
@@ -43,7 +61,6 @@ impl<Sym, Id, Gen> SymbolTable<Sym, Id, Gen>
     /// Panics if the symbol was previously present in the table
     pub fn insert(&mut self, sym: Sym) -> Id
         where Sym: Display + Clone,
-              Gen: GenId<Id>,
     {
         if self.ids.contains_key(&sym) {
             unreachable!("bug: attempt to insert duplicate symbol: `{}`", sym);

@@ -3,7 +3,7 @@
 //! All types here should directly map to concepts expressible in C. This is the last step in code
 //! generation and no further processing should be required in order to convert these types to C.
 
-use crate::symbol_table::{SymbolTable, GenId};
+use crate::symbol_table::{SymbolTable, SymId, GenId};
 
 /// Represents a complete C program with an optional entry point (for executables)
 ///
@@ -156,12 +156,16 @@ pub enum CAssignValue {
     },
 }
 
+/// Symbol table for C identifiers
+pub type CSymbols = SymbolTable<String, CIdent>;
+
 /// The ID of an identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CIdent(usize);
 
-/// Symbol table for C identifiers
-pub type CSymbols = SymbolTable<String, CIdent, CIdentGen>;
+impl SymId for CIdent {
+    type Gen = CIdentGen;
+}
 
 #[derive(Debug, Default)]
 pub struct CIdentGen {
