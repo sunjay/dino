@@ -9,6 +9,8 @@ pub mod runtime;
 pub mod dino_std;
 pub mod gc_lib;
 
+pub mod cir;
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
