@@ -3,6 +3,11 @@
 //! All types here should directly map to concepts expressible in C. This is the last step in code
 //! generation and no further processing should be required in order to convert these types to C.
 
+use std::fmt;
+
+use crate::{cwrite, cwriteln};
+use crate::runtime::ALLOCATE;
+use crate::fmt_ctx::DisplayCtx;
 use crate::symbol_table::{SymbolTable, SymId, GenId};
 
 /// Represents a complete C program with an optional entry point (for executables)
@@ -25,12 +30,81 @@ pub struct CProgram {
     pub entry_point: Option<CIdent>,
 }
 
+impl DisplayCtx<CSymbols> for CProgram {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {structs, functions, entry_point} = self;
+
+        cwriteln!(f, ctx, "// struct forward declarations")?;
+        for struct_decl in structs {
+            cwriteln!(f, ctx, "{}", struct_decl.forward_decl())?;
+        }
+        cwriteln!(f, ctx)?;
+
+        cwriteln!(f, ctx, "// struct declarations")?;
+        for struct_decl in structs {
+            cwriteln!(f, ctx, "{}", struct_decl)?;
+        }
+        cwriteln!(f, ctx)?;
+
+        cwriteln!(f, ctx, "// function forward declarations")?;
+        for func in functions {
+            cwriteln!(f, ctx, "{}", func.forward_decl())?;
+        }
+        cwriteln!(f, ctx)?;
+
+        cwriteln!(f, ctx, "// function declarations")?;
+        for func in functions {
+            cwriteln!(f, ctx, "{}", func)?;
+        }
+        cwriteln!(f, ctx)?;
+
+        if let Some(entry_point) = entry_point {
+            cwriteln!(f, ctx, "int main() {{")?;
+            cwriteln!(f, ctx, "    {}();", entry_point)?;
+            cwriteln!(f, ctx, "    return 0;")?;
+            cwriteln!(f, ctx, "}}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CStruct {
     pub name: CIdent,
     /// If any of the fields have the same name as the struct, the
     /// `struct` C keyword will be added before them
     pub fields: Vec<CStructField>,
+}
+
+impl CStruct {
+    fn forward_decl(&self) -> ForwardDecl<Self> {
+        ForwardDecl {value: self}
+    }
+}
+
+impl<'a> DisplayCtx<CSymbols> for ForwardDecl<'a, CStruct> {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let CStruct {name, fields: _} = self.value;
+        cwrite!(f, ctx, "typedef struct {} {};", name, name)
+    }
+}
+
+impl DisplayCtx<CSymbols> for CStruct {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {name, fields} = self;
+        cwriteln!(f, ctx, "typedef struct {} {{", name)?;
+        for field in fields {
+            let CStructField {name: field_name, ptr_typ} = field;
+            if ptr_typ == name {
+                // Recursive type
+                cwriteln!(f, ctx, "struct {}* {};", ptr_typ, field_name)?;
+            } else {
+                cwriteln!(f, ctx, "{}* {};", ptr_typ, field_name)?;
+            }
+        }
+        cwrite!(f, ctx, "}} {};", name)
+    }
 }
 
 /// All struct fields are pointers to a type
@@ -48,10 +122,41 @@ pub struct CFunction {
     pub body: Vec<CStmt>,
 }
 
+impl CFunction {
+    fn forward_decl(&self) -> ForwardDecl<Self> {
+        ForwardDecl {value: self}
+    }
+}
+
+impl<'a> DisplayCtx<CSymbols> for ForwardDecl<'a, CFunction> {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let CFunction {name, params, body: _} = self.value;
+        cwrite!(f, ctx, "void {}({});", name, Commas {values: params, empty: "void"})
+    }
+}
+
+impl DisplayCtx<CSymbols> for CFunction {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {name, params, body} = self;
+        cwriteln!(f, ctx, "void {}({}) {{", name, Commas {values: params, empty: "void"})?;
+        for stmt in body {
+            cwriteln!(f, ctx, "{}", stmt)?;
+        }
+        cwrite!(f, ctx, "}}")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CFuncParam {
     pub name: CIdent,
     pub typ: CFuncParamType,
+}
+
+impl DisplayCtx<CSymbols> for CFuncParam {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {name, typ} = self;
+        cwrite!(f, ctx, "{} {}", typ, name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +165,16 @@ pub enum CFuncParamType {
     InPtr {typ: CIdent},
     /// An out pointer to the given type (i.e. pointer to a pointer)
     OutPtr {typ: CIdent},
+}
+
+impl DisplayCtx<CSymbols> for CFuncParamType {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CFuncParamType::*;
+        match self {
+            InPtr {typ} => cwrite!(f, ctx, "{}*", typ),
+            OutPtr {typ} => cwrite!(f, ctx, "{}**", typ),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,10 +187,28 @@ pub enum CStmt {
     Assign(CAssign),
 }
 
+impl DisplayCtx<CSymbols> for CStmt {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CStmt::*;
+        match self {
+            VarDecl(decl) => cwrite!(f, ctx, "{};", decl),
+            FuncCall(decl) => cwrite!(f, ctx, "{};", decl),
+            Assign(decl) => cwrite!(f, ctx, "{};", decl),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CVarDecl {
     pub name: CIdent,
     pub typ: CVarType,
+}
+
+impl DisplayCtx<CSymbols> for CVarDecl {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {name, typ} = self;
+        cwrite!(f, ctx, "{} {}", typ, name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -86,18 +219,45 @@ pub enum CVarType {
     Bool,
 }
 
+impl DisplayCtx<CSymbols> for CVarType {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CVarType::*;
+        match self {
+            Ptr {typ} => cwrite!(f, ctx, "{}*", typ),
+            Bool => cwrite!(f, ctx, "bool"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CFuncCall {
     pub func_name: CIdent,
     pub args: Vec<CFuncArg>,
 }
 
+impl DisplayCtx<CSymbols> for CFuncCall {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {func_name, args} = self;
+        cwrite!(f, ctx, "{}({})", func_name, Commas {values: args, empty: ""})
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum CFuncArg {
     /// A plain variable passed as the argument
     Var(CIdent),
-    /// An out parameter (pointer to a variable)
+    /// An argument to an out parameter (pointer to the given variable)
     OutVar(CIdent),
+}
+
+impl DisplayCtx<CSymbols> for CFuncArg {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CFuncArg::*;
+        match self {
+            Var(var) => cwrite!(f, ctx, "{}", var),
+            OutVar(var) => cwrite!(f, ctx, "&{}", var),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +266,13 @@ pub struct CAssign {
     pub target: CAssignTarget,
     /// The right-hand side of the assignment
     pub value: CAssignValue,
+}
+
+impl DisplayCtx<CSymbols> for CAssign {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {target, value} = self;
+        cwrite!(f, ctx, "{} = {}", target, value)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +303,18 @@ pub enum CAssignTarget {
     },
 }
 
+impl DisplayCtx<CSymbols> for CAssignTarget {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CAssignTarget::*;
+        match *self {
+            OutPtr {name} => cwrite!(f, ctx, "*{}", name),
+            OutPtrField {name, field} => cwrite!(f, ctx, "(*{})->{}", name, field),
+            InPtrField {name, field} => cwrite!(f, ctx, "{}->{}", name, field),
+            Var {name} => cwrite!(f, ctx, "{}", name),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum CAssignValue {
     /// Allocates memory for the size of the given type
@@ -156,12 +335,29 @@ pub enum CAssignValue {
     },
 }
 
+impl DisplayCtx<CSymbols> for CAssignValue {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CAssignValue::*;
+        match *self {
+            Alloc {typ} => cwrite!(f, ctx, "{}(sizeof({}))", ALLOCATE, typ),
+            FieldAccess {value, field} => cwrite!(f, ctx, "{}->{}", value, field),
+            Var {name} => cwrite!(f, ctx, "{}", name),
+        }
+    }
+}
+
 /// Symbol table for C identifiers
 pub type CSymbols = SymbolTable<String, CIdent>;
 
 /// The ID of an identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CIdent(usize);
+
+impl DisplayCtx<CSymbols> for CIdent {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        write!(f, "{}", ctx.symbol(*self))
+    }
+}
 
 impl SymId for CIdent {
     type Gen = CIdentGen;
@@ -177,5 +373,38 @@ impl GenId<CIdent> for CIdentGen {
         let id = self.next;
         self.next += 1;
         CIdent(id)
+    }
+}
+
+/// Represents a foward declaration of the given type
+///
+/// Allows us to specialize the implementation of `DisplayCtx` for forward declarations
+struct ForwardDecl<'a, T> {
+    value: &'a T,
+}
+
+/// Writes out a comma-separated list, ensuring that there is no trailing comma since that is not
+/// supported in C.
+struct Commas<'a, T: DisplayCtx<CSymbols>, D: DisplayCtx<CSymbols>> {
+    /// The values to write out in a comma-separated list
+    values: &'a [T],
+    /// The default value to write out if the list of values is empty
+    empty: D,
+}
+
+impl<'a, T: DisplayCtx<CSymbols>, D: DisplayCtx<CSymbols>> DisplayCtx<CSymbols> for Commas<'a, T, D> {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {values, empty} = self;
+
+        if values.is_empty() {
+            return cwrite!(f, ctx, "{}", empty);
+        }
+
+        cwrite!(f, ctx, "{}", values[0])?;
+        for value in &values[1..] {
+            cwrite!(f, ctx, ", {}", value)?;
+        }
+
+        Ok(())
     }
 }

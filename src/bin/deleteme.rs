@@ -1,5 +1,6 @@
 //! Just for testing -- DELETE ME
 
+use dino::cprintln;
 use dino::cir::*;
 
 fn main() {
@@ -96,4 +97,6 @@ fn main() {
         functions,
         entry_point: None, //TODO
     };
+
+    cprintln!(&syms, "{}", program);
 }

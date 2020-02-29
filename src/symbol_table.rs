@@ -81,7 +81,8 @@ impl<Sym, Id> SymbolTable<Sym, Id>
     }
 
     /// Returns the symbol associated with the given ID
-    pub fn symbol(&self, id: Id) -> Option<&Sym> {
+    pub fn symbol(&self, id: Id) -> &Sym {
         self.symbols.get(&id).map(|sym| &**sym)
+            .expect("bug: should be impossible to get an ID that hasn't been inserted")
     }
 }

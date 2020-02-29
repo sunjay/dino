@@ -5,6 +5,9 @@ include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
 use std::{fs, io};
 use std::path::Path;
 
+/// The name of the allocation function that takes a size and returns a pointer
+pub const ALLOCATE: &str = "__dino__alloc";
+
 /// Places the language runtime in the given directory.
 ///
 /// This files must be present in the same directory as the generated code file.
