@@ -2,6 +2,8 @@ use core::ptr;
 use core::slice;
 use core::cmp::Ordering;
 
+use libc::c_char;
+
 use crate::unique::Unique;
 use crate::alloc::{alloc_struct, gc_malloc_no_ptr};
 use crate::dbool::DBool;
@@ -11,7 +13,7 @@ use crate::dint::DInt;
 /// The dino byte string type
 #[repr(C)]
 pub struct DBStr {
-    data: Unique<u8>,
+    data: Unique<c_char>,
     length: usize,
 }
 
@@ -49,12 +51,12 @@ impl Ord for DBStr {
 
 impl DBStr {
     /// Copies the data from the given pointer and returns a new DBStr
-    pub fn copy_ptr(input_data: *const u8, length: usize) -> Unique<Self> {
+    pub fn copy_ptr(input_data: *const c_char, length: usize) -> Unique<Self> {
         if length == 0 {
             return DBStr::new();
         }
 
-        let data = unsafe { gc_malloc_no_ptr(length) } as *mut u8;
+        let data = unsafe { gc_malloc_no_ptr(length) } as *mut c_char;
         //TODO: Check if returned ptr is NULL
         unsafe { ptr::copy(input_data, data, length) }
         unsafe { alloc_struct(Self {
@@ -66,7 +68,7 @@ impl DBStr {
 
 /// Creates a new DBStr from a byte string literal
 #[no_mangle]
-pub extern fn __dino__DBStr_from_bstr_literal(data: *const u8, length: usize) -> Unique<DBStr> {
+pub extern fn __dino__DBStr_from_bstr_literal(data: *const c_char, length: usize) -> Unique<DBStr> {
     DBStr::copy_ptr(data, length)
 }
 
@@ -107,7 +109,7 @@ pub extern fn bstr_concat(s1: &DBStr, s2: &DBStr) -> Unique<DBStr> {
         return DBStr::new();
     }
 
-    let data = unsafe { gc_malloc_no_ptr(length) } as *mut u8;
+    let data = unsafe { gc_malloc_no_ptr(length) } as *mut c_char;
     //TODO: Check if returned ptr is NULL
     unsafe { ptr::copy(s1.data.as_ptr(), data, s1.length) }
     unsafe { ptr::copy(s2.data.as_ptr(), data.add(s1.length), s2.length) }
@@ -166,5 +168,5 @@ pub extern fn read_line_bstr() -> Unique<DBStr> {
 
     //TODO: Free memory allocated by getline
     //TODO: We should make sure the data buffer has size min(length, buffer_len) to save memory
-    DBStr::copy_ptr(data as *mut u8, length)
+    DBStr::copy_ptr(data as *mut c_char, length)
 }
