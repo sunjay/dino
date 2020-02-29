@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::fmt::{self, Display};
 use std::hash::Hash;
 use std::collections::HashMap;
@@ -17,8 +18,8 @@ pub struct SymbolTable<Sym, Id>
     where Sym: Hash + Eq,
           Id: SymId,
 {
-    symbols: HashMap<Id, Sym>,
-    ids: HashMap<Sym, Id>,
+    symbols: HashMap<Id, Arc<Sym>>,
+    ids: HashMap<Arc<Sym>, Id>,
     id_gen: <Id as SymId>::Gen,
 }
 
@@ -60,12 +61,13 @@ impl<Sym, Id> SymbolTable<Sym, Id>
     ///
     /// Panics if the symbol was previously present in the table
     pub fn insert(&mut self, sym: Sym) -> Id
-        where Sym: Display + Clone,
+        where Sym: Display,
     {
         if self.ids.contains_key(&sym) {
             unreachable!("bug: attempt to insert duplicate symbol: `{}`", sym);
         }
 
+        let sym = Arc::new(sym);
         let id = self.id_gen.next_id();
         self.symbols.insert(id, sym.clone());
         self.ids.insert(sym, id);
@@ -80,6 +82,6 @@ impl<Sym, Id> SymbolTable<Sym, Id>
 
     /// Returns the symbol associated with the given ID
     pub fn symbol(&self, id: Id) -> Option<&Sym> {
-        self.symbols.get(&id)
+        self.symbols.get(&id).map(|sym| &**sym)
     }
 }
