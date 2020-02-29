@@ -6,6 +6,8 @@
 * All arguments are pointers
 * Functions that return a value take an out pointer as an argument
 * Since all arguments are pointers, the out pointer is a pointer to a pointer
+* Using out pointers rather than return values is useful for extending the
+  convention later to support multiple output parameters
 
 ## Allocation
 
@@ -37,6 +39,27 @@ In our subset of C, variables are only ever assigned to by:
   and `if` and an `else if`
 * The condition may only be a simple variable
 
+## C Loops
+
+* We only use infinite `while (true)` loops because evaluating the conditional
+  might require multiple statements
+* The loop follows the following general structure:
+
+```c
+while (true) {
+    // ...code to evaluate the condition...
+    bool tmp123 = ...;
+
+    if (tmp123) {
+        // ...code for loop body...
+
+    } else {
+        // Stop the loop once the condition is no longer satisfied
+        break;
+    }
+}
+```
+
 ## C Statements
 
 Within the body of a function, we only generate the following C statements:
@@ -45,6 +68,7 @@ Within the body of a function, we only generate the following C statements:
 * Initialized variables using one of the forms above
 * Function calls
 * Conditionals
+* Loops
 
 ## C Structs
 
