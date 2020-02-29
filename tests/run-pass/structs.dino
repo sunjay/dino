@@ -45,10 +45,12 @@ struct Game {
 impl Game {
     fn new(team_a_name: bstr, team_b_name: bstr) -> Self {
         Self {
+            // Note that field names do not have to be in order
+            // The code for each field will be executed in source order
             team_a_name,
-            team_a: Counter::new(),
             team_b_name,
             team_b: Counter::new(),
+            team_a: Counter::new(),
         }
     }
 
