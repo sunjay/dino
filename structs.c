@@ -264,7 +264,20 @@ void structs_98e3__test_counter_889f(void) {
 }
 
 void structs_98e3__test_game_729e(void) {
-    //TODO
+    DBStr *tmp398 = __dino__DBStr_from_bstr_literal("game", 4);
+    print_bstr(tmp398);
+    DBStr *tmp487 = __dino__DBStr_from_bstr_literal("team rocket", 11);
+    DBStr *tmp981 = __dino__DBStr_from_bstr_literal("team taco", 9);
+    structs_98e3__Game_93f2 *tmp512;
+    structs_98e3__Game_93f2__new(tmp487, tmp981, &tmp512);
+    structs_98e3__Game_93f2 *game_bc3f = tmp512;
+
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
+    structs_98e3__Game_93f2__team_b_scores(game_bc3f);
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
+
+    structs_98e3__Game_93f2__print_winner(game_bc3f);
 }
 
 void structs_98e3__main_062a(void) {
