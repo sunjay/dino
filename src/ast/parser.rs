@@ -2,6 +2,7 @@ use std::iter::once;
 
 use snafu::Snafu;
 use nom::{
+    InputLength,
     error::VerboseError,
     branch::alt,
     number::complete::double,
