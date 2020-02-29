@@ -183,5 +183,96 @@ void structs_98e3__Game_93f2__print_winner(structs_98e3__Game_93f2 *self) {
 // Since function names are unique within a module, this guarantees that there
 // won't be any conflicts.
 void structs_98e3__test_counter_889f(void) {
+    DBStr *tmp112 = __dino__DBStr_from_bstr_literal("counter", 7);
+    print_bstr(tmp112);
+    structs_98e3__Counter_0f34 *tmp167;
+    structs_98e3__Counter_0f34__new(&tmp167);
+    structs_98e3__Counter_0f34 *counter_3aef = tmp167;
+    DInt *tmp611;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp611);
+    print_int(tmp611);
+
+    structs_98e3__Counter_0f34__incr(counter_3aef);
+    DInt *tmp612;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp612);
+    print_int(tmp612);
+
+    structs_98e3__Counter_0f34__incr(counter_3aef);
+    DInt *tmp613;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp613);
+    print_int(tmp613);
+
+    structs_98e3__Counter_0f34__decr(counter_3aef);
+    DInt *tmp614;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp614);
+    print_int(tmp614);
+
+    structs_98e3__Counter_0f34__decr(counter_3aef);
+    DInt *tmp615;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp615);
+    print_int(tmp615);
+
+    structs_98e3__Counter_0f34__decr(counter_3aef);
+    DInt *tmp616;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp616);
+    print_int(tmp616);
+
+    while (true) {
+        DInt *tmp553;
+        structs_98e3__Counter_0f34__value(counter_3aef, &tmp553);
+        DInt *tmp412 = __dino__DInt_from_int_literal(10LL);
+        DBool *tmp598 = int__lt(tmp553, tmp412);
+        bool tmp572 = __dino__DBool_coerce_bool(tmp598);
+
+        if (tmp572) {
+            structs_98e3__Counter_0f34__incr(counter_3aef);
+
+        } else {
+            break;
+        }
+    }
+    DInt *tmp617;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp617);
+    print_int(tmp617);
+
+    DInt *tmp192 = __dino__DInt_from_int_literal(34LL);
+    structs_98e3__Counter_0f34__incr_by(counter_3aef, tmp192);
+    DInt *tmp618;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp618);
+    print_int(tmp618);
+
+    DBStr *tmp113 = __dino__DBStr_from_bstr_literal("counter2", 8);
+    print_bstr(tmp113);
+    structs_98e3__Counter_0f34 *tmp811;
+    structs_98e3__Counter_0f34__new(&tmp811);
+    structs_98e3__Counter_0f34 *counter2_a6bc = tmp811;
+    DInt *tmp742;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp742);
+    DInt *tmp743 = __dino__DInt_from_int_literal(2LL);
+    DInt *tmp689 = int__div(tmp742, tmp743);
+    structs_98e3__Counter_0f34__incr_by(counter2_a6bc, tmp689);
+    DInt *tmp619;
+    structs_98e3__Counter_0f34__value(counter2_a6bc, &tmp619);
+    print_int(tmp619);
+    structs_98e3__Counter_0f34__add(counter2_a6bc, counter_3aef);
+    DInt *tmp620;
+    structs_98e3__Counter_0f34__value(counter_3aef, &tmp620);
+    print_int(tmp620);
+    DInt *tmp621;
+    structs_98e3__Counter_0f34__value(counter2_a6bc, &tmp621);
+    print_int(tmp621);
+}
+
+void structs_98e3__test_game_729e(void) {
     //TODO
+}
+
+void structs_98e3__main_062a(void) {
+    structs_98e3__test_counter_889f();
+    structs_98e3__test_game_729e();
+}
+
+int main() {
+    structs_98e3__main_062a();
+    return 0;
 }
