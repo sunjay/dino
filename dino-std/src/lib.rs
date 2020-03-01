@@ -1,14 +1,15 @@
 #![no_std]
 
+mod unique;
+mod runtime;
+mod outptr;
+
 mod dunit;
 mod dbool;
 mod dint;
 mod dreal;
 mod dcomplex;
 mod dbstr;
-
-mod unique;
-mod runtime;
 
 pub use dunit::*;
 pub use dbool::*;

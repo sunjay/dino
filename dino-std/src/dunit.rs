@@ -1,4 +1,5 @@
 use crate::unique::Unique;
+use crate::outptr::OutPtr;
 use crate::dbool::DBool;
 
 /// The dino unit type
@@ -9,7 +10,7 @@ pub struct DUnit {
 }
 
 impl DUnit {
-    pub fn new() -> Unique<DUnit> {
+    pub fn new() -> Unique<Self> {
         // This should never be dereferenced, so it's fine to return a null pointer
         Unique::empty()
     }
@@ -17,21 +18,21 @@ impl DUnit {
 
 /// Creates a new DUnit
 #[no_mangle]
-pub extern fn __dino__DUnit_from_unit_literal() -> Unique<DUnit> {
-    DUnit::new()
+pub extern fn __dino__DUnit_from_unit_literal(mut out: OutPtr<DUnit>) {
+    out.write(DUnit::new());
 }
 
 #[no_mangle]
-pub extern fn unit_eq(_x: &DUnit, _y: &DUnit) -> Unique<DBool> {
+pub extern fn unit_eq(_x: &DUnit, _y: &DUnit, mut out: OutPtr<DBool>) {
     // Unit is always equal to itself
-    DBool::new(true)
+    out.write(DBool::new(true));
 }
 
 #[no_mangle]
-pub extern fn print_unit(_x: &DUnit) -> Unique<DUnit> {
+pub extern fn print_unit(_x: &DUnit, mut out: OutPtr<DUnit>) {
     unsafe {
         super::printf(b"()\n\0" as *const u8);
     }
 
-    DUnit::new()
+    out.write(DUnit::new());
 }

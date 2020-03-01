@@ -1,7 +1,8 @@
 use crate::unique::Unique;
+use crate::outptr::OutPtr;
 use crate::runtime::alloc_struct;
 use crate::dunit::DUnit;
-use crate::dreal::{self, DReal};
+use crate::dreal::DReal;
 
 /// The dino complex number type
 ///
@@ -30,81 +31,81 @@ impl DComplex {
 
 /// Creates a new DComplex from an integer literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_int_literal(value: i64) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::__dino__DReal_from_int_literal(value),
+pub extern fn __dino__DComplex_from_int_literal(value: i64, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: value.into(),
         imag: DReal::zero(),
-    })
+    }));
 }
 
 /// Creates a new DComplex from a real number literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_real_literal(value: f64) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::__dino__DReal_from_real_literal(value),
+pub extern fn __dino__DComplex_from_real_literal(value: f64, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: value.into(),
         imag: DReal::zero(),
-    })
+    }));
 }
 
 /// Creates a new DComplex from a complex number literal
 #[no_mangle]
-pub extern fn __dino__DComplex_from_complex_literal(value: f64) -> Unique<DComplex> {
-    alloc_struct(DComplex {
+pub extern fn __dino__DComplex_from_complex_literal(value: f64, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
         real: DReal::zero(),
-        imag: dreal::__dino__DReal_from_real_literal(value),
-    })
+        imag: value.into(),
+    }));
 }
 
 #[no_mangle]
-pub extern fn add_complex(x: &DComplex, y: &DComplex) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::add_real(x.real(), y.real()),
-        imag: dreal::add_real(x.imag(), y.imag()),
-    })
+pub extern fn add_complex(x: &DComplex, y: &DComplex, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x.real() + y.real(),
+        imag: x.imag() + y.imag(),
+    }));
 }
 
 #[no_mangle]
-pub extern fn add_real_complex(x: &DReal, y: &DComplex) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::add_real(x, y.real()),
+pub extern fn add_real_complex(x: &DReal, y: &DComplex, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x + y.real(),
         imag: y.imag,
-    })
+    }));
 }
 
 #[no_mangle]
-pub extern fn add_complex_real(x: &DComplex, y: &DReal) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::add_real(x.real(), y),
+pub extern fn add_complex_real(x: &DComplex, y: &DReal, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x.real() + y,
         imag: x.imag,
-    })
+    }));
 }
 
 #[no_mangle]
-pub extern fn sub_complex(x: &DComplex, y: &DComplex) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::sub_real(x.real(), y.real()),
-        imag: dreal::sub_real(x.imag(), y.imag()),
-    })
+pub extern fn sub_complex(x: &DComplex, y: &DComplex, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x.real() - y.real(),
+        imag: x.imag() - y.imag(),
+    }));
 }
 
 #[no_mangle]
-pub extern fn sub_real_complex(x: &DReal, y: &DComplex) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::sub_real(x, y.real()),
+pub extern fn sub_real_complex(x: &DReal, y: &DComplex, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x - y.real(),
         imag: y.imag,
-    })
+    }));
 }
 
 #[no_mangle]
-pub extern fn sub_complex_real(x: &DComplex, y: &DReal) -> Unique<DComplex> {
-    alloc_struct(DComplex {
-        real: dreal::sub_real(x.real(), y),
+pub extern fn sub_complex_real(x: &DComplex, y: &DReal, mut out: OutPtr<DComplex>) {
+    out.write(alloc_struct(DComplex {
+        real: x.real() - y,
         imag: x.imag,
-    })
+    }));
 }
 
 #[no_mangle]
-pub extern fn print_complex(x: &DComplex) -> Unique<DUnit> {
+pub extern fn print_complex(x: &DComplex, mut out: OutPtr<DUnit>) {
     let real = x.real().value();
     let imag = x.imag().value();
 
@@ -112,5 +113,5 @@ pub extern fn print_complex(x: &DComplex) -> Unique<DUnit> {
         super::printf(b"%g + %gi\n\0" as *const u8, real, imag);
     }
 
-    DUnit::new()
+    out.write(DUnit::new());
 }
