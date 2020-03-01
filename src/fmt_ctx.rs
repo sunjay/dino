@@ -96,6 +96,54 @@ macro_rules! cprintln {
     };
 }
 
+/// Similar to `eprint!` but allows some external context to be used during formatting
+#[macro_export]
+macro_rules! ceprint {
+    ($ctx:expr) => {
+        {
+            eprint!()
+        }
+    };
+    ($ctx:expr, $fmtstr:literal) => {
+        {
+            eprint!($fmtstr)
+        }
+    };
+    ($ctx:expr, $fmtstr:literal, $($arg:expr),*) => {
+        {
+            let ctx = $ctx;
+            eprint!($fmtstr, $($crate::fmt_ctx::DisplayWith {
+                ctx,
+                value: &$arg,
+            }),*)
+        }
+    };
+}
+
+/// Similar to `eprintln!` but allows some external context to be used during formatting
+#[macro_export]
+macro_rules! ceprintln {
+    ($ctx:expr) => {
+        {
+            eprintln!()
+        }
+    };
+    ($ctx:expr, $fmtstr:literal) => {
+        {
+            eprintln!($fmtstr)
+        }
+    };
+    ($ctx:expr, $fmtstr:literal, $($arg:expr),*) => {
+        {
+            let ctx = $ctx;
+            eprintln!($fmtstr, $($crate::fmt_ctx::DisplayWith {
+                ctx,
+                value: &$arg,
+            }),*)
+        }
+    };
+}
+
 /// Similar to `std::fmt::Display` but allows some external context to be used during formatting
 pub trait DisplayCtx<Ctx> {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &Ctx) -> fmt::Result;
