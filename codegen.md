@@ -102,3 +102,14 @@ typedef struct Tree {
 
 In a nested struct, the type name must be prefixed with `struct` when declaring
 the field.
+
+## Notes
+
+* list of structs and their mangled names
+* for each struct, a list of each field **in order** with:
+  * field (mangled) name
+  * field type mangled name
+* mangled name of struct literal constructor
+* list of methods and their mangled names
+* for each method:
+  * list of parameters and the mangled names of their types
