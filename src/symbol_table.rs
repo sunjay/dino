@@ -18,8 +18,8 @@ pub struct SymbolTable<Sym, Id, Data = ()>
     where Sym: Hash + Eq,
           Id: SymId,
 {
-    symbols: HashMap<Id, Arc<Sym>>,
-    ids: HashMap<Arc<Sym>, (Id, Data)>,
+    symbols: HashMap<Id, (Arc<Sym>, Data)>,
+    ids: HashMap<Arc<Sym>, Id>,
     id_gen: <Id as SymId>::Gen,
 }
 
@@ -86,20 +86,32 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
 
         let sym = Arc::new(sym);
         let id = self.id_gen.next_id();
-        self.symbols.insert(id, sym.clone());
-        self.ids.insert(sym, (id, data));
+        self.symbols.insert(id, (sym.clone(), data));
+        self.ids.insert(sym, id);
 
         id
     }
 
     /// Returns the ID associated with the given symbol
     pub fn id(&self, sym: &Sym) -> Option<Id> {
-        self.ids.get(sym).map(|(id, _)| id).copied()
+        self.ids.get(sym).copied()
+    }
+
+    /// Returns the symbol associated with the given ID
+    pub fn data(&self, id: Id) -> &Data {
+        self.symbols.get(&id).map(|(_, data)| data)
+            .expect("bug: should be impossible to get an ID that hasn't been inserted")
+    }
+
+    /// Returns the symbol associated with the given ID
+    pub fn data_mut(&mut self, id: Id) -> &mut Data {
+        self.symbols.get_mut(&id).map(|(_, data)| data)
+            .expect("bug: should be impossible to get an ID that hasn't been inserted")
     }
 
     /// Returns the symbol associated with the given ID
     pub fn symbol(&self, id: Id) -> &Sym {
-        self.symbols.get(&id).map(|sym| &**sym)
+        self.symbols.get(&id).map(|(sym, _)| &**sym)
             .expect("bug: should be impossible to get an ID that hasn't been inserted")
     }
 }
