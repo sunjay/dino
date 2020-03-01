@@ -113,6 +113,30 @@ impl<Ctx> DisplayCtx<Ctx> for str {
     }
 }
 
+impl<Ctx> DisplayCtx<Ctx> for usize {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl<Ctx> DisplayCtx<Ctx> for i64 {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl<Ctx> DisplayCtx<Ctx> for f64 {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl<Ctx> DisplayCtx<Ctx> for bool {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 /// Displays a value with the given context
 pub struct DisplayWith<'a, Ctx, T> {
     pub ctx: &'a Ctx,

@@ -14,6 +14,9 @@
 * In general, allocation is only performed in struct literal constructors
 * Since many functions return new instances of a type, allocation is performed
   when creating those instances
+* A consequence of this is that as long as the generated constructor for each
+  struct performs allocation, the generated code never needs to generate
+  allocations in variable decls, etc.
 
 ## C Variables
 
@@ -67,8 +70,10 @@ Within the body of a function, we only generate the following C statements:
 * Uninitialized variables (for out pointers) `DBStr *foo;`
 * Initialized variables using one of the forms above
 * Function calls
+* Early return `return;`
 * Conditionals
 * Loops
+* Loop control flow `break;`
 
 ## C Structs
 

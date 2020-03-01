@@ -186,8 +186,21 @@ pub enum CStmt {
     VarDecl(CVarDecl),
     /// Calls a function
     FuncCall(CFuncCall),
+    /// Calls a literal constructor
+    ///
+    /// This variant exists because while it works in general to always call functions with only
+    /// variables as args, we still need other literals for this specific case only.
+    LitFuncCall(CLitFuncCall),
     /// Variable Assignment
     Assign(CAssign),
+    /// A conditional statement
+    If(CCond),
+    /// An infinite loop
+    Loop(CInfiniteLoop),
+    /// Stops a loop
+    Break,
+    /// Returns early from a function
+    Return,
 }
 
 impl DisplayCtx<CSymbols> for CStmt {
@@ -195,8 +208,13 @@ impl DisplayCtx<CSymbols> for CStmt {
         use CStmt::*;
         match self {
             VarDecl(decl) => cwrite!(f, ctx, "{};", decl),
-            FuncCall(decl) => cwrite!(f, ctx, "{};", decl),
-            Assign(decl) => cwrite!(f, ctx, "{};", decl),
+            FuncCall(call) => cwrite!(f, ctx, "{};", call),
+            LitFuncCall(call) => cwrite!(f, ctx, "{};", call),
+            Assign(assign) => cwrite!(f, ctx, "{};", assign),
+            If(cond) => cwrite!(f, ctx, "{}", cond),
+            Loop(cloop) => cwrite!(f, ctx, "{}", cloop),
+            Break => cwrite!(f, ctx, "break;"),
+            Return => cwrite!(f, ctx, "return;"),
         }
     }
 }
@@ -246,6 +264,76 @@ impl DisplayCtx<CSymbols> for CFuncCall {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
         let Self {func_name, in_args, out_arg} = self;
         cwrite!(f, ctx, "{}({})", func_name, Commas {values: in_args, last: out_arg})
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CLitFuncCall {
+    /// The name of the literal constructor
+    pub lit_func_name: CIdent,
+    /// The input arguments to the literal constructor
+    pub in_args: CLitFuncArgs,
+    /// The output argument for the literal constructor
+    pub out_arg: COutArg,
+}
+
+impl DisplayCtx<CSymbols> for CLitFuncCall {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {lit_func_name, in_args, out_arg} = self;
+        cwrite!(f, ctx, "{}({}, {})", lit_func_name, in_args, out_arg)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CLitFuncArgs {
+    /// An escaped string literal and a second argument: its length
+    StrLitLen(ByteStringLit),
+    IntegerLiteral(i64),
+    DoubleLiteral(i64),
+    BoolLiteral(bool),
+}
+
+impl DisplayCtx<CSymbols> for CLitFuncArgs {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        use CLitFuncArgs::*;
+        match self {
+            StrLitLen(lit) => cwrite!(f, ctx, "{}, {}", lit, lit.len()),
+            IntegerLiteral(lit) => cwrite!(f, ctx, "{}", lit),
+            DoubleLiteral(lit) => cwrite!(f, ctx, "{}", lit),
+            BoolLiteral(lit) => cwrite!(f, ctx, "{}", lit),
+        }
+    }
+}
+
+/// A null-terminated C byte-string literal with the given data.
+///
+/// When code is generated, special characters will be correctly escaped.
+///
+/// The data is allowed to contain null characters.
+#[derive(Debug, Clone)]
+pub struct ByteStringLit(pub Vec<u8>);
+
+impl ByteStringLit {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl DisplayCtx<CSymbols> for ByteStringLit {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &CSymbols) -> fmt::Result {
+        let ByteStringLit(data) = self;
+        write!(f, "\"")?;
+        for &ch in data {
+            match ch {
+                b'\\' => write!(f, "\\\\")?,
+                b'"' => write!(f, "\\\"")?,
+                b'\n' => write!(f, "\\n")?,
+                b'\r' => write!(f, "\\r")?,
+                b'\t' => write!(f, "\\t")?,
+                _ => write!(f, "{}", ch as char)?,
+            }
+        }
+        write!(f, "\"")
     }
 }
 
@@ -348,6 +436,50 @@ impl DisplayCtx<CSymbols> for CAssignValue {
             FieldAccess {value, field} => cwrite!(f, ctx, "{}->{}", value, field),
             Var {name} => cwrite!(f, ctx, "{}", name),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CCond {
+    /// The condition variable (must be type `bool`)
+    cond: CIdent,
+    /// The `if` body, executed if `cond` is true
+    if_body: Vec<CStmt>,
+    /// The `else` body, executed if `cond` is false
+    else_body: Vec<CStmt>,
+}
+
+impl DisplayCtx<CSymbols> for CCond {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {cond, if_body, else_body} = self;
+        cwriteln!(f, ctx, "if ({}) {{", cond)?;
+        for stmt in if_body {
+            cwriteln!(f, ctx, "{}", stmt)?;
+        }
+        cwriteln!(f, ctx, "}} else {{")?;
+        for stmt in else_body {
+            cwriteln!(f, ctx, "{}", stmt)?;
+        }
+        cwrite!(f, ctx, "}}")
+    }
+}
+
+/// Represents a C loop that runs infinitely (e.g. `while (true)`)
+///
+/// This loop will only terminate due to break or return statement.
+#[derive(Debug, Clone)]
+pub struct CInfiniteLoop {
+    body: Vec<CStmt>,
+}
+
+impl DisplayCtx<CSymbols> for CInfiniteLoop {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+        let Self {body} = self;
+        cwriteln!(f, ctx, "while (true) {{")?;
+        for stmt in body {
+            cwriteln!(f, ctx, "{}", stmt)?;
+        }
+        cwrite!(f, ctx, "}}")
     }
 }
 
