@@ -14,19 +14,20 @@ pub trait SymId: Hash + Eq + Copy {
 }
 
 /// Represents a general symbol table that maps symbol names to unique IDs and back
-pub struct SymbolTable<Sym, Id>
+pub struct SymbolTable<Sym, Id, Data = ()>
     where Sym: Hash + Eq,
           Id: SymId,
 {
     symbols: HashMap<Id, Arc<Sym>>,
-    ids: HashMap<Arc<Sym>, Id>,
+    ids: HashMap<Arc<Sym>, (Id, Data)>,
     id_gen: <Id as SymId>::Gen,
 }
 
-impl<Sym, Id> fmt::Debug for SymbolTable<Sym, Id>
+impl<Sym, Id, Data> fmt::Debug for SymbolTable<Sym, Id, Data>
     where Sym: Hash + Eq + fmt::Debug,
           Id: SymId + fmt::Debug,
           <Id as SymId>::Gen: fmt::Debug,
+          Data: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {symbols, ids, id_gen} = self;
@@ -38,7 +39,7 @@ impl<Sym, Id> fmt::Debug for SymbolTable<Sym, Id>
     }
 }
 
-impl<Sym, Id> Default for SymbolTable<Sym, Id>
+impl<Sym, Id, Data> Default for SymbolTable<Sym, Id, Data>
     where Sym: Hash + Eq,
           Id: SymId,
 {
@@ -51,7 +52,7 @@ impl<Sym, Id> Default for SymbolTable<Sym, Id>
     }
 }
 
-impl<Sym, Id> SymbolTable<Sym, Id>
+impl<Sym, Id> SymbolTable<Sym, Id, ()>
     where Sym: Hash + Eq,
           Id: SymId,
 {
@@ -63,6 +64,22 @@ impl<Sym, Id> SymbolTable<Sym, Id>
     pub fn insert(&mut self, sym: Sym) -> Id
         where Sym: Display,
     {
+        self.insert_with(sym, ())
+    }
+}
+
+impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
+    where Sym: Hash + Eq,
+          Id: SymId,
+{
+    /// Inserts a new symbol into the symbol table with the given data and returns its ID
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol was previously present in the table
+    pub fn insert_with(&mut self, sym: Sym, data: Data) -> Id
+        where Sym: Display,
+    {
         if self.ids.contains_key(&sym) {
             unreachable!("bug: attempt to insert duplicate symbol: `{}`", sym);
         }
@@ -70,14 +87,14 @@ impl<Sym, Id> SymbolTable<Sym, Id>
         let sym = Arc::new(sym);
         let id = self.id_gen.next_id();
         self.symbols.insert(id, sym.clone());
-        self.ids.insert(sym, id);
+        self.ids.insert(sym, (id, data));
 
         id
     }
 
     /// Returns the ID associated with the given symbol
     pub fn id(&self, sym: &Sym) -> Option<Id> {
-        self.ids.get(sym).copied()
+        self.ids.get(sym).map(|(id, _)| id).copied()
     }
 
     /// Returns the symbol associated with the given ID
