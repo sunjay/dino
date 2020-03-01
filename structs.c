@@ -2,7 +2,8 @@
 #include "./dino-std/target/debug/dino-std.h"
 
 // This is just a hack to help make hand-generating code easier, not a real part
-// of the expected code generation
+// of the expected code generation. Every place where this is used should
+// actually use a fresh temporary.
 DUnit *unit_ret = NULL;
 
 // Mangled name of struct contains a deterministic string based on its name that
@@ -15,7 +16,7 @@ typedef struct structs_98e3__Counter_0f34 {
 } structs_98e3__Counter_0f34;
 
 // >>> declarations for all structs and forward declarations of all functions go here <<<
-void structs_98e3__Counter_0f34__incr_by(structs_98e3__Counter_0f34 *self, DInt *value);
+void structs_98e3__Counter_0f34__incr_by(structs_98e3__Counter_0f34 *self, DInt *value, DUnit **__dino__out);
 
 // Generated constructor -- all field values are provided as arguments
 void __dino__constructor__structs_98e3__Counter_0f34(
@@ -48,39 +49,50 @@ void structs_98e3__Counter_0f34__value(structs_98e3__Counter_0f34 *self, DInt **
 
 // Parameter names should be mangled to avoid conflicts with temporaries
 // `self` is not mangled here, but it could be in the generated code
-void structs_98e3__Counter_0f34__incr(structs_98e3__Counter_0f34 *self) {
+void structs_98e3__Counter_0f34__incr(structs_98e3__Counter_0f34 *self, DUnit **__dino__out) {
     DInt *tmp587;
     __dino__DInt_from_int_literal(1LL, &tmp587);
-    structs_98e3__Counter_0f34__incr_by(self, tmp587);
+    // Since there is no semi-colon after `incr_by`, we pass __dino__out
+    // directly to incr_by instead of generating unit on our own. Another valid
+    // code generation here would be to store the result of incr_by in a
+    // temporary and then assign __dino__out to that temporary.
+    structs_98e3__Counter_0f34__incr_by(self, tmp587, __dino__out);
 }
 
-void structs_98e3__Counter_0f34__incr_by(structs_98e3__Counter_0f34 *self, DInt *value_a0b6) {
+void structs_98e3__Counter_0f34__incr_by(structs_98e3__Counter_0f34 *self, DInt *value_a0b6, DUnit **__dino__out) {
     // Example of field being used as an rvalue:
     DInt *tmp753 = self->count;
     DInt *tmp829;
     int__add(tmp753, value_a0b6, &tmp829);
     // Example of field being used as an lvalue:
     self->count = tmp829;
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
-void structs_98e3__Counter_0f34__decr(structs_98e3__Counter_0f34 *self) {
+void structs_98e3__Counter_0f34__decr(structs_98e3__Counter_0f34 *self, DUnit **__dino__out) {
     DInt *tmp843 = self->count;
     DInt *tmp867;
     __dino__DInt_from_int_literal(1LL, &tmp867);
     DInt *tmp899;
     int__sub(tmp843, tmp867, &tmp899);
     self->count = tmp899;
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
 void structs_98e3__Counter_0f34__add(
     structs_98e3__Counter_0f34 *self,
-    structs_98e3__Counter_0f34 *other_f891
+    structs_98e3__Counter_0f34 *other_f891,
+    DUnit **__dino__out
 ) {
     DInt *tmp912 = self->count;
     DInt *tmp914 = other_f891->count;
     DInt *tmp943;
     int__add(tmp912, tmp914, &tmp943);
     self->count = tmp943;
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
 typedef struct structs_98e3__Game_93f2 {
@@ -138,15 +150,19 @@ void structs_98e3__Game_93f2__team_b_name(structs_98e3__Game_93f2 *self, DBStr *
     *__dino__out = tmp211;
 }
 
-void structs_98e3__Game_93f2__team_a_scores(structs_98e3__Game_93f2 *self) {
-    structs_98e3__Counter_0f34__incr(self->team_a);
+void structs_98e3__Game_93f2__team_a_scores(structs_98e3__Game_93f2 *self, DUnit **__dino__out) {
+    structs_98e3__Counter_0f34__incr(self->team_a, &unit_ret);
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
-void structs_98e3__Game_93f2__team_b_scores(structs_98e3__Game_93f2 *self) {
-    structs_98e3__Counter_0f34__incr(self->team_b);
+void structs_98e3__Game_93f2__team_b_scores(structs_98e3__Game_93f2 *self, DUnit **__dino__out) {
+    structs_98e3__Counter_0f34__incr(self->team_b, &unit_ret);
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
-void structs_98e3__Game_93f2__print_winner(structs_98e3__Game_93f2 *self) {
+void structs_98e3__Game_93f2__print_winner(structs_98e3__Game_93f2 *self, DUnit **__dino__out) {
     structs_98e3__Counter_0f34 *tmp147 = self->team_a;
     // Since this variable comes from a function/method call, we use an out variable
     DInt *tmp150;
@@ -192,6 +208,8 @@ void structs_98e3__Game_93f2__print_winner(structs_98e3__Game_93f2 *self) {
             print_bstr(tmp777, &unit_ret);
         }
     }
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
 // Free function names are mangled to avoid conflicts with structs that have the
@@ -199,7 +217,7 @@ void structs_98e3__Game_93f2__print_winner(structs_98e3__Game_93f2 *self) {
 // same namespace. The mangled name contains the mangled name of the module.
 // Since function names are unique within a module, this guarantees that there
 // won't be any conflicts.
-void structs_98e3__test_counter_889f(void) {
+void structs_98e3__test_counter_889f(DUnit **__dino__out) {
     DBStr *tmp112;
     __dino__DBStr_from_bstr_literal("counter", 7, &tmp112);
     print_bstr(tmp112, &unit_ret);
@@ -210,27 +228,27 @@ void structs_98e3__test_counter_889f(void) {
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp611);
     print_int(tmp611, &unit_ret);
 
-    structs_98e3__Counter_0f34__incr(counter_3aef);
+    structs_98e3__Counter_0f34__incr(counter_3aef, &unit_ret);
     DInt *tmp612;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp612);
     print_int(tmp612, &unit_ret);
 
-    structs_98e3__Counter_0f34__incr(counter_3aef);
+    structs_98e3__Counter_0f34__incr(counter_3aef, &unit_ret);
     DInt *tmp613;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp613);
     print_int(tmp613, &unit_ret);
 
-    structs_98e3__Counter_0f34__decr(counter_3aef);
+    structs_98e3__Counter_0f34__decr(counter_3aef, &unit_ret);
     DInt *tmp614;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp614);
     print_int(tmp614, &unit_ret);
 
-    structs_98e3__Counter_0f34__decr(counter_3aef);
+    structs_98e3__Counter_0f34__decr(counter_3aef, &unit_ret);
     DInt *tmp615;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp615);
     print_int(tmp615, &unit_ret);
 
-    structs_98e3__Counter_0f34__decr(counter_3aef);
+    structs_98e3__Counter_0f34__decr(counter_3aef, &unit_ret);
     DInt *tmp616;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp616);
     print_int(tmp616, &unit_ret);
@@ -246,7 +264,7 @@ void structs_98e3__test_counter_889f(void) {
         __dino__DBool_coerce_bool(tmp598, &tmp572);
 
         if (tmp572) {
-            structs_98e3__Counter_0f34__incr(counter_3aef);
+            structs_98e3__Counter_0f34__incr(counter_3aef, &unit_ret);
 
         } else {
             break;
@@ -258,7 +276,7 @@ void structs_98e3__test_counter_889f(void) {
 
     DInt *tmp192;
     __dino__DInt_from_int_literal(34LL, &tmp192);
-    structs_98e3__Counter_0f34__incr_by(counter_3aef, tmp192);
+    structs_98e3__Counter_0f34__incr_by(counter_3aef, tmp192, &unit_ret);
     DInt *tmp618;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp618);
     print_int(tmp618, &unit_ret);
@@ -275,20 +293,22 @@ void structs_98e3__test_counter_889f(void) {
     __dino__DInt_from_int_literal(2LL, &tmp743);
     DInt *tmp689;
     int__div(tmp742, tmp743, &tmp689);
-    structs_98e3__Counter_0f34__incr_by(counter2_a6bc, tmp689);
+    structs_98e3__Counter_0f34__incr_by(counter2_a6bc, tmp689, &unit_ret);
     DInt *tmp619;
     structs_98e3__Counter_0f34__value(counter2_a6bc, &tmp619);
     print_int(tmp619, &unit_ret);
-    structs_98e3__Counter_0f34__add(counter2_a6bc, counter_3aef);
+    structs_98e3__Counter_0f34__add(counter2_a6bc, counter_3aef, &unit_ret);
     DInt *tmp620;
     structs_98e3__Counter_0f34__value(counter_3aef, &tmp620);
     print_int(tmp620, &unit_ret);
     DInt *tmp621;
     structs_98e3__Counter_0f34__value(counter2_a6bc, &tmp621);
     print_int(tmp621, &unit_ret);
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
-void structs_98e3__test_game_729e(void) {
+void structs_98e3__test_game_729e(DUnit **__dino__out) {
     DBStr *tmp398;
     __dino__DBStr_from_bstr_literal("game", 4, &tmp398);
     print_bstr(tmp398, &unit_ret);
@@ -300,20 +320,25 @@ void structs_98e3__test_game_729e(void) {
     structs_98e3__Game_93f2__new(tmp487, tmp981, &tmp512);
     structs_98e3__Game_93f2 *game_bc3f = tmp512;
 
-    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
-    structs_98e3__Game_93f2__team_b_scores(game_bc3f);
-    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
-    structs_98e3__Game_93f2__team_a_scores(game_bc3f);
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f, &unit_ret);
+    structs_98e3__Game_93f2__team_b_scores(game_bc3f, &unit_ret);
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f, &unit_ret);
+    structs_98e3__Game_93f2__team_a_scores(game_bc3f, &unit_ret);
 
-    structs_98e3__Game_93f2__print_winner(game_bc3f);
+    structs_98e3__Game_93f2__print_winner(game_bc3f, &unit_ret);
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
-void structs_98e3__main_062a(void) {
-    structs_98e3__test_counter_889f();
-    structs_98e3__test_game_729e();
+void structs_98e3__main_062a(DUnit **__dino__out) {
+    structs_98e3__test_counter_889f(&unit_ret);
+    structs_98e3__test_game_729e(&unit_ret);
+
+    __dino__DUnit_from_unit_literal(__dino__out);
 }
 
 int main() {
-    structs_98e3__main_062a();
+    DUnit *tmp444;
+    structs_98e3__main_062a(&tmp444);
     return 0;
 }

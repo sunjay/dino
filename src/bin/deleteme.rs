@@ -60,16 +60,16 @@ fn main() {
         CFunction {
             name: constructor_struct_counter.clone(),
 
-            params: vec![
-                CFuncParam {
+            in_params: vec![
+                CInParam {
                     name: field_count.clone(),
-                    typ: CFuncParamType::InPtr {typ: type_dint.clone()},
-                },
-                CFuncParam {
-                    name: dino_out.clone(),
-                    typ: CFuncParamType::OutPtr {typ: struct_counter.clone()},
+                    ptr_typ: type_dint.clone(),
                 },
             ],
+            out_param: COutParam {
+                name: dino_out.clone(),
+                ptr_typ: struct_counter.clone(),
+            },
 
             body: vec![
                 CStmt::Assign(CAssign {

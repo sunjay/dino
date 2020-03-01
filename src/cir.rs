@@ -25,9 +25,9 @@ use crate::symbol_table::{SymbolTable, SymId, GenId};
 pub struct CProgram {
     pub structs: Vec<CStruct>,
     pub functions: Vec<CFunction>,
-    /// If provided, the program will end with an entry point (`int main`) that calls the given
-    /// function with no parameters
-    pub entry_point: Option<CIdent>,
+    /// If provided, the program will end with an entry point (`int main`) whose body is the given
+    /// statements
+    pub entry_point: Option<Vec<CStmt>>,
 }
 
 impl DisplayCtx<CSymbols> for CProgram {
@@ -58,10 +58,12 @@ impl DisplayCtx<CSymbols> for CProgram {
         }
         cwriteln!(f, ctx)?;
 
-        if let Some(entry_point) = entry_point {
+        if let Some(entry_point_body) = entry_point {
             cwriteln!(f, ctx, "int main() {{")?;
-            cwriteln!(f, ctx, "    {}();", entry_point)?;
-            cwriteln!(f, ctx, "    return 0;")?;
+            for stmt in entry_point_body {
+                cwriteln!(f, ctx, "{}", stmt)?;
+            }
+            cwriteln!(f, ctx, "return 0;")?;
             cwriteln!(f, ctx, "}}")?;
         }
 
@@ -118,7 +120,11 @@ pub struct CStructField {
 #[derive(Debug, Clone)]
 pub struct CFunction {
     pub name: CIdent,
-    pub params: Vec<CFuncParam>,
+    /// The input parameters of the function (possibly empty)
+    pub in_params: Vec<CInParam>,
+    /// Functions always have an out parameter since in our language you always return *something*,
+    /// even if that something is just `()`.
+    pub out_param: COutParam,
     pub body: Vec<CStmt>,
 }
 
@@ -130,15 +136,15 @@ impl CFunction {
 
 impl<'a> DisplayCtx<CSymbols> for ForwardDecl<'a, CFunction> {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let CFunction {name, params, body: _} = self.value;
-        cwrite!(f, ctx, "void {}({});", name, Commas {values: params, empty: "void"})
+        let CFunction {name, in_params, out_param, body: _} = self.value;
+        cwrite!(f, ctx, "void {}({});", name, Commas {values: in_params, last: out_param})
     }
 }
 
 impl DisplayCtx<CSymbols> for CFunction {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, params, body} = self;
-        cwriteln!(f, ctx, "void {}({}) {{", name, Commas {values: params, empty: "void"})?;
+        let Self {name, in_params, out_param, body} = self;
+        cwriteln!(f, ctx, "void {}({}) {{", name, Commas {values: in_params, last: out_param})?;
         for stmt in body {
             cwriteln!(f, ctx, "{}", stmt)?;
         }
@@ -147,33 +153,30 @@ impl DisplayCtx<CSymbols> for CFunction {
 }
 
 #[derive(Debug, Clone)]
-pub struct CFuncParam {
+pub struct CInParam {
     pub name: CIdent,
-    pub typ: CFuncParamType,
+    /// The type of the pointer this parameter represents
+    pub ptr_typ: CIdent,
 }
 
-impl DisplayCtx<CSymbols> for CFuncParam {
+impl DisplayCtx<CSymbols> for CInParam {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, typ} = self;
-        cwrite!(f, ctx, "{} {}", typ, name)
+        let Self {name, ptr_typ} = self;
+        cwrite!(f, ctx, "{}* {}", ptr_typ, name)
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum CFuncParamType {
-    /// A pointer to the given type
-    InPtr {typ: CIdent},
-    /// An out pointer to the given type (i.e. pointer to a pointer)
-    OutPtr {typ: CIdent},
+pub struct COutParam {
+    pub name: CIdent,
+    /// The type this out pointer represents
+    pub ptr_typ: CIdent,
 }
 
-impl DisplayCtx<CSymbols> for CFuncParamType {
+impl DisplayCtx<CSymbols> for COutParam {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CFuncParamType::*;
-        match self {
-            InPtr {typ} => cwrite!(f, ctx, "{}*", typ),
-            OutPtr {typ} => cwrite!(f, ctx, "{}**", typ),
-        }
+        let Self {name, ptr_typ} = self;
+        cwrite!(f, ctx, "{}** {}", ptr_typ, name)
     }
 }
 
@@ -232,31 +235,33 @@ impl DisplayCtx<CSymbols> for CVarType {
 #[derive(Debug, Clone)]
 pub struct CFuncCall {
     pub func_name: CIdent,
-    pub args: Vec<CFuncArg>,
+    /// The input arguments to the function. Each one is a plain variable whose type must be a
+    /// pointer.
+    pub in_args: Vec<CIdent>,
+    /// Since all functions take an out parameter, we always have to provide it
+    pub out_arg: COutArg,
 }
 
 impl DisplayCtx<CSymbols> for CFuncCall {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {func_name, args} = self;
-        cwrite!(f, ctx, "{}({})", func_name, Commas {values: args, empty: ""})
+        let Self {func_name, in_args, out_arg} = self;
+        cwrite!(f, ctx, "{}({})", func_name, Commas {values: in_args, last: out_arg})
     }
 }
 
+/// An output argument to a function. Must be a pointer variable.
+///
+/// This will cause the address of that variable to be passed to the function.
 #[derive(Debug, Clone)]
-pub enum CFuncArg {
-    /// A plain variable passed as the argument
-    Var(CIdent),
-    /// An argument to an out parameter (pointer to the given variable)
-    OutVar(CIdent),
+pub struct COutArg {
+    /// The name of the variable to write output to
+    pub name: CIdent,
 }
 
-impl DisplayCtx<CSymbols> for CFuncArg {
+impl DisplayCtx<CSymbols> for COutArg {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CFuncArg::*;
-        match self {
-            Var(var) => cwrite!(f, ctx, "{}", var),
-            OutVar(var) => cwrite!(f, ctx, "&{}", var),
-        }
+        let Self {name} = self;
+        cwrite!(f, ctx, "&{}", name)
     }
 }
 
@@ -383,27 +388,23 @@ struct ForwardDecl<'a, T> {
     value: &'a T,
 }
 
-/// Writes out a comma-separated list, ensuring that there is no trailing comma since that is not
-/// supported in C.
-struct Commas<'a, T: DisplayCtx<CSymbols>, D: DisplayCtx<CSymbols>> {
+/// Writes out a non-empty comma-separated list
+struct Commas<'a, T: DisplayCtx<CSymbols>, L: DisplayCtx<CSymbols>> {
     /// The values to write out in a comma-separated list
     values: &'a [T],
-    /// The default value to write out if the list of values is empty
-    empty: D,
+    /// The final value, always present
+    last: &'a L,
 }
 
-impl<'a, T: DisplayCtx<CSymbols>, D: DisplayCtx<CSymbols>> DisplayCtx<CSymbols> for Commas<'a, T, D> {
+impl<'a, T: DisplayCtx<CSymbols>, L: DisplayCtx<CSymbols>> DisplayCtx<CSymbols> for Commas<'a, T, L> {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {values, empty} = self;
+        let &Self {values, last} = self;
 
-        if values.is_empty() {
-            return cwrite!(f, ctx, "{}", empty);
+        for value in values {
+            cwrite!(f, ctx, "{}, ", value)?;
         }
-
-        cwrite!(f, ctx, "{}", values[0])?;
-        for value in &values[1..] {
-            cwrite!(f, ctx, ", {}", value)?;
-        }
+        // C does not support trailing commas
+        cwrite!(f, ctx, "{}", last)?;
 
         Ok(())
     }

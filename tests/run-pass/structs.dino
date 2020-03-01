@@ -17,7 +17,8 @@ impl Counter {
 
     /// Increment the counter
     fn incr(self) {
-        self.incr_by(1);
+        // No semi-colon results in the () from incr_by being returned here too
+        self.incr_by(1)
     }
 
     /// Increment the counter by the given value
