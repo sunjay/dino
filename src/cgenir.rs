@@ -1,7 +1,10 @@
-//! C IR - Types for representing the minimal subset of C used for code generation.
+//! C Generation IR - Similar to C, but a minimal subset that still encodes details of things like
+//! our calling convention, program structure, etc. The goal of this IR is to limit flexibility and
+//! help us generate the correct code.
 //!
-//! All types here should directly map to concepts expressible in C. This is the last step in code
-//! generation and no further processing should be required in order to convert these types to C.
+//! Although most types here map directly to concepts expressible directly in C, we may need to do
+//! some minimal processing in order to produce valid C code. For example, recursive struct types
+//! do a check on the struct type name. This isn't done in C IR.
 
 use std::fmt;
 

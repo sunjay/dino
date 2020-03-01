@@ -1,7 +1,7 @@
 //! Just for testing -- DELETE ME
 
 use dino::cprintln;
-use dino::cir::*;
+use dino::cgenir::*;
 
 fn main() {
     let mut syms = CSymbols::default();

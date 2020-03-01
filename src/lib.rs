@@ -11,7 +11,7 @@ pub mod gc_lib;
 
 pub mod symbol_table;
 pub mod fmt_ctx;
-pub mod cir;
+pub mod cgenir;
 
 use std::fs;
 use std::io;
