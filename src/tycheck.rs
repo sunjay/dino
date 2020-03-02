@@ -13,7 +13,7 @@ use snafu::Snafu;
 use rayon::prelude::*;
 
 use crate::{ast, ir};
-use crate::resolve::{ModuleDecls, ProgramDecls, DeclMap, TyId};
+use crate::resolve2::{ModuleDecls, ProgramDecls, DeclMap, TyId};
 use crate::primitives::Primitives;
 
 use constraints::ConstraintSet;

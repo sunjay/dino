@@ -1,5 +1,5 @@
 use crate::ir;
-use crate::resolve::{TyId, DeclMap};
+use crate::resolve2::{TyId, DeclMap};
 use crate::codegen::*;
 
 use super::Error;

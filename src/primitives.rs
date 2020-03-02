@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::resolve::{TyId, DeclMap, TypeInfo, LiteralConstructors};
+use crate::resolve2::{TyId, DeclMap, TypeInfo, LiteralConstructors};
 
 macro_rules! primitives {
     (

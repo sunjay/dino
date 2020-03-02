@@ -4,7 +4,7 @@ use snafu::OptionExt;
 use maplit::hashset;
 use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
-use crate::resolve::{DeclMap, TyId};
+use crate::resolve2::{DeclMap, TyId};
 use crate::primitives::Primitives;
 use crate::{ast, ir};
 

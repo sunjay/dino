@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 
 use rayon::prelude::*;
 
-use crate::resolve::TyId;
+use crate::resolve2::TyId;
 
 use super::constraints::TyVar;
 

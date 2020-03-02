@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 pub use crate::ast::{Ident, IdentPath};
 
-use crate::resolve::TyId;
+use crate::resolve2::TyId;
 
 #[derive(Debug, Clone)]
 pub struct Program<'a> {

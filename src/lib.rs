@@ -4,7 +4,7 @@ pub mod ast;
 pub mod codegen;
 pub mod trans;
 pub mod ir;
-pub mod resolve;
+pub mod resolve2;
 pub mod primitives;
 pub mod tycheck;
 pub mod runtime;
@@ -39,7 +39,7 @@ pub enum Error {
     #[snafu(display("In '{}': {}", path.display(), source))]
     ResolveError {
         path: PathBuf,
-        source: resolve::Error,
+        source: resolve2::Error,
     },
     #[snafu(display("In '{}': {}", path.display(), source))]
     TypeError {
@@ -60,7 +60,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
         .with_context(|| IOError {path: path.to_path_buf()})?;
     let program = ast::Program::parse(&input_program)
         .with_context(|| ParseError {path: path.to_path_buf()})?;
-    let (mut decls, resolved_ast) = resolve::ProgramDecls::extract(&program)
+    let (mut decls, resolved_ast) = resolve2::ProgramDecls::extract(&program)
         .with_context(|| ResolveError {path: path.to_path_buf()})?;
     insert_prelude(&mut decls);
     let program_ir = tycheck::infer_and_check(resolved_ast, &decls)
@@ -71,11 +71,11 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     Ok(code)
 }
 
-fn insert_prelude(decls: &mut resolve::ProgramDecls) {
+fn insert_prelude(decls: &mut resolve2::ProgramDecls) {
     //TODO: Figure out how to do this properly without hard coding things
 
     use crate::ir::{FuncSig, FuncParam};
-    use crate::resolve::FunctionInfo;
+    use crate::resolve2::FunctionInfo;
 
     let prims = &decls.prims;
     let decls = &mut decls.top_level_decls;

@@ -4,7 +4,7 @@ use snafu::OptionExt;
 use rayon::prelude::*;
 use ena::unify::InPlaceUnificationTable;
 
-use crate::resolve::TyId;
+use crate::resolve2::TyId;
 
 use super::subst::TypeSubst;
 use super::constraints::TyVar;

@@ -8,7 +8,7 @@ use std::iter;
 use snafu::Snafu;
 
 use crate::ir;
-use crate::resolve::{ProgramDecls, DeclMap};
+use crate::resolve2::{ProgramDecls, DeclMap};
 use crate::primitives::Primitives;
 use crate::codegen::*;
 
