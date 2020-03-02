@@ -14,6 +14,7 @@ pub mod gc_lib;
 pub mod diagnostics;
 pub mod symbol_table;
 pub mod fmt_ctx;
+pub mod def_id;
 pub mod cgenir;
 pub mod cir;
 

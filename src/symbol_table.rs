@@ -8,6 +8,17 @@ pub trait GenId<Id> {
     fn next_id(&mut self) -> Id;
 }
 
+/// A trait for generating unique IDs (with synchronization)
+pub trait GenIdSync<Id> {
+    fn next_id(&self) -> Id;
+}
+
+impl<Id, T: GenIdSync<Id>> GenId<Id> for Arc<T> {
+    fn next_id(&mut self) -> Id {
+        GenIdSync::next_id(&**self)
+    }
+}
+
 /// Represents a type that can be used as an ID
 pub trait SymId: Hash + Eq + Copy {
     type Gen: GenId<Self> + Default;
