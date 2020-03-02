@@ -66,6 +66,16 @@ impl<Sym, Id> SymbolTable<Sym, Id, ()>
     {
         self.insert_with(sym, ())
     }
+
+    /// Gets the ID for the given symbol, or inserts the symbol and returns its new ID
+    pub fn get_or_insert(&mut self, sym: Sym) -> Id
+        where Sym: Display,
+    {
+        match self.id(&sym) {
+            Some(id) => id,
+            None => self.insert(sym),
+        }
+    }
 }
 
 impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
