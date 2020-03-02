@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::fmt::{self, Display};
+use std::fmt;
 use std::hash::Hash;
 use std::collections::HashMap;
 
@@ -58,23 +58,16 @@ impl<Sym, Id> SymbolTable<Sym, Id, ()>
 {
     /// Inserts a new symbol into the symbol table and returns its ID
     ///
-    /// # Panics
-    ///
-    /// Panics if the symbol was previously present in the table
-    pub fn insert(&mut self, sym: Sym) -> Id
-        where Sym: Display,
-    {
-        self.insert_with(sym, ())
+    /// If the symbol was already present in the table, it will be returned in an `Err`
+    pub fn insert(&mut self, sym: Sym) -> Result<Id, Sym> {
+        self.insert_with(sym, ()).map_err(|(sym, _)| sym)
     }
 
-    /// Gets the ID for the given symbol, or inserts the symbol and returns its new ID
-    pub fn get_or_insert(&mut self, sym: Sym) -> Id
-        where Sym: Display,
-    {
-        match self.id(&sym) {
-            Some(id) => id,
-            None => self.insert(sym),
-        }
+    /// Inserts a new symbol into the symbol table and returns its ID
+    ///
+    /// If the symbol was previously present in the table, it will be overwritten with a new ID.
+    pub fn insert_overwrite(&mut self, sym: Sym) -> Id {
+        self.insert_overwrite_with(sym, ())
     }
 }
 
@@ -84,16 +77,19 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
 {
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
-    /// # Panics
-    ///
-    /// Panics if the symbol was previously present in the table
-    pub fn insert_with(&mut self, sym: Sym, data: Data) -> Id
-        where Sym: Display,
-    {
+    /// If the symbol was already present in the table, it will be returned in an `Err`
+    pub fn insert_with(&mut self, sym: Sym, data: Data) -> Result<Id, (Sym, Data)> {
         if self.ids.contains_key(&sym) {
-            unreachable!("bug: attempt to insert duplicate symbol: `{}`", sym);
+            return Err((sym, data));
         }
 
+        Ok(self.insert_overwrite_with(sym, data))
+    }
+
+    /// Inserts a new symbol into the symbol table with the given data and returns its ID
+    ///
+    /// If the symbol was previously present in the table, it will be overwritten with a new ID.
+    pub fn insert_overwrite_with(&mut self, sym: Sym, data: Data) -> Id {
         let sym = Arc::new(sym);
         let id = self.id_gen.next_id();
         self.symbols.insert(id, (sym.clone(), data));

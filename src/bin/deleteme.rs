@@ -7,17 +7,17 @@ use dino::cgenir::*;
 fn main() {
     let mut syms = CSymbols::default();
 
-    let type_dint = syms.insert("DInt".to_string());
-    let type_dbstr = syms.insert("DBStr".to_string());
+    let type_dint = syms.insert_overwrite("DInt".to_string());
+    let type_dbstr = syms.insert_overwrite("DBStr".to_string());
 
-    let struct_counter = syms.insert("structs_98e3__Counter_0f34".to_string());
-    let field_count = syms.insert("count".to_string());
+    let struct_counter = syms.insert_overwrite("structs_98e3__Counter_0f34".to_string());
+    let field_count = syms.insert_overwrite("count".to_string());
 
-    let struct_game = syms.insert("structs_98e3__Game_93f2".to_string());
-    let field_team_a_name = syms.insert("team_a_name".to_string());
-    let field_team_a = syms.insert("team_a".to_string());
-    let field_team_b_name = syms.insert("team_b_name".to_string());
-    let field_team_b = syms.insert("team_b".to_string());
+    let struct_game = syms.insert_overwrite("structs_98e3__Game_93f2".to_string());
+    let field_team_a_name = syms.insert_overwrite("team_a_name".to_string());
+    let field_team_a = syms.insert_overwrite("team_a".to_string());
+    let field_team_b_name = syms.insert_overwrite("team_b_name".to_string());
+    let field_team_b = syms.insert_overwrite("team_b".to_string());
 
     let structs = vec![
         Struct {
@@ -53,9 +53,9 @@ fn main() {
         },
     ];
 
-    let dino_out = syms.insert("__dino__out".to_string());
+    let dino_out = syms.insert_overwrite("__dino__out".to_string());
 
-    let constructor_struct_counter = syms.insert("__dino__constructor__structs_98e3__Counter_0f34".to_string());
+    let constructor_struct_counter = syms.insert_overwrite("__dino__constructor__structs_98e3__Counter_0f34".to_string());
 
     let functions = vec![
         Function {
