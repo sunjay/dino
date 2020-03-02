@@ -78,8 +78,8 @@ impl DBStr {
 ///
 /// Safe as long as the pointer passed in is valid and the length is correct
 #[no_mangle]
-pub unsafe extern fn __dino__DBStr_from_bstr_literal(data: *const c_char, length: usize, mut out: OutPtr<DBStr>) {
-    out.write(DBStr::copy_ptr(data, length));
+pub unsafe extern fn __dino__DBStr_from_bstr_literal(data: *const c_char, length: u64, mut out: OutPtr<DBStr>) {
+    out.write(DBStr::copy_ptr(data, length as usize));
 }
 
 #[no_mangle]
