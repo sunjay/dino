@@ -15,8 +15,12 @@ pub mod diagnostics;
 pub mod symbol_table;
 pub mod fmt_ctx;
 pub mod def_id;
+pub mod hir;
+pub mod nir;
+pub mod resolve;
 pub mod cgenir;
 pub mod cir;
+pub mod package;
 
 use std::fs;
 use std::io;
