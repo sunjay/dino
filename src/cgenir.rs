@@ -6,12 +6,38 @@
 //! some minimal processing in order to produce valid C code. For example, recursive struct types
 //! do a check on the struct type name. This isn't done in C IR.
 
-use std::fmt;
+use std::iter::once;
 
-use crate::{cwrite, cwriteln};
-use crate::runtime::ALLOCATE;
-use crate::fmt_ctx::DisplayCtx;
-use crate::symbol_table::{SymbolTable, SymId, GenId};
+use crate::gc_lib::GC_LIB_HEADER_FILENAME;
+use crate::runtime::{ALLOCATE, RUNTIME_HEADER_FILENAME};
+use crate::dino_std::DINO_STD_HEADER_FILENAME;
+use crate::cir;
+
+pub trait GenerateC {
+    /// The type from `cir` that this generates
+    type Output;
+
+    /// Generates C IR for the program, adding to the symbol table as necessary
+    fn to_c(&self) -> Self::Output;
+}
+
+impl<'a, T: GenerateC> GenerateC for &'a T {
+    type Output = <T as GenerateC>::Output;
+
+    fn to_c(&self) -> Self::Output {
+        (*self).to_c()
+    }
+}
+
+impl<T: GenerateC> GenerateC for Vec<T> {
+    type Output = Vec<<T as GenerateC>::Output>;
+
+    fn to_c(&self) -> Self::Output {
+        self.iter()
+            .map(|stmt| stmt.to_c())
+            .collect()
+    }
+}
 
 /// Represents a complete C program with an optional entry point (for executables)
 ///
@@ -25,318 +51,337 @@ use crate::symbol_table::{SymbolTable, SymId, GenId};
 /// without forcing us to write them out in dependency order. This even works if there are cyclic
 /// dependencies between functions and types.
 #[derive(Debug, Clone)]
-pub struct CProgram {
-    pub structs: Vec<CStruct>,
-    pub functions: Vec<CFunction>,
+pub struct Program {
+    pub structs: Vec<Struct>,
+    pub functions: Vec<Function>,
     /// If provided, the program will end with an entry point (`int main`) whose body is the given
     /// statements
-    pub entry_point: Option<Vec<CStmt>>,
+    pub entry_point: Option<Vec<Stmt>>,
 }
 
-impl DisplayCtx<CSymbols> for CProgram {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+impl GenerateC for Program {
+    type Output = cir::Program;
+
+    fn to_c(&self) -> Self::Output {
         let Self {structs, functions, entry_point} = self;
 
-        cwriteln!(f, ctx, "// struct forward declarations")?;
+        let mut decls = Vec::new();
+
+        decls.push(cir::Decl::Include(GC_LIB_HEADER_FILENAME.into()));
+        decls.push(cir::Decl::Include(RUNTIME_HEADER_FILENAME.into()));
+        decls.push(cir::Decl::Include(DINO_STD_HEADER_FILENAME.into()));
+        decls.push(cir::Decl::BlankLine);
+
+        decls.push(cir::Decl::Comment("struct forward declarations".into()));
+        decls.reserve(structs.len());
         for struct_decl in structs {
-            cwriteln!(f, ctx, "{}", struct_decl.forward_decl())?;
+            decls.push(cir::Decl::TypedefForwardDecl(struct_decl.forward_decl().to_c()));
         }
-        cwriteln!(f, ctx)?;
+        decls.push(cir::Decl::BlankLine);
 
-        cwriteln!(f, ctx, "// struct declarations")?;
+        decls.push(cir::Decl::Comment("struct declarations".into()));
         for struct_decl in structs {
-            cwriteln!(f, ctx, "{}", struct_decl)?;
+            decls.push(cir::Decl::Typedef(struct_decl.to_c()));
         }
-        cwriteln!(f, ctx)?;
+        decls.push(cir::Decl::BlankLine);
 
-        cwriteln!(f, ctx, "// function forward declarations")?;
+        decls.push(cir::Decl::Comment("function forward declarations".into()));
         for func in functions {
-            cwriteln!(f, ctx, "{}", func.forward_decl())?;
+            decls.push(cir::Decl::FunctionForwardDecl(func.forward_decl().to_c()));
         }
-        cwriteln!(f, ctx)?;
+        decls.push(cir::Decl::BlankLine);
 
-        cwriteln!(f, ctx, "// function declarations")?;
+        decls.push(cir::Decl::Comment("function declarations".into()));
         for func in functions {
-            cwriteln!(f, ctx, "{}", func)?;
+            decls.push(cir::Decl::Function(func.to_c()));
         }
-        cwriteln!(f, ctx)?;
 
         if let Some(entry_point_body) = entry_point {
-            cwriteln!(f, ctx, "int main() {{")?;
-            for stmt in entry_point_body {
-                cwriteln!(f, ctx, "{}", stmt)?;
-            }
-            cwriteln!(f, ctx, "return 0;")?;
-            cwriteln!(f, ctx, "}}")?;
+            decls.push(cir::Decl::BlankLine);
+            decls.push(cir::Decl::Function(cir::Function {
+                sig: cir::FuncSig {
+                    name: "main".into(),
+                    ret_type: cir::Type::Int32,
+                    params: Vec::new(),
+                },
+
+                body: entry_point_body.iter()
+                    .map(|stmt| stmt.to_c())
+                    .chain(once(cir::Stmt::Return(Some(cir::Expr::Int32(0)))))
+                    .collect(),
+            }));
         }
 
-        Ok(())
+        cir::Program {
+            decls,
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CStruct {
-    pub name: CIdent,
+pub struct Struct {
+    pub name: Ident,
     /// If any of the fields have the same name as the struct, the
     /// `struct` C keyword will be added before them
-    pub fields: Vec<CStructField>,
+    pub fields: Vec<StructField>,
 }
 
-impl CStruct {
+impl Struct {
     fn forward_decl(&self) -> ForwardDecl<Self> {
         ForwardDecl {value: self}
     }
 }
 
-impl<'a> DisplayCtx<CSymbols> for ForwardDecl<'a, CStruct> {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let CStruct {name, fields: _} = self.value;
-        cwrite!(f, ctx, "typedef struct {} {};", name, name)
+impl<'a> GenerateC for ForwardDecl<'a, Struct> {
+    type Output = cir::TypedefForwardDecl;
+
+    fn to_c(&self) -> Self::Output {
+        let &Struct {name, fields: _} = self.value;
+
+        cir::TypedefForwardDecl {
+            struct_name: name,
+            typedef_name: name,
+        }
     }
 }
 
-impl DisplayCtx<CSymbols> for CStruct {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, fields} = self;
-        cwriteln!(f, ctx, "typedef struct {} {{", name)?;
-        for field in fields {
-            let CStructField {name: field_name, ptr_typ} = field;
-            if ptr_typ == name {
-                // Recursive type
-                cwriteln!(f, ctx, "struct {}* {};", ptr_typ, field_name)?;
-            } else {
-                cwriteln!(f, ctx, "{}* {};", ptr_typ, field_name)?;
-            }
+impl GenerateC for Struct {
+    type Output = cir::Typedef;
+
+    fn to_c(&self) -> Self::Output {
+        let &Self {name, ref fields} = self;
+
+        cir::Typedef {
+            struct_type: cir::Struct {
+                name,
+                fields: fields.iter().map(|field| {
+                    let &StructField {name: field_name, ptr_typ} = field;
+                    if ptr_typ == name {
+                        // Recursive type
+                        cir::StructField {
+                            name: field_name,
+                            typ: cir::Type::StructPtr(ptr_typ),
+                        }
+                    } else {
+                        cir::StructField {
+                            name: field_name,
+                            typ: cir::Type::Ptr(ptr_typ),
+                        }
+                    }
+                }).collect(),
+            },
+            typedef_name: name,
         }
-        cwrite!(f, ctx, "}} {};", name)
     }
 }
 
 /// All struct fields are pointers to a type
 #[derive(Debug, Clone)]
-pub struct CStructField {
-    pub name: CIdent,
+pub struct StructField {
+    pub name: Ident,
     /// The type of the pointer stored in this field
-    pub ptr_typ: CIdent,
+    pub ptr_typ: Ident,
 }
 
 #[derive(Debug, Clone)]
-pub struct CFunction {
-    pub name: CIdent,
+pub struct Function {
+    pub name: Ident,
     /// The input parameters of the function (possibly empty)
-    pub in_params: Vec<CInParam>,
+    pub in_params: Vec<InParam>,
     /// Functions always have an out parameter since in our language you always return *something*,
     /// even if that something is just `()`.
-    pub out_param: COutParam,
-    pub body: Vec<CStmt>,
+    pub out_param: OutParam,
+    pub body: Vec<Stmt>,
 }
 
-impl CFunction {
+impl Function {
+    fn to_c_sig(&self) -> cir::FuncSig {
+        let Self {name, in_params, out_param, body: _} = self;
+
+        cir::FuncSig {
+            name: name.into(),
+            ret_type: cir::Type::Void,
+            params: in_params.iter()
+                .map(|param| param.to_c())
+                .chain(once(out_param.to_c()))
+                .collect(),
+        }
+    }
+
     fn forward_decl(&self) -> ForwardDecl<Self> {
         ForwardDecl {value: self}
     }
 }
 
-impl<'a> DisplayCtx<CSymbols> for ForwardDecl<'a, CFunction> {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let CFunction {name, in_params, out_param, body: _} = self.value;
-        cwrite!(f, ctx, "void {}({});", name, Commas {values: in_params, last: out_param})
-    }
-}
+impl<'a> GenerateC for ForwardDecl<'a, Function> {
+    type Output = cir::FunctionForwardDecl;
 
-impl DisplayCtx<CSymbols> for CFunction {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, in_params, out_param, body} = self;
-        cwriteln!(f, ctx, "void {}({}) {{", name, Commas {values: in_params, last: out_param})?;
-        for stmt in body {
-            cwriteln!(f, ctx, "{}", stmt)?;
+    fn to_c(&self) -> Self::Output {
+        cir::FunctionForwardDecl {
+            sig: self.value.to_c_sig(),
         }
-        cwrite!(f, ctx, "}}")
+    }
+}
+
+impl GenerateC for Function {
+    type Output = cir::Function;
+
+    fn to_c(&self) -> Self::Output {
+        let Self {name: _, in_params: _, out_param: _, body} = self;
+
+        cir::Function {
+            sig: self.to_c_sig(),
+            body: body.to_c(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CInParam {
-    pub name: CIdent,
+pub struct InParam {
+    pub name: Ident,
     /// The type of the pointer this parameter represents
-    pub ptr_typ: CIdent,
+    pub ptr_typ: Ident,
 }
 
-impl DisplayCtx<CSymbols> for CInParam {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, ptr_typ} = self;
-        cwrite!(f, ctx, "{}* {}", ptr_typ, name)
+impl GenerateC for InParam {
+    type Output = cir::FuncParam;
+
+    fn to_c(&self) -> Self::Output {
+        let &Self {name, ptr_typ} = self;
+
+        cir::FuncParam {
+            name,
+            typ: cir::Type::Ptr(ptr_typ),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct COutParam {
-    pub name: CIdent,
+pub struct OutParam {
+    pub name: Ident,
     /// The type this out pointer represents
-    pub ptr_typ: CIdent,
+    pub ptr_typ: Ident,
 }
 
-impl DisplayCtx<CSymbols> for COutParam {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, ptr_typ} = self;
-        cwrite!(f, ctx, "{}** {}", ptr_typ, name)
+impl GenerateC for OutParam {
+    type Output = cir::FuncParam;
+
+    fn to_c(&self) -> Self::Output {
+        let &Self {name, ptr_typ} = self;
+
+        cir::FuncParam {
+            name,
+            typ: cir::Type::OutPtr(ptr_typ),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum CStmt {
+pub enum Stmt {
     /// An uninitialized variable declaration
-    VarDecl(CVarDecl),
+    VarDecl(VarDecl),
     /// Calls a function
-    FuncCall(CFuncCall),
+    FuncCall(FuncCall),
     /// Calls a literal constructor
     ///
     /// This variant exists because while it works in general to always call functions with only
     /// variables as args, we still need other literals for this specific case only.
-    LitFuncCall(CLitFuncCall),
+    LitFuncCall(LitFuncCall),
     /// Variable Assignment
-    Assign(CAssign),
+    Assign(Assign),
     /// A conditional statement
-    If(CCond),
+    If(Cond),
     /// An infinite loop
-    Loop(CInfiniteLoop),
+    Loop(InfiniteLoop),
     /// Stops a loop
     Break,
     /// Returns early from a function
     Return,
 }
 
-impl DisplayCtx<CSymbols> for CStmt {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CStmt::*;
+impl GenerateC for Stmt {
+    type Output = cir::Stmt;
+
+    fn to_c(&self) -> Self::Output {
+        use Stmt::*;
         match self {
-            VarDecl(decl) => cwrite!(f, ctx, "{};", decl),
-            FuncCall(call) => cwrite!(f, ctx, "{};", call),
-            LitFuncCall(call) => cwrite!(f, ctx, "{};", call),
-            Assign(assign) => cwrite!(f, ctx, "{};", assign),
-            If(cond) => cwrite!(f, ctx, "{}", cond),
-            Loop(cloop) => cwrite!(f, ctx, "{}", cloop),
-            Break => cwrite!(f, ctx, "break;"),
-            Return => cwrite!(f, ctx, "return;"),
+            VarDecl(decl) => cir::Stmt::VarDecl(decl.to_c()),
+            FuncCall(call) => cir::Stmt::FuncCall(call.to_c()),
+            LitFuncCall(call) => cir::Stmt::FuncCall(call.to_c()),
+            Assign(assign) => cir::Stmt::Assign(assign.to_c()),
+            If(cond) => cir::Stmt::If(cond.to_c()),
+            Loop(cloop) => cir::Stmt::WhileLoop(cloop.to_c()),
+            Break => cir::Stmt::Break,
+            Return => cir::Stmt::Return(None),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CVarDecl {
-    pub name: CIdent,
-    pub typ: CVarType,
+pub struct VarDecl {
+    pub name: Ident,
+    pub typ: VarType,
 }
 
-impl DisplayCtx<CSymbols> for CVarDecl {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, typ} = self;
-        cwrite!(f, ctx, "{} {}", typ, name)
+impl GenerateC for VarDecl {
+    type Output = cir::VarDecl;
+
+    fn to_c(&self) -> Self::Output {
+        let &Self {name, typ} = self;
+
+        cir::VarDecl {
+            name,
+            typ: typ.to_c(),
+            body: None,
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum CVarType {
+#[derive(Debug, Clone, Copy)]
+pub enum VarType {
     /// A pointer to the given type
-    Ptr {typ: CIdent},
+    Ptr {typ: Ident},
     /// A plain `bool` type
     Bool,
 }
 
-impl DisplayCtx<CSymbols> for CVarType {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CVarType::*;
+impl GenerateC for VarType {
+    type Output = cir::Type;
+
+    fn to_c(&self) -> Self::Output {
+        use VarType::*;
         match self {
-            Ptr {typ} => cwrite!(f, ctx, "{}*", typ),
-            Bool => cwrite!(f, ctx, "bool"),
+            &Ptr {typ} => cir::Type::Ptr(typ),
+            Bool => cir::Type::Bool,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CFuncCall {
-    pub func_name: CIdent,
+pub struct FuncCall {
+    /// The name of the function to call
+    pub name: Ident,
     /// The input arguments to the function. Each one is a plain variable whose type must be a
     /// pointer.
-    pub in_args: Vec<CIdent>,
+    pub in_args: Vec<Ident>,
     /// Since all functions take an out parameter, we always have to provide it
-    pub out_arg: COutArg,
+    pub out_arg: OutArg,
 }
 
-impl DisplayCtx<CSymbols> for CFuncCall {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {func_name, in_args, out_arg} = self;
-        cwrite!(f, ctx, "{}({})", func_name, Commas {values: in_args, last: out_arg})
-    }
-}
+impl GenerateC for FuncCall {
+    type Output = cir::FuncCall;
 
-#[derive(Debug, Clone)]
-pub struct CLitFuncCall {
-    /// The name of the literal constructor
-    pub lit_func_name: CIdent,
-    /// The input arguments to the literal constructor
-    pub in_args: CLitFuncArgs,
-    /// The output argument for the literal constructor
-    pub out_arg: COutArg,
-}
+    fn to_c(&self) -> Self::Output {
+        let Self {name, in_args, out_arg} = self;
 
-impl DisplayCtx<CSymbols> for CLitFuncCall {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {lit_func_name, in_args, out_arg} = self;
-        cwrite!(f, ctx, "{}({}, {})", lit_func_name, in_args, out_arg)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum CLitFuncArgs {
-    /// An escaped string literal and a second argument: its length
-    StrLitLen(ByteStringLit),
-    IntegerLiteral(i64),
-    DoubleLiteral(i64),
-    BoolLiteral(bool),
-}
-
-impl DisplayCtx<CSymbols> for CLitFuncArgs {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CLitFuncArgs::*;
-        match self {
-            StrLitLen(lit) => cwrite!(f, ctx, "{}, {}", lit, lit.len()),
-            IntegerLiteral(lit) => cwrite!(f, ctx, "{}", lit),
-            DoubleLiteral(lit) => cwrite!(f, ctx, "{}", lit),
-            BoolLiteral(lit) => cwrite!(f, ctx, "{}", lit),
+        cir::FuncCall {
+            name: name.into(),
+            args: in_args.iter()
+                .copied()
+                .map(cir::Expr::Var)
+                .chain(once(out_arg.to_c()))
+                .collect(),
         }
-    }
-}
-
-/// A null-terminated C byte-string literal with the given data.
-///
-/// When code is generated, special characters will be correctly escaped.
-///
-/// The data is allowed to contain null characters.
-#[derive(Debug, Clone)]
-pub struct ByteStringLit(pub Vec<u8>);
-
-impl ByteStringLit {
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl DisplayCtx<CSymbols> for ByteStringLit {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &CSymbols) -> fmt::Result {
-        let ByteStringLit(data) = self;
-        write!(f, "\"")?;
-        for &ch in data {
-            match ch {
-                b'\\' => write!(f, "\\\\")?,
-                b'"' => write!(f, "\\\"")?,
-                b'\n' => write!(f, "\\n")?,
-                b'\r' => write!(f, "\\r")?,
-                b'\t' => write!(f, "\\t")?,
-                _ => write!(f, "{}", ch as char)?,
-            }
-        }
-        write!(f, "\"")
     }
 }
 
@@ -344,126 +389,193 @@ impl DisplayCtx<CSymbols> for ByteStringLit {
 ///
 /// This will cause the address of that variable to be passed to the function.
 #[derive(Debug, Clone)]
-pub struct COutArg {
+pub struct OutArg {
     /// The name of the variable to write output to
-    pub name: CIdent,
+    pub name: Ident,
 }
 
-impl DisplayCtx<CSymbols> for COutArg {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name} = self;
-        cwrite!(f, ctx, "&{}", name)
+impl GenerateC for OutArg {
+    type Output = cir::Expr;
+
+    fn to_c(&self) -> Self::Output {
+        let &Self {name} = self;
+
+        cir::Expr::AddrOf(name)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CAssign {
+pub struct LitFuncCall {
+    /// The name of the literal constructor
+    pub lit_func_name: Ident,
+    /// The input arguments to the literal constructor
+    pub in_args: LitFuncArgs,
+    /// The output argument for the literal constructor
+    pub out_arg: OutArg,
+}
+
+impl GenerateC for LitFuncCall {
+    type Output = cir::FuncCall;
+
+    fn to_c(&self) -> Self::Output {
+        let Self {lit_func_name, in_args, out_arg} = self;
+
+        cir::FuncCall {
+            name: lit_func_name.into(),
+            args: in_args.to_c()
+                .into_iter()
+                .chain(once(out_arg.to_c()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LitFuncArgs {
+    /// A byte-string literal and a second argument: its length
+    StrLen(Vec<u8>),
+    Int64(i64),
+    Double(i64),
+    Bool(bool),
+}
+
+impl GenerateC for LitFuncArgs {
+    type Output = Vec<cir::Expr>;
+
+    fn to_c(&self) -> Self::Output {
+        use LitFuncArgs::*;
+        match self {
+            StrLen(lit) => vec![
+                cir::Expr::BStr(cir::BStrLiteral(lit.clone())),
+                cir::Expr::UInt64(lit.len() as u64),
+            ],
+            &Int64(lit) => vec![cir::Expr::Int64(lit)],
+            &Double(lit) => vec![cir::Expr::Double(lit)],
+            &Bool(lit) => vec![cir::Expr::Bool(lit)],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Assign {
     /// The left-hand side of the assignment
-    pub target: CAssignTarget,
+    pub target: AssignTarget,
     /// The right-hand side of the assignment
-    pub value: CAssignValue,
+    pub value: AssignValue,
 }
 
-impl DisplayCtx<CSymbols> for CAssign {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+impl GenerateC for Assign {
+    type Output = cir::Assign;
+
+    fn to_c(&self) -> Self::Output {
         let Self {target, value} = self;
-        cwrite!(f, ctx, "{} = {}", target, value)
+
+        cir::Assign {
+            target: target.to_c(),
+            value: value.to_c(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum CAssignTarget {
-    /// Dereferences and writes to an out pointer
-    OutPtr {
-        /// The name of the variable that is an out pointer
-        name: CIdent,
-    },
-    /// Dereferences an out pointer and writes to one of its fields
-    OutPtrField {
-        /// The name of the variable that is an out pointer
-        name: CIdent,
-        /// The name of the field to write to
-        field: CIdent,
+pub enum AssignTarget {
+    /// Writes to the variable with the given name
+    Var {
+        /// The name of the variable
+        name: Ident,
     },
     /// Writes to one of the fields of an in-pointer
     InPtrField {
         /// The name of the variable that is an in-pointer
-        name: CIdent,
+        name: Ident,
         /// The name of the field to write to
-        field: CIdent,
+        field: Ident,
     },
-    /// Writes to the variable with the given name
-    Var {
-        /// The name of the variable
-        name: CIdent,
+    /// Dereferences and writes to an out pointer
+    OutPtr {
+        /// The name of the variable that is an out pointer
+        name: Ident,
+    },
+    /// Dereferences an out pointer and writes to one of its fields
+    OutPtrField {
+        /// The name of the variable that is an out pointer
+        name: Ident,
+        /// The name of the field to write to
+        field: Ident,
     },
 }
 
-impl DisplayCtx<CSymbols> for CAssignTarget {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CAssignTarget::*;
+impl GenerateC for AssignTarget {
+    type Output = cir::LValue;
+
+    fn to_c(&self) -> Self::Output {
+        use AssignTarget::*;
         match *self {
-            OutPtr {name} => cwrite!(f, ctx, "*{}", name),
-            OutPtrField {name, field} => cwrite!(f, ctx, "(*{})->{}", name, field),
-            InPtrField {name, field} => cwrite!(f, ctx, "{}->{}", name, field),
-            Var {name} => cwrite!(f, ctx, "{}", name),
+            Var {name} => cir::LValue::Var(name),
+            InPtrField {name, field} => cir::LValue::Field {name, field},
+            OutPtr {name} => cir::LValue::Deref {name},
+            OutPtrField {name, field} => cir::LValue::DerefField {name, field},
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum CAssignValue {
+pub enum AssignValue {
     /// Allocates memory for the size of the given type
     Alloc {
-        typ: CIdent,
+        typ: Ident,
     },
     /// Accesses a field on an in-pointer
     FieldAccess {
-        /// The value to access a field from
-        value: CIdent,
+        /// The variable name to access a field from
+        name: Ident,
         /// The name of the field to access
-        field: CIdent,
+        field: Ident,
     },
     /// Accesses a plain variable
     Var {
         /// The name of the variable
-        name: CIdent,
+        name: Ident,
     },
 }
 
-impl DisplayCtx<CSymbols> for CAssignValue {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        use CAssignValue::*;
+impl GenerateC for AssignValue {
+    type Output = cir::Expr;
+
+    fn to_c(&self) -> Self::Output {
+        use AssignValue::*;
         match *self {
-            Alloc {typ} => cwrite!(f, ctx, "{}(sizeof({}))", ALLOCATE, typ),
-            FieldAccess {value, field} => cwrite!(f, ctx, "{}->{}", value, field),
-            Var {name} => cwrite!(f, ctx, "{}", name),
+            Alloc {typ} => cir::Expr::FuncCall(cir::FuncCall {
+                name: ALLOCATE.into(),
+                args: vec![cir::Expr::Sizeof(cir::Type::Named(typ))],
+            }),
+            FieldAccess {name, field} => cir::Expr::FieldAccess(cir::FieldAccess {name, field}),
+            Var {name} => cir::Expr::Var(name),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CCond {
+pub struct Cond {
     /// The condition variable (must be type `bool`)
-    cond: CIdent,
+    cond: Ident,
     /// The `if` body, executed if `cond` is true
-    if_body: Vec<CStmt>,
+    if_body: Vec<Stmt>,
     /// The `else` body, executed if `cond` is false
-    else_body: Vec<CStmt>,
+    else_body: Vec<Stmt>,
 }
 
-impl DisplayCtx<CSymbols> for CCond {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+impl GenerateC for Cond {
+    type Output = cir::Cond;
+
+    fn to_c(&self) -> Self::Output {
         let Self {cond, if_body, else_body} = self;
-        cwriteln!(f, ctx, "if ({}) {{", cond)?;
-        for stmt in if_body {
-            cwriteln!(f, ctx, "{}", stmt)?;
+
+        cir::Cond {
+            cond: cir::Expr::Var(*cond),
+            if_body: if_body.to_c(),
+            else_body: else_body.to_c(),
         }
-        cwriteln!(f, ctx, "}} else {{")?;
-        for stmt in else_body {
-            cwriteln!(f, ctx, "{}", stmt)?;
-        }
-        cwrite!(f, ctx, "}}")
     }
 }
 
@@ -471,76 +583,25 @@ impl DisplayCtx<CSymbols> for CCond {
 ///
 /// This loop will only terminate due to break or return statement.
 #[derive(Debug, Clone)]
-pub struct CInfiniteLoop {
-    body: Vec<CStmt>,
+pub struct InfiniteLoop {
+    body: Vec<Stmt>,
 }
 
-impl DisplayCtx<CSymbols> for CInfiniteLoop {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
+impl GenerateC for InfiniteLoop {
+    type Output = cir::WhileLoop;
+
+    fn to_c(&self) -> Self::Output {
         let Self {body} = self;
-        cwriteln!(f, ctx, "while (true) {{")?;
-        for stmt in body {
-            cwriteln!(f, ctx, "{}", stmt)?;
-        }
-        cwrite!(f, ctx, "}}")
+
+        cir::WhileLoop::infinite_loop(body.to_c())
     }
 }
 
-/// Symbol table for C identifiers
-pub type CSymbols = SymbolTable<String, CIdent>;
-
-/// The ID of an identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CIdent(usize);
-
-impl DisplayCtx<CSymbols> for CIdent {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        write!(f, "{}", ctx.symbol(*self))
-    }
-}
-
-impl SymId for CIdent {
-    type Gen = CIdentGen;
-}
-
-#[derive(Debug, Default)]
-pub struct CIdentGen {
-    next: usize,
-}
-
-impl GenId<CIdent> for CIdentGen {
-    fn next_id(&mut self) -> CIdent {
-        let id = self.next;
-        self.next += 1;
-        CIdent(id)
-    }
-}
+pub type Ident = cir::Ident;
 
 /// Represents a foward declaration of the given type
 ///
-/// Allows us to specialize the implementation of `DisplayCtx` for forward declarations
+/// Allows us to specialize the implementation of `GenerateC` for forward declarations
 struct ForwardDecl<'a, T> {
     value: &'a T,
-}
-
-/// Writes out a non-empty comma-separated list
-struct Commas<'a, T: DisplayCtx<CSymbols>, L: DisplayCtx<CSymbols>> {
-    /// The values to write out in a comma-separated list
-    values: &'a [T],
-    /// The final value, always present
-    last: &'a L,
-}
-
-impl<'a, T: DisplayCtx<CSymbols>, L: DisplayCtx<CSymbols>> DisplayCtx<CSymbols> for Commas<'a, T, L> {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let &Self {values, last} = self;
-
-        for value in values {
-            cwrite!(f, ctx, "{}, ", value)?;
-        }
-        // C does not support trailing commas
-        cwrite!(f, ctx, "{}", last)?;
-
-        Ok(())
-    }
 }

@@ -1,3 +1,5 @@
+#![deny(unused_must_use)]
+
 pub mod ast;
 pub mod codegen;
 pub mod trans;
@@ -12,6 +14,7 @@ pub mod gc_lib;
 pub mod symbol_table;
 pub mod fmt_ctx;
 pub mod cgenir;
+pub mod cir;
 
 use std::fs;
 use std::io;

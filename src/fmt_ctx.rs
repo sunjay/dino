@@ -1,4 +1,5 @@
 use std::fmt;
+use std::borrow::Cow;
 
 /// Similar to `write!` but allows some external context to be used during formatting
 #[macro_export]
@@ -161,13 +162,34 @@ impl<Ctx> DisplayCtx<Ctx> for str {
     }
 }
 
+impl<'a, Ctx, B: fmt::Display> DisplayCtx<Ctx> for Cow<'a, B>
+    where B: fmt::Display + ToOwned + ?Sized,
+          <B as ToOwned>::Owned: fmt::Display,
+{
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl<Ctx> DisplayCtx<Ctx> for usize {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
+impl<Ctx> DisplayCtx<Ctx> for u64 {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl<Ctx> DisplayCtx<Ctx> for i64 {
+    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl<Ctx> DisplayCtx<Ctx> for i32 {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, _ctx: &Ctx) -> fmt::Result {
         write!(f, "{}", self)
     }

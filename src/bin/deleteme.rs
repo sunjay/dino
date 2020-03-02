@@ -1,6 +1,7 @@
 //! Just for testing -- DELETE ME
 
 use dino::cprintln;
+use dino::cir::CSymbols;
 use dino::cgenir::*;
 
 fn main() {
@@ -19,32 +20,32 @@ fn main() {
     let field_team_b = syms.insert("team_b".to_string());
 
     let structs = vec![
-        CStruct {
+        Struct {
             name: struct_counter.clone(),
             fields: vec![
-                CStructField {
+                StructField {
                     name: field_count.clone(),
                     ptr_typ: type_dint.clone(),
                 },
             ],
         },
 
-        CStruct {
+        Struct {
             name: struct_game.clone(),
             fields: vec![
-                CStructField {
+                StructField {
                     name: field_team_a_name.clone(),
                     ptr_typ: type_dbstr.clone(),
                 },
-                CStructField {
+                StructField {
                     name: field_team_a.clone(),
                     ptr_typ: struct_counter.clone(),
                 },
-                CStructField {
+                StructField {
                     name: field_team_b_name.clone(),
                     ptr_typ: type_dbstr.clone(),
                 },
-                CStructField {
+                StructField {
                     name: field_team_b.clone(),
                     ptr_typ: struct_counter.clone(),
                 },
@@ -57,46 +58,46 @@ fn main() {
     let constructor_struct_counter = syms.insert("__dino__constructor__structs_98e3__Counter_0f34".to_string());
 
     let functions = vec![
-        CFunction {
+        Function {
             name: constructor_struct_counter.clone(),
 
             in_params: vec![
-                CInParam {
+                InParam {
                     name: field_count.clone(),
                     ptr_typ: type_dint.clone(),
                 },
             ],
-            out_param: COutParam {
+            out_param: OutParam {
                 name: dino_out.clone(),
                 ptr_typ: struct_counter.clone(),
             },
 
             body: vec![
-                CStmt::Assign(CAssign {
-                    target: CAssignTarget::OutPtr {
+                Stmt::Assign(Assign {
+                    target: AssignTarget::OutPtr {
                         name: dino_out.clone(),
                     },
-                    value: CAssignValue::Alloc {
+                    value: AssignValue::Alloc {
                         typ: struct_counter.clone(),
                     },
                 }),
 
-                CStmt::Assign(CAssign {
-                    target: CAssignTarget::OutPtrField {
+                Stmt::Assign(Assign {
+                    target: AssignTarget::OutPtrField {
                         name: dino_out.clone(),
                         field: field_count.clone(),
                     },
-                    value: CAssignValue::Var {name: field_count.clone()},
+                    value: AssignValue::Var {name: field_count.clone()},
                 }),
             ],
         },
     ];
 
-    let program = CProgram {
+    let program = Program {
         structs,
         functions,
         entry_point: None, //TODO
     };
 
-    cprintln!(&syms, "{}", program);
+    cprintln!(&syms, "{}", program.to_c());
 }
