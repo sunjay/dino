@@ -5,11 +5,16 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 
 /// A trait for generating unique IDs
+///
+/// If the implementor of this trait implements `Clone`, the `new_shared` method can be used to
+/// create another fresh symbol table that contains a clone of the generator.
 pub trait GenId<Id> {
     fn next_id(&mut self) -> Id;
 }
 
 /// A trait for generating unique IDs (with synchronization)
+///
+/// If this trait is implemented, it signifies that the generator can be shared among symbol tables
 pub trait GenIdSync<Id> {
     fn next_id(&self) -> Id;
 }
@@ -60,6 +65,22 @@ impl<Sym, Id, Data> Default for SymbolTable<Sym, Id, Data>
             symbols: HashMap::default(),
             ids: HashMap::default(),
             id_gen: Default::default(),
+        }
+    }
+}
+
+impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
+    where Sym: Hash + Eq + Clone,
+          Id: SymId,
+          <Id as SymId>::Gen: Clone,
+{
+    /// Creates a new symbol table with a clone of the ID generator from this table
+    pub fn new_shared<Sym2, Data2>(&self) -> SymbolTable<Sym2, Id, Data2>
+        where Sym2: Hash + Eq + Clone,
+    {
+        SymbolTable {
+            id_gen: self.id_gen.clone(),
+            ..Default::default()
         }
     }
 }
