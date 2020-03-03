@@ -103,6 +103,18 @@ impl<Sym, Id> SymbolTable<Sym, Id, ()>
         self.insert_overwrite_with(sym, ())
     }
 
+    /// Gets the ID for the given symbol, or inserts the symbol and returns its new ID
+    ///
+    /// This is different from `insert_overwrite` because it does *not* insert a new ID when the
+    /// symbol is already present in the table.
+    pub fn get_or_insert(&mut self, sym: Sym) -> Id {
+        match self.id(&sym) {
+            Some(id) => id,
+            // The symbol isn't present, so this doesn't overwrite anything
+            None => self.insert_overwrite(sym),
+        }
+    }
+
     /// Iterates over (Id, Sym) pairs
     pub fn iter(&self) -> impl Iterator<Item=(Id, &Sym)> {
         self.iter_data().map(|(id, sym, _)| (id, sym))
