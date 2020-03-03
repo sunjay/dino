@@ -1,21 +1,26 @@
 //! Name resolution - translates High-level IR (HIR) to Nameless IR (NIR)
 
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap, HashSet};
 
 use crate::hir;
 use crate::nir;
 use crate::def_id::DefId;
+use crate::symbol_table::SymbolTable;
+use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;
 
 pub fn resolve_names(
     pkg: &hir::Package,
     packages: &Packages,
+    prims: &Primitives,
     diag: &Diagnostics,
 ) -> nir::Package {
     let mut walker = HIRWalker {
         scope_stack: VecDeque::new(),
+        type_fields: HashMap::new(),
         packages,
+        prims,
         diag,
     };
 
@@ -25,8 +30,6 @@ pub fn resolve_names(
 /// The different kinds of scopes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ScopeKind {
-    /// The top-level scope for an entire package
-    Package,
     /// Module scope
     ///
     /// Most name lookups stop here.
@@ -56,34 +59,37 @@ enum ScopeKind {
 #[derive(Debug)]
 struct Scope {
     /// The kind of scope this is
-    kind: ScopeKind,
+    pub kind: ScopeKind,
     /// All symbols from all of these modules are available in the scope
     /// The name is looked up
-    wildcard_imports: Vec<DefId>,
+    pub wildcard_imports: Vec<DefId>,
     /// All the types in the current scope
-    types: nir::DefTable,
+    pub types: nir::DefTable,
     /// All the functions (*not* methods) in the current scope
-    functions: nir::DefTable,
+    pub functions: nir::DefTable,
     /// All the variables in the current scope
     ///
     /// To support shadowing, variables can be arbitrarily overwritten, at which point they will be
     /// given a fresh `DefId`.
-    variables: nir::DefTable,
+    pub variables: nir::DefTable,
 }
 
 impl Scope {
     /// The top-level scope for the entire package
-    pub fn package() -> Self {
+    pub fn root() -> Self {
+        let table = SymbolTable::default();
+
         Self {
-            kind: ScopeKind::Package,
+            kind: ScopeKind::Module,
             wildcard_imports: Vec::new(),
-            types: nir::DefTable::default(),
-            functions: nir::DefTable::default(),
-            variables: nir::DefTable::default(),
+            types: table.new_shared(),
+            functions: table.new_shared(),
+            variables: table,
         }
     }
 
-    pub fn child(&self, kind: ScopeKind) -> Self {
+    /// Creates a new empty child scope of the given kind
+    fn new_child(&self, kind: ScopeKind) -> Self {
         Self {
             kind,
             wildcard_imports: Vec::new(),
@@ -97,12 +103,454 @@ impl Scope {
 struct HIRWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
+    /// The fields of all the types in the current scope
+    ///
+    /// Mapping of type ID to a mapping of the field names to their IDs
+    //TODO: This is kind of a hack and I don't currently know how to model it better
+    type_fields: HashMap<DefId, HashMap<String, DefId>>,
     /// The packages available in the root scope
     packages: &'a Packages,
+    /// Compiler built-in primitive types
+    prims: &'a Primitives,
+    /// For outputting diagnostics
     diag: &'a Diagnostics,
 }
 
 impl<'a> HIRWalker<'a> {
+    fn resolve_package(&mut self, pkg: &hir::Package) -> nir::Package {
+        let hir::Package {root} = pkg;
+
+        let pkg = nir::Package {
+            root: self.resolve_module(root, true),
+        };
+        assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
+
+        pkg
+    }
+
+    fn resolve_module(&mut self, module: &hir::Module, root: bool) -> nir::Module {
+        let hir::Module {decls} = module;
+
+        if root {
+            assert!(self.scope_stack.is_empty(),
+                "bug: attempt to add a root module scope onto a non-empty scope stack");
+            self.scope_stack.push_back(Scope::root());
+        }
+
+        self.push_scope(ScopeKind::Module);
+        let decls = self.resolve_decls(decls, None);
+        self.pop_scope();
+
+        nir::Module {decls}
+    }
+
+    fn resolve_decls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) -> nir::Decls {
+        // Add the decl names to the scope so they are available during resolution
+        self.insert_decls(decls);
+
+        let structs = self.resolve_structs(decls, self_ty);
+
+        let funcs = decls.iter().filter_map(|decl| match decl {
+            hir::Decl::Function(func) => Some(func),
+            _ => None,
+        });
+        let functions = self.resolve_functions(funcs, None);
+
+        nir::Decls {structs, functions}
+    }
+
+    /// Inserts all the decl names into the scope
+    fn insert_decls(&mut self, decls: &[hir::Decl]) {
+        for decl in decls {
+            match decl {
+                hir::Decl::Import(import) => {
+                    let hir::ImportPath {path, selection} = import;
+
+                    //TODO: Lookup the module at `path`
+                    use hir::ImportSelection::*;
+                    match selection {
+                        //TODO: Lookup each name in the `path` module
+                        Names(names) => todo!(),
+                        //TODO: Add `path` module DefId to `wildcard_imports`
+                        All => todo!(),
+                    }
+                },
+
+                hir::Decl::Struct(struct_decl) => {
+                    let &hir::Struct {name, fields: _} = struct_decl;
+
+                    // You're allowed to redefine structs that are already at higher levels of
+                    // scope as long as the same level doesn't define the same name more than once
+                    let insert_res = self.top_scope().types.insert(name.to_string());
+                    if let Err(name) = insert_res {
+                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
+                    }
+                },
+
+                hir::Decl::Function(func) => {
+                    let &hir::Function {name, sig: _, body: _} = func;
+
+                    // You're allowed to redefine functions that are already at higher levels of
+                    // scope as long as the same level doesn't define the same name more than once
+                    let insert_res = self.top_scope().functions.insert(name.to_string());
+                    if let Err(name) = insert_res {
+                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
+                    }
+                },
+
+                // Ignored until we get all the types that are in scope
+                hir::Decl::Impl(_) => {},
+            }
+        }
+    }
+
+    fn resolve_structs(
+        &mut self,
+        decls: &[hir::Decl],
+        self_ty: Option<DefId>,
+    ) -> HashMap<DefId, nir::Struct> {
+        let mut structs = HashMap::default();
+
+        // Insert struct fields now that all types have been inserted
+        for decl in decls {
+            match decl {
+                // Already handled
+                hir::Decl::Import(_) => {},
+
+                hir::Decl::Struct(struct_decl) => {
+                    let hir::Struct {name, fields} = struct_decl;
+                    // Looking in the top scope because that's exactly where we expect the decl to
+                    // be given that we just inserted it
+                    let struct_id = self.top_scope().types.id(*name)
+                        .expect("bug: all structs should be inserted in the scope at this point");
+                    let struct_data = structs.entry(struct_id)
+                        .or_insert_with(|| nir::Struct::new(struct_id));
+
+                    // We don't have to worry about overwriting fields because we've already
+                    // checked that there is only one decl of this name in this scope
+                    debug_assert!(struct_data.fields.is_empty(), "bug: should be only unique decls");
+                    struct_data.fields = self.resolve_fields(struct_id, fields);
+                },
+
+                // Ignored in this pass
+                hir::Decl::Impl(_) |
+                hir::Decl::Function(_) => {},
+            }
+        }
+
+        // Need to do impls after all the fields have been inserted in case those fields are used
+        for decl in decls {
+            match decl {
+                // Already handled
+                hir::Decl::Import(_) |
+                hir::Decl::Struct(_) => {},
+
+                hir::Decl::Impl(impl_decl) => {
+                    // The type name must be in scope at this point
+                    let hir::Impl {self_ty: impl_self_ty, methods} = impl_decl;
+
+                    // The `Self` type changes to the type specified in this impl
+                    // We resolve the type properly instead of just checking the top scope because
+                    // impls don't have to be in the same scope as the struct itself
+                    let self_ty = self.resolve_ty(impl_self_ty, self_ty);
+
+                    let methods = self.resolve_functions(methods.iter(), Some(self_ty));
+
+                    let struct_data = structs.entry(self_ty)
+                        .or_insert_with(|| nir::Struct::new(self_ty));
+                    struct_data.methods.extend(methods);
+                },
+
+                // Ignored in this pass
+                hir::Decl::Function(_) => {},
+            }
+        }
+
+        structs
+    }
+
+    fn resolve_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) -> Vec<nir::NamedField> {
+        // Need to check that field names are unique
+        let mut field_names = self.top_scope().types.new_shared();
+
+        fields.iter().filter_map(|field| {
+            let hir::StructField {name, ty} = field;
+            let name_ident = *name;
+
+            let name = match field_names.insert(name_ident) {
+                Ok(name) => name,
+                Err(name) => {
+                    self.diag.emit_error(format!("field `{}` is already declared", name));
+                    return None;
+                },
+            };
+            let ty = self.resolve_ty(ty, Some(self_ty));
+
+            self.type_fields.entry(self_ty).or_default().insert(name_ident.to_string(), name);
+
+            Some(nir::NamedField {name, ty})
+        }).collect()
+    }
+
+    fn resolve_functions<'b>(
+        &mut self,
+        decls: impl Iterator<Item=&'b hir::Function<'b>>,
+        self_ty: Option<DefId>,
+    ) -> Vec<nir::Function> {
+        decls.map(|func| self.resolve_function(func, self_ty)).collect()
+    }
+
+    fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> nir::Function {
+        let hir::Function {name, sig, body} = func;
+
+        // Name should be in the top scope at this point
+        let name = self.top_scope().functions.id(*name)
+            .expect("bug: all functions should be inserted in the scope at this point");
+
+        // Push a new scope for this function so that after we're done with it the parameters are
+        // not in scope anymore
+        self.push_scope(ScopeKind::Function);
+
+        // Resolve function parameters before the body based on the current scope up until now
+        let sig = self.resolve_sig(sig, self_ty);
+        let body = self.resolve_block(body, self_ty);
+
+        self.pop_scope();
+
+        nir::Function {name, sig, body}
+    }
+
+    fn resolve_sig(&mut self, sig: &hir::FuncSig, self_ty: Option<DefId>) -> nir::FuncSig {
+        let hir::FuncSig {params, return_type} = sig;
+
+        // Make sure there are no duplicate parameters
+        let mut duplicate_count = 0;
+        let params = params.iter().map(|param| {
+            let hir::FuncParam {name, ty} = param;
+
+            let name = match self.top_scope().variables.insert(name.to_string()) {
+                Ok(id) => id,
+                Err(name) => {
+                    self.diag.emit_error(format!("identifier `{}` is bound more than once in this parameter list", name));
+
+                    // Generate a fresh name so there is at least the right number of params
+                    duplicate_count += 1;
+                    self.top_scope().variables.insert(format!("{}$p{}", name, duplicate_count))
+                        .expect("bug: fresh variables should not collide")
+                },
+            };
+
+            let ty = self.resolve_ty(ty, self_ty);
+
+            nir::FuncParam {name, ty}
+        }).collect();
+
+        let return_type = self.resolve_ty(return_type, self_ty);
+
+        nir::FuncSig {params, return_type}
+    }
+
+    fn resolve_block(&mut self, block: &hir::Block, self_ty: Option<DefId>) -> nir::Block {
+        let hir::Block {decls, stmts, ret} = block;
+
+        self.push_scope(ScopeKind::Block);
+
+        let decls = self.resolve_decls(decls, self_ty);
+        let stmts = stmts.iter()
+            .map(|stmt| self.resolve_stmt(stmt, self_ty))
+            .collect();
+        let ret = ret.as_ref().map(|ret| self.resolve_expr(ret, self_ty));
+
+        self.pop_scope();
+
+        nir::Block {decls, stmts, ret}
+    }
+
+    fn resolve_stmt(&mut self, stmt: &hir::Stmt, self_ty: Option<DefId>) -> nir::Stmt {
+        match stmt {
+            hir::Stmt::Cond(cond) => nir::Stmt::Cond(self.resolve_cond(cond, self_ty)),
+            hir::Stmt::WhileLoop(wloop) => nir::Stmt::WhileLoop(self.resolve_while_loop(wloop, self_ty)),
+            hir::Stmt::VarDecl(var_decl) => nir::Stmt::VarDecl(self.resolve_var_decl(var_decl, self_ty)),
+            hir::Stmt::Expr(expr) => nir::Stmt::Expr(self.resolve_expr(expr, self_ty)),
+        }
+    }
+
+    fn resolve_while_loop(&mut self, wloop: &hir::WhileLoop, self_ty: Option<DefId>) -> nir::WhileLoop {
+        let hir::WhileLoop {cond, body} = wloop;
+
+        let cond = self.resolve_expr(cond, self_ty);
+        let body = self.resolve_block(body, self_ty);
+
+        nir::WhileLoop {cond, body}
+    }
+
+    fn resolve_var_decl(&mut self, var_decl: &hir::VarDecl, self_ty: Option<DefId>) -> nir::VarDecl {
+        let hir::VarDecl {name, ty, expr} = var_decl;
+
+        // Using `insert_overwrite` is how we support variable shadowing
+        let name = self.top_scope().variables.insert_overwrite(name.to_string());
+        let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
+        let expr = self.resolve_expr(expr, self_ty);
+
+        nir::VarDecl {name, ty, expr}
+    }
+
+    fn resolve_expr(&mut self, expr: &hir::Expr, self_ty: Option<DefId>) -> nir::Expr {
+        use hir::Expr::*;
+        match expr {
+            Assign(assign) => nir::Expr::Assign(Box::new(self.resolve_assign(assign, self_ty))),
+            MethodCall(call) => nir::Expr::MethodCall(Box::new(self.resolve_method_call(call, self_ty))),
+            FieldAccess(access) => nir::Expr::FieldAccess(Box::new(self.resolve_field_access(access, self_ty))),
+            Cond(cond) => nir::Expr::Cond(Box::new(self.resolve_cond(cond, self_ty))),
+            Call(call) => nir::Expr::Call(self.resolve_func_call(call, self_ty)),
+            Return(ret) => nir::Expr::Return(ret.as_ref().map(|ret| Box::new(self.resolve_expr(ret, self_ty)))),
+            StructLiteral(struct_lit) => nir::Expr::StructLiteral(self.resolve_struct_lit(struct_lit, self_ty)),
+            BStrLiteral(lit) => nir::Expr::BStrLiteral(lit.clone()),
+            IntegerLiteral(int_lit) => nir::Expr::IntegerLiteral(self.resolve_int_lit(int_lit)),
+            &RealLiteral(value) => nir::Expr::RealLiteral(value),
+            &ComplexLiteral(value) => nir::Expr::ComplexLiteral(value),
+            &BoolLiteral(value) => nir::Expr::BoolLiteral(value),
+            UnitLiteral => nir::Expr::UnitLiteral,
+            SelfLiteral => nir::Expr::SelfLiteral,
+            Var(var) => nir::Expr::Var(self.resolve_var(var)),
+        }
+    }
+
+    fn resolve_assign(&mut self, assign: &hir::Assign, self_ty: Option<DefId>) -> nir::Assign {
+        let hir::Assign {lhs, expr} = assign;
+
+        let lhs = match lhs {
+            hir::LValue::FieldAccess(access) => {
+                nir::LValue::FieldAccess(self.resolve_field_access(access, self_ty))
+            },
+
+            hir::LValue::Var(var) => nir::LValue::Var(self.resolve_var(var)),
+        };
+        let expr = self.resolve_expr(expr, self_ty);
+
+        nir::Assign {lhs, expr}
+    }
+
+    fn resolve_method_call(&mut self, call: &hir::MethodCall, self_ty: Option<DefId>) -> nir::MethodCall {
+        let hir::MethodCall {lhs, method_name, args} = call;
+
+        let lhs = self.resolve_expr(lhs, self_ty);
+        let method_name = method_name.to_string();
+        let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
+
+        nir::MethodCall {lhs, method_name, args}
+    }
+
+    fn resolve_field_access(&mut self, access: &hir::FieldAccess, self_ty: Option<DefId>) -> nir::FieldAccess {
+        let hir::FieldAccess {lhs, field} = access;
+
+        let lhs = self.resolve_expr(lhs, self_ty);
+        let field = field.to_string();
+
+        nir::FieldAccess {lhs, field}
+    }
+
+    fn resolve_cond(&mut self, cond: &hir::Cond, self_ty: Option<DefId>) -> nir::Cond {
+        let hir::Cond {conds, else_body} = cond;
+
+        let conds = conds.iter().map(|(if_cond, if_body)| {
+            let if_cond = self.resolve_expr(if_cond, self_ty);
+            let if_body = self.resolve_block(if_body, self_ty);
+            (if_cond, if_body)
+        }).collect();
+        let else_body = else_body.as_ref().map(|body| self.resolve_block(body, self_ty));
+
+        nir::Cond {conds, else_body}
+    }
+
+    fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<DefId>) -> nir::FuncCall {
+        let hir::FuncCall {func_name, args} = call;
+
+        let func_name = self.resolve_func(func_name);
+        let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
+
+        nir::FuncCall {func_name, args}
+    }
+
+    fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<DefId>) -> nir::StructLiteral {
+        let hir::StructLiteral {name, field_values} = struct_lit;
+
+        let mut fields = HashSet::new();
+        let name = self.resolve_ty(&name.into(), self_ty);
+        let field_values = field_values.iter().map(|field_value| {
+            let hir::StructFieldValue {name: field_name, value} = field_value;
+
+            let name = self.resolve_field_name(name, field_name);
+            let value = self.resolve_expr(value, self_ty);
+
+            // Make sure none of the names are specified more than once
+            if fields.contains(&name) {
+                self.diag.emit_error(format!("field `{}` specified more than once", field_name));
+            }
+            fields.insert(name);
+
+            (name, value)
+        }).collect();
+
+        nir::StructLiteral {name, field_values}
+    }
+
+    fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
+        let &hir::IntegerLiteral {value, type_hint} = int_lit;
+
+        let type_hint = type_hint.as_ref().and_then(|hint| match self.lookup_type(hint) {
+            Some(ty) => Some(ty),
+            None => {
+                self.diag.emit_error(format!("invalid suffix `{}` for integer literal", hint));
+                // Just default to there being no type hint if an error occurs
+                None
+            },
+        });
+
+        nir::IntegerLiteral {value, type_hint}
+    }
+
+    /// Resolves a field name. Returns something even if the field wasn't found so that name
+    /// resolution may continue.
+    fn resolve_field_name(&mut self, name: DefId, field_name: hir::Ident) -> DefId {
+        let field = self.type_fields.get(&name).and_then(|fields| fields.get(field_name)).copied();
+
+        todo!()
+    }
+
+    /// Resolves a function name. Returns something even if the function wasn't found so that name
+    /// resolution may continue.
+    fn resolve_func(&mut self, name: &hir::IdentPath) -> DefId {
+        todo!()
+    }
+
+    /// Resolves a variable. Returns something even if the variable wasn't found so that name
+    /// resolution may continue.
+    fn resolve_var(&mut self, name: hir::Ident) -> DefId {
+        todo!()
+    }
+
+    /// Attempts to resolve a type and emits an error if the type could not be resolved
+    fn resolve_ty(&self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
+        todo!()
+    }
+
+    /// Attempts to lookup a name of a type by walking up the scope stack
+    fn lookup_type(&mut self, name: hir::Ident) -> Option<DefId> {
+        todo!()
+    }
+
+    /// Attempts to lookup a name of a function by walking up the scope stack
+    fn lookup_func(&mut self, name: &hir::IdentPath) -> Option<DefId> {
+        todo!()
+    }
+
+    /// Attempts to lookup a name of a variable by walking up the scope stack
+    fn lookup_var(&mut self, name: hir::Ident) -> Option<DefId> {
+        todo!()
+    }
+
+    /// Returns the scope at the top of the stack (the "current" scope)
     fn top_scope(&mut self) -> &mut Scope {
         self.scope_stack.back_mut()
             .expect("bug: scope stack should not be empty")
@@ -110,41 +558,14 @@ impl<'a> HIRWalker<'a> {
 
     /// Pushes a new level onto the scope stack
     fn push_scope(&mut self, kind: ScopeKind) -> &mut Scope {
-        let new_scope = self.top_scope().child(kind);
+        let new_scope = self.top_scope().new_child(kind);
         self.scope_stack.push_back(new_scope);
         self.top_scope()
     }
 
     /// Removes the upper-most level of the scope stack
-    fn pop_scope(&mut self) {
-        todo!()
-    }
-
-    fn resolve_package(&mut self, pkg: &hir::Package) -> nir::Package {
-        let hir::Package {root} = pkg;
-
-        self.scope_stack.push_back(Scope::package());
-        let pkg = nir::Package {
-            root: self.resolve_module(root),
-        };
-        self.pop_scope();
-        assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
-
-        pkg
-    }
-
-    fn resolve_module(&mut self, module: &hir::Module) -> nir::Module {
-        let hir::Module {decls} = module;
-
-        self.push_scope(ScopeKind::Module);
-
-
-        todo!()
-    }
-
-    fn resolve_function(&mut self, func: &hir::Function) -> nir::Function {
-        //TODO: Function parameters need to be resolved BEFORE we push a scope for the block of the
-        // function since imports inside the function do not affect the name resolution of the params
-        todo!()
+    fn pop_scope(&mut self) -> Scope {
+        self.scope_stack.pop_back()
+            .expect("bug: scope stack was empty when it shouldn't have been")
     }
 }

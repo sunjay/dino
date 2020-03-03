@@ -59,21 +59,15 @@ pub struct Impl<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function<'a> {
-    /// The name of the function
     pub name: Ident<'a>,
-    /// The type signature of the function
     pub sig: FuncSig<'a>,
-    /// The body of the function. Not used if `is_extern` is true.
     pub body: Block<'a>,
-    /// True if the function is meant to be linked in externally
-    pub is_extern: bool,
 }
 
-/// The type signature of a free function
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSig<'a> {
+    pub params: Vec<FuncParam<'a>>,
     pub return_type: Ty<'a>,
-    pub params: Vec<FuncParam<'a>>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,7 +110,7 @@ pub struct WhileLoop<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl<'a> {
     /// The identifier to assign a value to
-    pub ident: Ident<'a>,
+    pub name: Ident<'a>,
     /// The type of the variable (or None if the type is to be inferred)
     pub ty: Option<Ty<'a>>,
     /// The expression for the value to assign to the variable
@@ -125,11 +119,11 @@ pub struct VarDecl<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
-    VarAssign(Box<VarAssign<'a>>),
+    Assign(Box<Assign<'a>>),
     MethodCall(Box<MethodCall<'a>>),
     FieldAccess(Box<FieldAccess<'a>>),
     Cond(Box<Cond<'a>>),
-    Call(CallExpr<'a>),
+    Call(FuncCall<'a>),
     Return(Option<Box<Expr<'a>>>),
     StructLiteral(StructLiteral<'a>),
     BStrLiteral(Vec<u8>),
@@ -142,20 +136,20 @@ pub enum Expr<'a> {
     Var(Ident<'a>),
 }
 
-/// Expressions that can be on the left-hand side of assignment
-#[derive(Debug, Clone, PartialEq)]
-pub enum LValueExpr<'a> {
-    FieldAccess(FieldAccess<'a>),
-    Var(Ident<'a>),
-}
-
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
-pub struct VarAssign<'a> {
+pub struct Assign<'a> {
     /// The left-hand expression to assign a value to
-    pub lhs: LValueExpr<'a>,
+    pub lhs: LValue<'a>,
     /// The expression for the value to assign to the left-hand side
     pub expr: Expr<'a>,
+}
+
+/// Expressions that can be on the left-hand side of assignment
+#[derive(Debug, Clone, PartialEq)]
+pub enum LValue<'a> {
+    FieldAccess(FieldAccess<'a>),
+    Var(Ident<'a>),
 }
 
 /// A method call in the form `<expr> . <call-expr>`
@@ -190,7 +184,7 @@ pub struct Cond<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CallExpr<'a> {
+pub struct FuncCall<'a> {
     pub func_name: IdentPath<'a>,
     pub args: Vec<Expr<'a>>,
 }
@@ -231,8 +225,8 @@ pub enum Ty<'a> {
     Named(Ident<'a>),
 }
 
-impl<'a> From<NamedTy<'a>> for Ty<'a> {
-    fn from(ty: NamedTy<'a>) -> Self {
+impl<'a> From<&'a NamedTy<'a>> for Ty<'a> {
+    fn from(ty: &'a NamedTy<'a>) -> Self {
         match ty {
             NamedTy::SelfType => Ty::SelfType,
             NamedTy::Named(name) => Ty::Named(name),
