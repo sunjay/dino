@@ -1,5 +1,7 @@
 //! High-level IR - Completely Desugared AST
 
+use std::fmt;
+
 use crate::ast;
 
 /// Represents an entire compilation unit
@@ -133,6 +135,8 @@ pub enum Expr<'a> {
     BoolLiteral(bool),
     UnitLiteral,
     SelfLiteral,
+    Path(IdentPath<'a>),
+    /// Either a variable or function in the module scope
     Var(Ident<'a>),
 }
 
@@ -215,24 +219,45 @@ pub struct IntegerLiteral<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy<'a> {
     SelfType,
-    Named(Ident<'a>),
+    Named(IdentPath<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty<'a> {
     Unit,
     SelfType,
-    Named(Ident<'a>),
+    Named(IdentPath<'a>),
 }
 
-impl<'a> From<&'a NamedTy<'a>> for Ty<'a> {
-    fn from(ty: &'a NamedTy<'a>) -> Self {
-        match ty {
-            NamedTy::SelfType => Ty::SelfType,
-            NamedTy::Named(name) => Ty::Named(name),
+#[derive(Debug, Clone, PartialEq)]
+pub struct IdentPath<'a> {
+    /// The components of the path (non-empty only if root is false)
+    pub components: Vec<Ident<'a>>,
+    /// If true, this path is relative to the root of the current package
+    ///
+    /// i.e. the path started with the `package` keyword
+    pub root: bool,
+}
+
+impl<'a> fmt::Display for IdentPath<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self {components, root} = self;
+
+        if *root {
+            write!(f, "package")?;
+            if components.is_empty() {
+                return Ok(());
+            }
+            write!(f, "::")?;
         }
+
+        write!(f, "{}", components[0])?;
+        for comp in &components[1..] {
+            write!(f, "::{}", comp)?;
+        }
+
+        Ok(())
     }
 }
 
-pub type IdentPath<'a> = ast::IdentPath<'a>;
 pub type Ident<'a> = ast::Ident<'a>;

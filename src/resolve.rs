@@ -32,7 +32,8 @@ pub fn resolve_names(
 enum ScopeKind {
     /// Module scope
     ///
-    /// Most name lookups stop here.
+    /// Type and function lookups stop here. This is to prevent modules from accessing parent
+    /// modules.
     Module,
     /// Function scope
     ///
@@ -40,8 +41,6 @@ enum ScopeKind {
     /// of outer functions.
     Function,
     /// Block scope
-    ///
-    /// Blocks can access all upper level scopes.
     Block,
 }
 
@@ -135,9 +134,11 @@ impl<'a> HIRWalker<'a> {
             assert!(self.scope_stack.is_empty(),
                 "bug: attempt to add a root module scope onto a non-empty scope stack");
             self.scope_stack.push_back(Scope::root());
+
+        } else {
+            self.push_scope(ScopeKind::Module);
         }
 
-        self.push_scope(ScopeKind::Module);
         let decls = self.resolve_decls(decls, None);
         self.pop_scope();
 
@@ -412,6 +413,7 @@ impl<'a> HIRWalker<'a> {
             &BoolLiteral(value) => nir::Expr::BoolLiteral(value),
             UnitLiteral => nir::Expr::UnitLiteral,
             SelfLiteral => nir::Expr::SelfLiteral,
+            Path(path) => nir::Expr::Var(self.resolve_func(path)),
             Var(var) => nir::Expr::Var(self.resolve_var(var)),
         }
     }
@@ -476,7 +478,7 @@ impl<'a> HIRWalker<'a> {
         let hir::StructLiteral {name, field_values} = struct_lit;
 
         let mut fields = HashSet::new();
-        let name = self.resolve_ty(&name.into(), self_ty);
+        let name = self.resolve_named_ty(name, self_ty);
         let field_values = field_values.iter().map(|field_value| {
             let hir::StructFieldValue {name: field_name, value} = field_value;
 
@@ -498,7 +500,7 @@ impl<'a> HIRWalker<'a> {
     fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
         let &hir::IntegerLiteral {value, type_hint} = int_lit;
 
-        let type_hint = type_hint.as_ref().and_then(|hint| match self.lookup_type(hint) {
+        let type_hint = type_hint.as_ref().and_then(|hint| match self.lookup_name(hint) {
             Some(ty) => Some(ty),
             None => {
                 self.diag.emit_error(format!("invalid suffix `{}` for integer literal", hint));
@@ -526,8 +528,8 @@ impl<'a> HIRWalker<'a> {
 
     /// Resolves a function name. Returns something even if the function wasn't found so that name
     /// resolution may continue.
-    fn resolve_func(&mut self, name: &hir::IdentPath) -> DefId {
-        match self.lookup_func(name) {
+    fn resolve_func(&mut self, path: &hir::IdentPath) -> DefId {
+        match self.lookup_path(path) {
             Some(func) => func,
             None => {
                 // Insert a fake function so name resolution may continue
@@ -539,7 +541,7 @@ impl<'a> HIRWalker<'a> {
     /// Resolves a variable. Returns something even if the variable wasn't found so that name
     /// resolution may continue.
     fn resolve_var(&mut self, name: hir::Ident) -> DefId {
-        match self.lookup_var(name) {
+        match self.lookup_name(name) {
             Some(var) => var,
             None => {
                 // Insert a fake variable so name resolution may continue
@@ -548,11 +550,10 @@ impl<'a> HIRWalker<'a> {
         }
     }
 
-    /// Attempts to resolve a type and emits an error if the type could not be resolved
-    fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
-        use hir::Ty::*;
+    /// Attempts to resolve a named type and emits an error if the type could not be resolved
+    fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<DefId>) -> DefId {
+        use hir::NamedTy::*;
         let ty = match ty {
-            Unit => Some(self.prims.unit()),
             SelfType => match self_ty {
                 Some(ty) => Some(ty),
                 None => {
@@ -560,7 +561,7 @@ impl<'a> HIRWalker<'a> {
                     None
                 },
             },
-            Named(ty_name) => match self.lookup_type(ty_name) {
+            Named(ty_name) => match self.lookup_path(ty_name) {
                 Some(ty) => Some(ty),
                 None => {
                     self.diag.emit_error(format!("cannot find type `{}` in this scope", ty_name));
@@ -578,19 +579,88 @@ impl<'a> HIRWalker<'a> {
         }
     }
 
-    /// Attempts to lookup a name of a type by walking up the scope stack
-    fn lookup_type(&self, name: hir::Ident) -> Option<DefId> {
+    /// Attempts to resolve a type and emits an error if the type could not be resolved
+    fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
+        use hir::Ty::*;
+        let ty = match ty {
+            Unit => Some(self.prims.unit()),
+            SelfType => match self_ty {
+                Some(ty) => Some(ty),
+                None => {
+                    self.diag.emit_error(format!("cannot find type `Self` in this scope"));
+                    None
+                },
+            },
+            Named(ty_name) => match self.lookup_path(ty_name) {
+                Some(ty) => Some(ty),
+                None => {
+                    self.diag.emit_error(format!("cannot find type `{}` in this scope", ty_name));
+                    None
+                },
+            },
+        };
+
+        match ty {
+            Some(ty) => ty,
+            None => {
+                // Insert a fake type so name resolution may continue
+                self.top_scope().types.get_or_insert("$error".to_string())
+            },
+        }
+    }
+
+    /// Attempts to lookup a path
+    fn lookup_path(&self, path: &hir::IdentPath) -> Option<DefId> {
         todo!()
     }
 
-    /// Attempts to lookup a name of a function by walking up the scope stack
-    fn lookup_func(&self, name: &hir::IdentPath) -> Option<DefId> {
-        todo!()
-    }
+    /// Attempts to lookup a name by walking up the scope stack
+    fn lookup_name(&self, name: hir::Ident) -> Option<DefId> {
+        // Search variables
+        for scope in self.scope_stack.iter().rev() {
+            use ScopeKind::*;
+            match scope.kind {
+                Module => break,
+                Function => match scope.variables.id(name) {
+                    Some(id) => return Some(id),
+                    // Stop searching for variables once we reach a function boundary
+                    None => break,
+                },
+                Block => if let Some(id) = scope.variables.id(name) {
+                    return Some(id);
+                },
+            }
+        }
 
-    /// Attempts to lookup a name of a variable by walking up the scope stack
-    fn lookup_var(&self, name: hir::Ident) -> Option<DefId> {
-        todo!()
+        // Search functions
+        for scope in self.scope_stack.iter().rev() {
+            use ScopeKind::*;
+            match scope.kind {
+                Module => break,
+                Function => if let Some(id) = scope.functions.id(name) {
+                    return Some(id);
+                },
+                Block => if let Some(id) = scope.functions.id(name) {
+                    return Some(id);
+                },
+            }
+        }
+
+        // Search types
+        for scope in self.scope_stack.iter().rev() {
+            use ScopeKind::*;
+            match scope.kind {
+                Module => break,
+                Function => if let Some(id) = scope.types.id(name) {
+                    return Some(id);
+                },
+                Block => if let Some(id) = scope.types.id(name) {
+                    return Some(id);
+                },
+            }
+        }
+
+        None
     }
 
     /// Returns the scope at the top of the stack (the "current" scope)
