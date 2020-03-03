@@ -611,7 +611,18 @@ impl<'a> HIRWalker<'a> {
 
     /// Attempts to lookup a path
     fn lookup_path(&self, path: &hir::IdentPath) -> Option<DefId> {
-        todo!()
+        let hir::IdentPath {components, root} = path;
+
+        if *root {
+            //TODO: Lookup the module (starting from the root) and lookup the name in its decls
+            todo!()
+        } else {
+            match &components[..] {
+                [name] => self.lookup_name(name),
+                //TODO: Lookup the module and lookup the name in its decls
+                _ => todo!(),
+            }
+        }
     }
 
     /// Attempts to lookup a name by walking up the scope stack
