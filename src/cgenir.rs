@@ -160,12 +160,12 @@ impl GenerateC for Struct {
                         // Recursive type
                         cir::StructField {
                             name: field_name,
-                            typ: cir::Type::StructPtr(ptr_typ),
+                            ty: cir::Type::StructPtr(ptr_typ),
                         }
                     } else {
                         cir::StructField {
                             name: field_name,
-                            typ: cir::Type::Ptr(ptr_typ),
+                            ty: cir::Type::Ptr(ptr_typ),
                         }
                     }
                 }).collect(),
@@ -251,7 +251,7 @@ impl GenerateC for InParam {
 
         cir::FuncParam {
             name,
-            typ: cir::Type::Ptr(ptr_typ),
+            ty: cir::Type::Ptr(ptr_typ),
         }
     }
 }
@@ -271,7 +271,7 @@ impl GenerateC for OutParam {
 
         cir::FuncParam {
             name,
-            typ: cir::Type::OutPtr(ptr_typ),
+            ty: cir::Type::OutPtr(ptr_typ),
         }
     }
 }
@@ -320,18 +320,18 @@ impl GenerateC for Stmt {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
     pub name: Ident,
-    pub typ: VarType,
+    pub ty: VarType,
 }
 
 impl GenerateC for VarDecl {
     type Output = cir::VarDecl;
 
     fn to_c(&self) -> Self::Output {
-        let &Self {name, typ} = self;
+        let &Self {name, ty} = self;
 
         cir::VarDecl {
             name,
-            typ: typ.to_c(),
+            ty: ty.to_c(),
             body: None,
         }
     }
@@ -340,7 +340,7 @@ impl GenerateC for VarDecl {
 #[derive(Debug, Clone, Copy)]
 pub enum VarType {
     /// A pointer to the given type
-    Ptr {typ: Ident},
+    Ptr {ty: Ident},
     /// A plain `bool` type
     Bool,
 }
@@ -351,7 +351,7 @@ impl GenerateC for VarType {
     fn to_c(&self) -> Self::Output {
         use VarType::*;
         match self {
-            &Ptr {typ} => cir::Type::Ptr(typ),
+            &Ptr {ty} => cir::Type::Ptr(ty),
             Bool => cir::Type::Bool,
         }
     }
@@ -523,7 +523,7 @@ impl GenerateC for AssignTarget {
 pub enum AssignValue {
     /// Allocates memory for the size of the given type
     Alloc {
-        typ: Ident,
+        ty: Ident,
     },
     /// Accesses a field on an in-pointer
     FieldAccess {
@@ -545,9 +545,9 @@ impl GenerateC for AssignValue {
     fn to_c(&self) -> Self::Output {
         use AssignValue::*;
         match *self {
-            Alloc {typ} => cir::Expr::FuncCall(cir::FuncCall {
+            Alloc {ty} => cir::Expr::FuncCall(cir::FuncCall {
                 name: ALLOCATE.into(),
-                args: vec![cir::Expr::Sizeof(cir::Type::Named(typ))],
+                args: vec![cir::Expr::Sizeof(cir::Type::Named(ty))],
             }),
             FieldAccess {name, field} => cir::Expr::FieldAccess(cir::FieldAccess {name, field}),
             Var {name} => cir::Expr::Var(name),

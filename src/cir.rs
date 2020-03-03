@@ -115,14 +115,14 @@ impl DisplayCtx<CSymbols> for Struct {
 #[derive(Debug, Clone)]
 pub struct StructField {
     pub name: Ident,
-    pub typ: Type,
+    pub ty: Type,
 }
 
 impl DisplayCtx<CSymbols> for StructField {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, typ} = self;
+        let Self {name, ty} = self;
 
-        cwrite!(f, ctx, "{} {};", typ, name)
+        cwrite!(f, ctx, "{} {};", ty, name)
     }
 }
 
@@ -213,14 +213,14 @@ impl DisplayCtx<CSymbols> for FuncName {
 #[derive(Debug, Clone)]
 pub struct FuncParam {
     pub name: Ident,
-    pub typ: Type,
+    pub ty: Type,
 }
 
 impl DisplayCtx<CSymbols> for FuncParam {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, typ} = self;
+        let Self {name, ty} = self;
 
-        cwrite!(f, ctx, "{} {}", typ, name)
+        cwrite!(f, ctx, "{} {}", ty, name)
     }
 }
 
@@ -258,7 +258,7 @@ impl DisplayCtx<CSymbols> for Stmt {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
     pub name: Ident,
-    pub typ: Type,
+    pub ty: Type,
     /// The variable initilizer expression
     ///
     /// If not provided, the variable will be left uninitialized
@@ -267,9 +267,9 @@ pub struct VarDecl {
 
 impl DisplayCtx<CSymbols> for VarDecl {
     fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        let Self {name, typ, body} = self;
+        let Self {name, ty, body} = self;
 
-        cwrite!(f, ctx, "{} {}", typ, name)?;
+        cwrite!(f, ctx, "{} {}", ty, name)?;
 
         match body {
             Some(expr) => cwrite!(f, ctx, " = {};", expr),

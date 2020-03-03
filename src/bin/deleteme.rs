@@ -78,7 +78,7 @@ fn main() {
                         name: dino_out.clone(),
                     },
                     value: AssignValue::Alloc {
-                        typ: struct_counter.clone(),
+                        ty: struct_counter.clone(),
                     },
                 }),
 
