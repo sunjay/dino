@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::fmt;
 use std::hash::Hash;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 
 /// A trait for generating unique IDs
@@ -26,16 +27,16 @@ pub trait SymId: Hash + Eq + Copy {
 
 /// Represents a general symbol table that maps symbol names to unique IDs and back
 pub struct SymbolTable<Sym, Id, Data = ()>
-    where Sym: Hash + Eq,
+    where Sym: Hash + Eq + Clone,
           Id: SymId,
 {
-    symbols: HashMap<Id, (Arc<Sym>, Data)>,
-    ids: HashMap<Arc<Sym>, Id>,
+    symbols: HashMap<Id, (Sym, Data)>,
+    ids: HashMap<Sym, Id>,
     id_gen: <Id as SymId>::Gen,
 }
 
 impl<Sym, Id, Data> fmt::Debug for SymbolTable<Sym, Id, Data>
-    where Sym: Hash + Eq + fmt::Debug,
+    where Sym: Hash + Eq + Clone + fmt::Debug,
           Id: SymId + fmt::Debug,
           <Id as SymId>::Gen: fmt::Debug,
           Data: fmt::Debug,
@@ -51,7 +52,7 @@ impl<Sym, Id, Data> fmt::Debug for SymbolTable<Sym, Id, Data>
 }
 
 impl<Sym, Id, Data> Default for SymbolTable<Sym, Id, Data>
-    where Sym: Hash + Eq,
+    where Sym: Hash + Eq + Clone,
           Id: SymId,
 {
     fn default() -> Self {
@@ -64,7 +65,7 @@ impl<Sym, Id, Data> Default for SymbolTable<Sym, Id, Data>
 }
 
 impl<Sym, Id> SymbolTable<Sym, Id, ()>
-    where Sym: Hash + Eq,
+    where Sym: Hash + Eq + Clone,
           Id: SymId,
 {
     /// Inserts a new symbol into the symbol table and returns its ID
@@ -83,7 +84,7 @@ impl<Sym, Id> SymbolTable<Sym, Id, ()>
 }
 
 impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
-    where Sym: Hash + Eq,
+    where Sym: Hash + Eq + Clone,
           Id: SymId,
 {
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
@@ -101,7 +102,6 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
     ///
     /// If the symbol was previously present in the table, it will be overwritten with a new ID.
     pub fn insert_overwrite_with(&mut self, sym: Sym, data: Data) -> Id {
-        let sym = Arc::new(sym);
         let id = self.id_gen.next_id();
         self.symbols.insert(id, (sym.clone(), data));
         self.ids.insert(sym, id);
@@ -110,7 +110,10 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
     }
 
     /// Returns the ID associated with the given symbol
-    pub fn id(&self, sym: &Sym) -> Option<Id> {
+    pub fn id<Q: ?Sized>(&self, sym: &Q) -> Option<Id>
+        where Sym: Borrow<Q>,
+              Q: Hash + Eq,
+    {
         self.ids.get(sym).copied()
     }
 
@@ -128,7 +131,7 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
 
     /// Returns the symbol associated with the given ID
     pub fn symbol(&self, id: Id) -> &Sym {
-        self.symbols.get(&id).map(|(sym, _)| &**sym)
+        self.symbols.get(&id).map(|(sym, _)| sym)
             .expect("bug: should be impossible to get an ID that hasn't been inserted")
     }
 }
