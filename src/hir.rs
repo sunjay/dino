@@ -234,20 +234,5 @@ impl<'a> From<&'a NamedTy<'a>> for Ty<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum IdentPath<'a> {
-    /// An absolute path, relative to either the crate root or some other package
-    Absolute(Vec<Ident<'a>>, IdentPathBase<'a>),
-    /// A path relative to the current module namespace.
-    Relative(Vec<Ident<'a>>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdentPathBase<'a> {
-    /// A package with the given name
-    Package(Ident<'a>),
-    /// The root of the current package
-    Root,
-}
-
+pub type IdentPath<'a> = ast::IdentPath<'a>;
 pub type Ident<'a> = ast::Ident<'a>;
