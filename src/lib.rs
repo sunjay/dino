@@ -5,7 +5,7 @@ pub mod codegen;
 pub mod trans;
 pub mod ir;
 pub mod resolve2;
-pub mod primitives;
+pub mod primitives2;
 pub mod tycheck;
 pub mod runtime;
 pub mod dino_std;

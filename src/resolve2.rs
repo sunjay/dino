@@ -14,7 +14,7 @@ use snafu::{Snafu, OptionExt};
 
 use crate::ast;
 use crate::ir;
-use crate::primitives::Primitives;
+use crate::primitives2::Primitives;
 
 /// Type inference and type checking errors
 #[derive(Debug, Snafu)]

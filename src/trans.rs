@@ -9,7 +9,7 @@ use snafu::Snafu;
 
 use crate::ir;
 use crate::resolve2::{ProgramDecls, DeclMap};
-use crate::primitives::Primitives;
+use crate::primitives2::Primitives;
 use crate::codegen::*;
 
 use function::FunctionCodeGenerator;

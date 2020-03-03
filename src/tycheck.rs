@@ -14,7 +14,7 @@ use rayon::prelude::*;
 
 use crate::{ast, ir};
 use crate::resolve2::{ModuleDecls, ProgramDecls, DeclMap, TyId};
-use crate::primitives::Primitives;
+use crate::primitives2::Primitives;
 
 use constraints::ConstraintSet;
 

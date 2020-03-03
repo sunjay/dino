@@ -5,7 +5,7 @@ use maplit::hashset;
 use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
 use crate::resolve2::{DeclMap, TyId};
-use crate::primitives::Primitives;
+use crate::primitives2::Primitives;
 use crate::{ast, ir};
 
 use super::{
