@@ -11,7 +11,7 @@ use crate::package::Packages;
 pub fn resolve_names(
     pkg: &hir::Package,
     packages: &Packages,
-    diag: &mut Diagnostics,
+    diag: &Diagnostics,
 ) -> nir::Package {
     let mut walker = HIRWalker {
         scope_stack: VecDeque::new(),
@@ -99,7 +99,7 @@ struct HIRWalker<'a> {
     scope_stack: VecDeque<Scope>,
     /// The packages available in the root scope
     packages: &'a Packages,
-    diag: &'a mut Diagnostics,
+    diag: &'a Diagnostics,
 }
 
 impl<'a> HIRWalker<'a> {
