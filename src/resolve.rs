@@ -515,38 +515,81 @@ impl<'a> HIRWalker<'a> {
     fn resolve_field_name(&mut self, name: DefId, field_name: hir::Ident) -> DefId {
         let field = self.type_fields.get(&name).and_then(|fields| fields.get(field_name)).copied();
 
-        todo!()
+        match field {
+            Some(field) => field,
+            None => {
+                //HACK: Use a fake variable so name resolution may continue
+                self.top_scope().variables.get_or_insert("$error".to_string())
+            },
+        }
     }
 
     /// Resolves a function name. Returns something even if the function wasn't found so that name
     /// resolution may continue.
     fn resolve_func(&mut self, name: &hir::IdentPath) -> DefId {
-        todo!()
+        match self.lookup_func(name) {
+            Some(func) => func,
+            None => {
+                // Insert a fake function so name resolution may continue
+                self.top_scope().functions.get_or_insert("$error".to_string())
+            },
+        }
     }
 
     /// Resolves a variable. Returns something even if the variable wasn't found so that name
     /// resolution may continue.
     fn resolve_var(&mut self, name: hir::Ident) -> DefId {
-        todo!()
+        match self.lookup_var(name) {
+            Some(var) => var,
+            None => {
+                // Insert a fake variable so name resolution may continue
+                self.top_scope().variables.get_or_insert("$error".to_string())
+            },
+        }
     }
 
     /// Attempts to resolve a type and emits an error if the type could not be resolved
-    fn resolve_ty(&self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
-        todo!()
+    fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
+        use hir::Ty::*;
+        let ty = match ty {
+            Unit => Some(self.prims.unit()),
+            SelfType => match self_ty {
+                Some(ty) => Some(ty),
+                None => {
+                    self.diag.emit_error(format!("cannot find type `Self` in this scope"));
+                    None
+                },
+            },
+            Named(ty_name) => match self.lookup_type(ty_name) {
+                Some(ty) => Some(ty),
+                None => {
+                    self.diag.emit_error(format!("cannot find type `{}` in this scope", ty_name));
+                    None
+                },
+            },
+        };
+
+        match ty {
+            Some(ty) => ty,
+            None => {
+                // Insert a fake type so name resolution may continue
+                self.top_scope().types.get_or_insert("$error".to_string())
+            },
+        }
     }
 
     /// Attempts to lookup a name of a type by walking up the scope stack
-    fn lookup_type(&mut self, name: hir::Ident) -> Option<DefId> {
+    fn lookup_type(&self, name: hir::Ident) -> Option<DefId> {
         todo!()
     }
 
     /// Attempts to lookup a name of a function by walking up the scope stack
-    fn lookup_func(&mut self, name: &hir::IdentPath) -> Option<DefId> {
+    fn lookup_func(&self, name: &hir::IdentPath) -> Option<DefId> {
         todo!()
     }
 
     /// Attempts to lookup a name of a variable by walking up the scope stack
-    fn lookup_var(&mut self, name: hir::Ident) -> Option<DefId> {
+    fn lookup_var(&self, name: hir::Ident) -> Option<DefId> {
         todo!()
     }
 
