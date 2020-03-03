@@ -102,6 +102,11 @@ impl<Sym, Id> SymbolTable<Sym, Id, ()>
     pub fn insert_overwrite(&mut self, sym: Sym) -> Id {
         self.insert_overwrite_with(sym, ())
     }
+
+    /// Iterates over (Id, Sym) pairs
+    pub fn iter(&self) -> impl Iterator<Item=(Id, &Sym)> {
+        self.iter_data().map(|(id, sym, _)| (id, sym))
+    }
 }
 
 impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
@@ -154,5 +159,10 @@ impl<Sym, Id, Data> SymbolTable<Sym, Id, Data>
     pub fn symbol(&self, id: Id) -> &Sym {
         self.symbols.get(&id).map(|(sym, _)| sym)
             .expect("bug: should be impossible to get an ID that hasn't been inserted")
+    }
+
+    /// Iterates over (Id, Sym, Data) triples
+    pub fn iter_data(&self) -> impl Iterator<Item=(Id, &Sym, &Data)> {
+        self.symbols.iter().map(|(id, (sym, data))| (*id, sym, data))
     }
 }
