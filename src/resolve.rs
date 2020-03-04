@@ -35,6 +35,11 @@ enum ScopeKind {
     /// Type and function lookups stop here. This is to prevent modules from accessing parent
     /// modules.
     Module,
+    /// Impl scope
+    ///
+    /// The methods in an impl are allowed to have the same names as functions in module scope
+    /// because they are namespaced by the type being implemented.
+    Impl,
     /// Function scope
     ///
     /// Variable lookups stop here. This is to prevent inner functions from accessing the variables
@@ -94,13 +99,13 @@ impl<'a> HIRWalker<'a> {
 
         assert!(self.scope_stack.is_empty(),
             "bug: attempt to add a root module scope onto a non-empty scope stack");
-        let root = self.resolve_module(root, true);
+        let root = self.resolve_module(root);
         assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
 
         nir::Package {root}
     }
 
-    fn resolve_module(&mut self, module: &hir::Module, root: bool) -> nir::Module {
+    fn resolve_module(&mut self, module: &hir::Module) -> nir::Module {
         let hir::Module {decls} = module;
 
         self.push_scope(ScopeKind::Module);
@@ -116,11 +121,10 @@ impl<'a> HIRWalker<'a> {
 
         let structs = self.resolve_structs(decls, self_ty);
 
-        let funcs = decls.iter().filter_map(|decl| match decl {
-            hir::Decl::Function(func) => Some(func),
+        let functions = decls.iter().filter_map(|decl| match decl {
+            hir::Decl::Function(func) => Some(self.resolve_function(func, self_ty)),
             _ => None,
-        });
-        let functions = self.resolve_functions(funcs, None);
+        }).collect();
 
         nir::Decls {structs, functions}
     }
@@ -222,7 +226,26 @@ impl<'a> HIRWalker<'a> {
                     // impls don't have to be in the same scope as the struct itself
                     let self_ty = self.resolve_ty(impl_self_ty, self_ty);
 
-                    let methods = self.resolve_functions(methods.iter(), Some(self_ty));
+                    // Push a scope so that method names do not clash with free function names
+                    self.push_scope(ScopeKind::Impl);
+                    let methods: Vec<nir::Function> = methods.iter().map(|method| {
+                        let func = self.resolve_function(method, Some(self_ty));
+
+                        // Insert into type info so the methods can be looked up by name later
+                        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+                        let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+                        if ty_info.methods.contains_key(method.name) {
+                            self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
+                        } else {
+                            // Only insert the method if a method with that name hasn't been
+                            // inserted yet. This means that the first decl of every method name
+                            // will be kept in the type info.
+                            ty_info.methods.insert(method.name.to_string(), func.name);
+                        }
+
+                        func
+                    }).collect();
+                    self.pop_scope();
 
                     let struct_data = structs.entry(self_ty)
                         .or_insert_with(|| nir::Struct::new(self_ty));
@@ -263,14 +286,6 @@ impl<'a> HIRWalker<'a> {
 
             Some(nir::NamedField {name, ty})
         }).collect()
-    }
-
-    fn resolve_functions<'b>(
-        &mut self,
-        decls: impl Iterator<Item=&'b hir::Function<'b>>,
-        self_ty: Option<DefId>,
-    ) -> Vec<nir::Function> {
-        decls.map(|func| self.resolve_function(func, self_ty)).collect()
     }
 
     fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> nir::Function {
@@ -386,7 +401,7 @@ impl<'a> HIRWalker<'a> {
             &BoolLiteral(value) => nir::Expr::BoolLiteral(value),
             UnitLiteral => nir::Expr::UnitLiteral,
             SelfLiteral => nir::Expr::SelfLiteral,
-            Path(path) => nir::Expr::Var(self.resolve_func(path)),
+            Path(path) => nir::Expr::Var(self.resolve_func_name(path)),
             Var(var) => nir::Expr::Var(self.resolve_var(var)),
         }
     }
@@ -441,7 +456,7 @@ impl<'a> HIRWalker<'a> {
     fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<DefId>) -> nir::FuncCall {
         let hir::FuncCall {func_name, args} = call;
 
-        let func_name = self.resolve_func(func_name);
+        let func_name = self.resolve_func_name(func_name);
         let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
 
         nir::FuncCall {func_name, args}
@@ -501,7 +516,7 @@ impl<'a> HIRWalker<'a> {
 
     /// Resolves a function name. Returns something even if the function wasn't found so that name
     /// resolution may continue.
-    fn resolve_func(&mut self, path: &hir::IdentPath) -> DefId {
+    fn resolve_func_name(&mut self, path: &hir::IdentPath) -> DefId {
         match self.lookup_path(path) {
             Some(func) => func,
             None => {
@@ -605,6 +620,7 @@ impl<'a> HIRWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
+                Impl => break,
                 Function => match scope.variables.id(name) {
                     Some(id) => return Some(id),
                     // Stop searching for variables once we reach a function boundary
@@ -621,6 +637,9 @@ impl<'a> HIRWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
+                Impl => if let Some(id) = scope.functions.id(name) {
+                    return Some(id);
+                },
                 Function => if let Some(id) = scope.functions.id(name) {
                     return Some(id);
                 },
@@ -635,6 +654,9 @@ impl<'a> HIRWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
+                Impl => if let Some(id) = scope.types.id(name) {
+                    return Some(id);
+                },
                 Function => if let Some(id) = scope.types.id(name) {
                     return Some(id);
                 },

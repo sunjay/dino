@@ -1,4 +1,6 @@
-use super::DefId;
+use std::collections::HashMap;
+
+use super::{DefId, FuncSig};
 
 /// A named-field of a type
 #[derive(Debug)]
@@ -16,14 +18,15 @@ pub enum TypeFields {
 #[derive(Debug)]
 pub struct TypeInfo {
     pub fields: TypeFields,
-    pub methods: Vec<super::FuncSig>,
+    /// Mapping of method name to its function `DefId`
+    pub methods: HashMap<String, DefId>,
 }
 
 impl TypeInfo {
     pub fn new_struct() -> Self {
         Self {
             fields: TypeFields::Struct(Vec::new()),
-            methods: Vec::new(),
+            methods: HashMap::new(),
         }
     }
 
