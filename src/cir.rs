@@ -9,7 +9,7 @@ use std::borrow::Cow;
 
 use crate::{cwrite, cwriteln};
 use crate::fmt_ctx::DisplayCtx;
-use crate::symbol_table::{SymbolTable, SymId, GenId};
+use crate::symbol_table::{IdGenSymbolTable, SymId, GenId};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -530,7 +530,7 @@ impl DisplayCtx<CSymbols> for Type {
 }
 
 /// Symbol table for C identifiers
-pub type CSymbols = SymbolTable<String, Ident>;
+pub type CSymbols = IdGenSymbolTable<String, Ident>;
 
 /// The ID of an identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

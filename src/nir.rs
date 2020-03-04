@@ -6,20 +6,17 @@
 //! Note that this IR still contains field and method names as `DefId`s since those don't get
 //! resolved until later when we know the types.
 
-use std::collections::HashMap;
+mod type_info;
+mod def_id;
 
-use crate::def_id::DefId;
-use crate::symbol_table::SymbolTable;
+pub use type_info::*;
+pub use def_id::*;
+
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Package {
     pub root: Module,
-}
-
-#[derive(Debug)]
-pub struct DeclScope {
-    pub types: DefTable,
-    pub functions: DefTable,
 }
 
 #[derive(Debug)]
@@ -67,13 +64,13 @@ pub struct Function {
     pub body: Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncSig {
     pub params: Vec<FuncParam>,
     pub return_type: DefId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncParam {
     pub name: DefId,
     pub ty: DefId,
@@ -201,5 +198,3 @@ pub struct IntegerLiteral {
     /// e.g. 132int or 32real
     pub type_hint: Option<DefId>,
 }
-
-pub type DefTable = SymbolTable<String, DefId>;

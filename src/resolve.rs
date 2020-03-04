@@ -3,15 +3,14 @@
 use std::collections::{VecDeque, HashMap, HashSet};
 
 use crate::hir;
-use crate::nir;
-use crate::def_id::DefId;
-use crate::symbol_table::SymbolTable;
+use crate::nir::{self, DefId};
 use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;
 
 pub fn resolve_names(
     pkg: &hir::Package,
+    def_store: &nir::DefStoreSync,
     packages: &Packages,
     prims: &Primitives,
     diag: &Diagnostics,
@@ -19,6 +18,7 @@ pub fn resolve_names(
     let mut walker = HIRWalker {
         scope_stack: VecDeque::new(),
         type_fields: HashMap::new(),
+        def_store,
         packages,
         prims,
         diag,
@@ -73,32 +73,6 @@ struct Scope {
     pub variables: nir::DefTable,
 }
 
-impl Scope {
-    /// The top-level scope for the entire package
-    pub fn root() -> Self {
-        let table = SymbolTable::default();
-
-        Self {
-            kind: ScopeKind::Module,
-            wildcard_imports: Vec::new(),
-            types: table.new_shared(),
-            functions: table.new_shared(),
-            variables: table,
-        }
-    }
-
-    /// Creates a new empty child scope of the given kind
-    fn new_child(&self, kind: ScopeKind) -> Self {
-        Self {
-            kind,
-            wildcard_imports: Vec::new(),
-            types: self.types.new_shared(),
-            functions: self.functions.new_shared(),
-            variables: self.variables.new_shared(),
-        }
-    }
-}
-
 struct HIRWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
@@ -107,6 +81,8 @@ struct HIRWalker<'a> {
     /// Mapping of type ID to a mapping of the field names to their IDs
     //TODO: This is kind of a hack and I don't currently know how to model it better
     type_fields: HashMap<DefId, HashMap<String, DefId>>,
+    /// The definitions of all `DefId`s
+    def_store: &'a nir::DefStoreSync,
     /// The packages available in the root scope
     packages: &'a Packages,
     /// Compiler built-in primitive types
@@ -119,26 +95,18 @@ impl<'a> HIRWalker<'a> {
     fn resolve_package(&mut self, pkg: &hir::Package) -> nir::Package {
         let hir::Package {root} = pkg;
 
-        let pkg = nir::Package {
-            root: self.resolve_module(root, true),
-        };
+        assert!(self.scope_stack.is_empty(),
+            "bug: attempt to add a root module scope onto a non-empty scope stack");
+        let root = self.resolve_module(root, true);
         assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
 
-        pkg
+        nir::Package {root}
     }
 
     fn resolve_module(&mut self, module: &hir::Module, root: bool) -> nir::Module {
         let hir::Module {decls} = module;
 
-        if root {
-            assert!(self.scope_stack.is_empty(),
-                "bug: attempt to add a root module scope onto a non-empty scope stack");
-            self.scope_stack.push_back(Scope::root());
-
-        } else {
-            self.push_scope(ScopeKind::Module);
-        }
-
+        self.push_scope(ScopeKind::Module);
         let decls = self.resolve_decls(decls, None);
         self.pop_scope();
 
@@ -182,8 +150,8 @@ impl<'a> HIRWalker<'a> {
 
                     // You're allowed to redefine structs that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().types.insert(name.to_string());
-                    if let Err(name) = insert_res {
+                    let insert_res = self.top_scope().types.insert_with(name.to_string(), nir::Def::new_struct());
+                    if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
                 },
@@ -191,10 +159,12 @@ impl<'a> HIRWalker<'a> {
                 hir::Decl::Function(func) => {
                     let &hir::Function {name, sig: _, body: _} = func;
 
+                    //HACK: Using a default `FuncSig` until we can insert it properly. Is there a better way?
+                    let sig = nir::FuncSig {params: Vec::new(), return_type: self.prims.unit()};
                     // You're allowed to redefine functions that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().functions.insert(name.to_string());
-                    if let Err(name) = insert_res {
+                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), nir::Def::new_func(sig));
+                    if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
                 },
@@ -272,16 +242,15 @@ impl<'a> HIRWalker<'a> {
 
     fn resolve_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) -> Vec<nir::NamedField> {
         // Need to check that field names are unique
-        let mut field_names = self.top_scope().types.new_shared();
+        let mut field_names = nir::DefTable::new(self.def_store.clone());
 
         fields.iter().filter_map(|field| {
-            let hir::StructField {name, ty} = field;
-            let name_ident = *name;
+            let hir::StructField {name: name_ident, ty} = field;
 
-            let name = match field_names.insert(name_ident) {
+            let name = match field_names.insert_with(name_ident.to_string(), nir::Def::Field) {
                 Ok(name) => name,
-                Err(name) => {
-                    self.diag.emit_error(format!("field `{}` is already declared", name));
+                Err(_) => {
+                    self.diag.emit_error(format!("field `{}` is already declared", name_ident));
                     return None;
                 },
             };
@@ -329,14 +298,14 @@ impl<'a> HIRWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name = match self.top_scope().variables.insert(name.to_string()) {
+            let name = match self.top_scope().variables.insert_with(name.to_string(), nir::Def::FuncParam) {
                 Ok(id) => id,
-                Err(name) => {
+                Err(_) => {
                     self.diag.emit_error(format!("identifier `{}` is bound more than once in this parameter list", name));
 
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
-                    self.top_scope().variables.insert(format!("{}$p{}", name, duplicate_count))
+                    self.top_scope().variables.insert_with(format!("{}$p{}", name, duplicate_count), nir::Def::FuncParam)
                         .expect("bug: fresh variables should not collide")
                 },
             };
@@ -389,7 +358,7 @@ impl<'a> HIRWalker<'a> {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name = self.top_scope().variables.insert_overwrite(name.to_string());
+        let name = self.top_scope().variables.insert_overwrite_with(name.to_string(), nir::Def::Variable);
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
         let expr = self.resolve_expr(expr, self_ty);
 
@@ -521,7 +490,7 @@ impl<'a> HIRWalker<'a> {
             Some(field) => field,
             None => {
                 //HACK: Use a fake variable so name resolution may continue
-                self.top_scope().variables.get_or_insert("$error".to_string())
+                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::Def::Error)
             },
         }
     }
@@ -533,7 +502,7 @@ impl<'a> HIRWalker<'a> {
             Some(func) => func,
             None => {
                 // Insert a fake function so name resolution may continue
-                self.top_scope().functions.get_or_insert("$error".to_string())
+                self.top_scope().functions.insert_overwrite_with("$error".to_string(), nir::Def::Error)
             },
         }
     }
@@ -545,7 +514,7 @@ impl<'a> HIRWalker<'a> {
             Some(var) => var,
             None => {
                 // Insert a fake variable so name resolution may continue
-                self.top_scope().variables.get_or_insert("$error".to_string())
+                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::Def::Error)
             },
         }
     }
@@ -574,7 +543,7 @@ impl<'a> HIRWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.get_or_insert("$error".to_string())
+                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::Def::Error)
             },
         }
     }
@@ -604,7 +573,7 @@ impl<'a> HIRWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.get_or_insert("$error".to_string())
+                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::Def::Error)
             },
         }
     }
@@ -681,10 +650,14 @@ impl<'a> HIRWalker<'a> {
     }
 
     /// Pushes a new level onto the scope stack
-    fn push_scope(&mut self, kind: ScopeKind) -> &mut Scope {
-        let new_scope = self.top_scope().new_child(kind);
-        self.scope_stack.push_back(new_scope);
-        self.top_scope()
+    fn push_scope(&mut self, kind: ScopeKind) {
+        self.scope_stack.push_back(Scope {
+            kind,
+            wildcard_imports: Vec::new(),
+            types: nir::DefTable::new(self.def_store.clone()),
+            functions: nir::DefTable::new(self.def_store.clone()),
+            variables: nir::DefTable::new(self.def_store.clone()),
+        });
     }
 
     /// Removes the upper-most level of the scope stack

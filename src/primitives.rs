@@ -1,4 +1,4 @@
-use crate::def_id::DefId;
+use crate::nir::DefId;
 
 macro_rules! primitives {
     (
