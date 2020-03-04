@@ -1,9 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::package::PkgId;
-use crate::symbol_table::{SymbolTable, IdStore};
 
-use super::TypeInfo;
+use super::DefData;
 
 /// An ID for any module, type, function, variable, etc.
 ///
@@ -16,44 +15,15 @@ pub struct DefId {
     def_index: usize,
 }
 
-#[derive(Debug)]
-pub enum Def {
-    Module,
-    Type(TypeInfo),
-    Field,
-    Function(super::FuncSig),
-    FuncParam,
-    Variable,
-    /// A placeholder for a def which could not be computed; this is
-    /// propagated to avoid useless error messages.
-    Error,
-}
-
-impl Def {
-    pub fn new_struct() -> Self {
-        Def::Type(TypeInfo::new_struct())
-    }
-
-    pub fn new_func(sig: super::FuncSig) -> Self {
-        Def::Function(sig)
-    }
-}
-
-/// A symbol table contain a shared `DefStore`
-///
-/// This allows all levels of scope to have their own table for looking up names, but a single
-/// source of data for looking up `DefId`s
-pub type DefTable = SymbolTable<DefStoreSync>;
-
 /// A version of the `DefStore` that can be shared
 pub type DefStoreSync = Arc<Mutex<DefStore>>;
 
-/// Stores a mapping from `DefId` to each `Def` one particular package
+/// Stores a mapping from `DefId` to each `DefData` one particular package
 #[derive(Debug)]
 pub struct DefStore {
     pkg: PkgId,
     /// `def_index` indexes into this field
-    defs: Vec<(String, Def)>,
+    defs: Vec<(String, DefData)>,
 }
 
 impl DefStore {
@@ -63,14 +33,9 @@ impl DefStore {
             defs: Vec::new(),
         }
     }
-}
 
-impl IdStore for DefStore {
-    type Sym = String;
-    type Id = DefId;
-    type Data = Def;
-
-    fn push(&mut self, sym: Self::Sym, data: Self::Data) -> Self::Id {
+    /// Pushes a new item into the store, returning a new ID for that item
+    pub fn push(&mut self, sym: String, data: DefData) -> DefId {
         self.defs.push((sym, data));
         DefId {
             pkg: self.pkg,
@@ -78,19 +43,22 @@ impl IdStore for DefStore {
         }
     }
 
-    fn data(&self, id: Self::Id) -> &Self::Data {
+    /// Retrieves the data for an item already in the store
+    pub fn data(&self, id: DefId) -> &DefData {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (_, data) = &self.defs[id.def_index];
         data
     }
 
-    fn data_mut(&mut self, id: Self::Id) -> &mut Self::Data {
+    /// Retrieves a mutable version of the data for an item already in the store
+    pub fn data_mut(&mut self, id: DefId) -> &mut DefData {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (_, data) = &mut self.defs[id.def_index];
         data
     }
 
-    fn symbol(&self, id: Self::Id) -> &Self::Sym {
+    /// Retrieves the symbol corresponding to the give ID
+    pub fn symbol(&self, id: DefId) -> &String {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (sym, _) = &self.defs[id.def_index];
         sym

@@ -7,10 +7,14 @@
 //! resolved until later when we know the types.
 
 mod type_info;
-mod def_id;
+mod def_data;
+mod def_store;
+mod def_table;
 
 pub use type_info::*;
-pub use def_id::*;
+pub use def_data::*;
+pub use def_store::*;
+pub use def_table::*;
 
 use std::collections::HashMap;
 

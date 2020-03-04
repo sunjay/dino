@@ -4,12 +4,15 @@
 //! generation. This is a very flexible IR designed to allow us to generate whatever C code we want.
 //! To that end, no special-casing is done specific to our compiler. It's just C.
 
+mod csymbols;
+
+pub use csymbols::*;
+
 use std::fmt;
 use std::borrow::Cow;
 
 use crate::{cwrite, cwriteln};
 use crate::fmt_ctx::DisplayCtx;
-use crate::symbol_table::{IdGenSymbolTable, SymId, GenId};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -526,36 +529,6 @@ impl DisplayCtx<CSymbols> for Type {
             Int32 => cwrite!(f, ctx, "int"),
             Void => cwrite!(f, ctx, "void"),
         }
-    }
-}
-
-/// Symbol table for C identifiers
-pub type CSymbols = IdGenSymbolTable<String, Ident>;
-
-/// The ID of an identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Ident(usize);
-
-impl DisplayCtx<CSymbols> for Ident {
-    fn fmt_ctx(&self, f: &mut fmt::Formatter<'_>, ctx: &CSymbols) -> fmt::Result {
-        write!(f, "{}", ctx.symbol(*self))
-    }
-}
-
-impl SymId for Ident {
-    type Gen = IdentGen;
-}
-
-#[derive(Debug, Default)]
-pub struct IdentGen {
-    next: usize,
-}
-
-impl GenId<Ident> for IdentGen {
-    fn next_id(&mut self) -> Ident {
-        let id = self.next;
-        self.next += 1;
-        Ident(id)
     }
 }
 

@@ -150,7 +150,7 @@ impl<'a> HIRWalker<'a> {
 
                     // You're allowed to redefine structs that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().types.insert_with(name.to_string(), nir::Def::new_struct());
+                    let insert_res = self.top_scope().types.insert_with(name.to_string(), nir::DefData::new_struct());
                     if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
@@ -163,7 +163,7 @@ impl<'a> HIRWalker<'a> {
                     let sig = nir::FuncSig {params: Vec::new(), return_type: self.prims.unit()};
                     // You're allowed to redefine functions that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), nir::Def::new_func(sig));
+                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), nir::DefData::new_func(sig));
                     if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
@@ -247,7 +247,7 @@ impl<'a> HIRWalker<'a> {
         fields.iter().filter_map(|field| {
             let hir::StructField {name: name_ident, ty} = field;
 
-            let name = match field_names.insert_with(name_ident.to_string(), nir::Def::Field) {
+            let name = match field_names.insert_with(name_ident.to_string(), nir::DefData::Field) {
                 Ok(name) => name,
                 Err(_) => {
                     self.diag.emit_error(format!("field `{}` is already declared", name_ident));
@@ -298,14 +298,15 @@ impl<'a> HIRWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name = match self.top_scope().variables.insert_with(name.to_string(), nir::Def::FuncParam) {
+            let name = match self.top_scope().variables.insert_with(name.to_string(), nir::DefData::FuncParam) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.emit_error(format!("identifier `{}` is bound more than once in this parameter list", name));
 
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
-                    self.top_scope().variables.insert_with(format!("{}$p{}", name, duplicate_count), nir::Def::FuncParam)
+                    let fresh_name = format!("{}$p{}", name, duplicate_count);
+                    self.top_scope().variables.insert_with(fresh_name, nir::DefData::Error)
                         .expect("bug: fresh variables should not collide")
                 },
             };
@@ -358,7 +359,7 @@ impl<'a> HIRWalker<'a> {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name = self.top_scope().variables.insert_overwrite_with(name.to_string(), nir::Def::Variable);
+        let name = self.top_scope().variables.insert_overwrite_with(name.to_string(), nir::DefData::Variable);
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
         let expr = self.resolve_expr(expr, self_ty);
 
@@ -490,7 +491,7 @@ impl<'a> HIRWalker<'a> {
             Some(field) => field,
             None => {
                 //HACK: Use a fake variable so name resolution may continue
-                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::Def::Error)
+                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
             },
         }
     }
@@ -502,7 +503,7 @@ impl<'a> HIRWalker<'a> {
             Some(func) => func,
             None => {
                 // Insert a fake function so name resolution may continue
-                self.top_scope().functions.insert_overwrite_with("$error".to_string(), nir::Def::Error)
+                self.top_scope().functions.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
             },
         }
     }
@@ -514,7 +515,7 @@ impl<'a> HIRWalker<'a> {
             Some(var) => var,
             None => {
                 // Insert a fake variable so name resolution may continue
-                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::Def::Error)
+                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
             },
         }
     }
@@ -543,7 +544,7 @@ impl<'a> HIRWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::Def::Error)
+                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
             },
         }
     }
@@ -573,7 +574,7 @@ impl<'a> HIRWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::Def::Error)
+                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
             },
         }
     }
