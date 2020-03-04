@@ -17,7 +17,7 @@ pub fn resolve_names(
 ) -> nir::Package {
     let mut walker = HIRWalker {
         scope_stack: VecDeque::new(),
-        type_fields: HashMap::new(),
+        field_names: HashMap::new(),
         def_store,
         packages,
         prims,
@@ -76,11 +76,8 @@ struct Scope {
 struct HIRWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
-    /// The fields of all the types in the current scope
-    ///
-    /// Mapping of type ID to a mapping of the field names to their IDs
-    //TODO: This is kind of a hack and I don't currently know how to model it better
-    type_fields: HashMap<DefId, HashMap<String, DefId>>,
+    /// A mapping from struct ID to the names of its fields
+    field_names: HashMap<DefId, HashMap<String, DefId>>,
     /// The definitions of all `DefId`s
     def_store: &'a nir::DefStoreSync,
     /// The packages available in the root scope
@@ -256,7 +253,13 @@ impl<'a> HIRWalker<'a> {
             };
             let ty = self.resolve_ty(ty, Some(self_ty));
 
-            self.type_fields.entry(self_ty).or_default().insert(name_ident.to_string(), name);
+            // Insert into `field_names` so we can lookup fields by name
+            self.field_names.entry(self_ty).or_default().insert(name_ident.to_string(), name);
+
+            // Insert into type info so the fields are available by ID
+            let mut store = self.def_store.lock().expect("bug: lock poisoned");
+            let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+            ty_info.push_struct_field(name, ty);
 
             Some(nir::NamedField {name, ty})
         }).collect()
@@ -484,8 +487,8 @@ impl<'a> HIRWalker<'a> {
 
     /// Resolves a field name. Returns something even if the field wasn't found so that name
     /// resolution may continue.
-    fn resolve_field_name(&mut self, name: DefId, field_name: hir::Ident) -> DefId {
-        let field = self.type_fields.get(&name).and_then(|fields| fields.get(field_name)).copied();
+    fn resolve_field_name(&mut self, self_ty: DefId, field_name: hir::Ident) -> DefId {
+        let field = self.field_names.get(&self_ty).and_then(|fields| fields.get(field_name)).copied();
 
         match field {
             Some(field) => field,
