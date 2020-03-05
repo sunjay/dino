@@ -25,40 +25,12 @@ pub struct Package {
 
 #[derive(Debug)]
 pub struct Decls {
-    /// Mapping of struct name (`DefId`) to the struct data
-    ///
-    /// Using a `HashMap` so we have fast lookup when adding methods from impl blocks
-    pub structs: HashMap<DefId, Struct>,
     pub functions: Vec<Function>,
 }
 
 #[derive(Debug)]
 pub struct Module {
     pub decls: Decls,
-}
-
-#[derive(Debug)]
-pub struct Struct {
-    pub name: DefId,
-    pub fields: Vec<NamedField>,
-    pub methods: Vec<Function>,
-}
-
-impl Struct {
-    pub fn new(name: DefId) -> Self {
-        Self {
-            name,
-            fields: Vec::new(),
-            methods: Vec::new(),
-        }
-    }
-}
-
-/// A named-field of a type
-#[derive(Debug)]
-pub struct NamedField {
-    pub name: DefId,
-    pub ty: DefId,
 }
 
 #[derive(Debug)]

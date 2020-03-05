@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{DefId, FuncSig};
+use super::{DefId, DefTable};
 
 /// A named-field of a type
 #[derive(Debug)]
@@ -11,7 +11,23 @@ pub struct NamedField {
 
 #[derive(Debug)]
 pub enum TypeFields {
-    Struct(Vec<NamedField>),
+    Struct(DefTable),
+}
+
+impl TypeFields {
+    pub fn struct_fields(&self) -> &DefTable {
+        use TypeFields::*;
+        match self {
+            Struct(fields) => &fields,
+        }
+    }
+
+    pub fn struct_fields_mut(&mut self) -> &mut DefTable {
+        use TypeFields::*;
+        match self {
+            Struct(fields) => fields,
+        }
+    }
 }
 
 /// The type information stored for each type
@@ -23,20 +39,10 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn new_struct() -> Self {
+    pub fn new_struct(fields: DefTable) -> Self {
         Self {
-            fields: TypeFields::Struct(Vec::new()),
+            fields: TypeFields::Struct(fields),
             methods: HashMap::new(),
-        }
-    }
-
-    /// Pushes a new struct field into the type
-    ///
-    /// The field name MUST be unique. That is, the same field should not be pushed twice.
-    pub fn push_struct_field(&mut self, name: DefId, ty: DefId) {
-        use TypeFields::*;
-        match &mut self.fields {
-            Struct(fields) => fields.push(NamedField {name, ty}),
         }
     }
 }

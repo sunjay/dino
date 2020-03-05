@@ -1,10 +1,10 @@
-use super::TypeInfo;
+use super::{TypeInfo, DefId, DefTable};
 
 #[derive(Debug)]
 pub enum DefData {
     Module,
     Type(TypeInfo),
-    Field,
+    Field {ty: DefId},
     Function(super::FuncSig),
     FuncParam,
     Variable,
@@ -14,12 +14,19 @@ pub enum DefData {
 }
 
 impl DefData {
-    pub fn new_struct() -> Self {
-        DefData::Type(TypeInfo::new_struct())
+    pub fn new_struct(fields: DefTable) -> Self {
+        DefData::Type(TypeInfo::new_struct(fields))
     }
 
     pub fn new_func(sig: super::FuncSig) -> Self {
         DefData::Function(sig)
+    }
+
+    pub fn unwrap_type(&self) -> &TypeInfo {
+        match self {
+            DefData::Type(data) => data,
+            _ => unreachable!("bug: expected a type"),
+        }
     }
 
     pub fn unwrap_type_mut(&mut self) -> &mut TypeInfo {
