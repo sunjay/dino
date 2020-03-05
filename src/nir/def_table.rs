@@ -53,27 +53,6 @@ impl DefTable {
         self.ids.get(sym).copied()
     }
 
-    /// Applies a function to the data for an item already in the store
-    pub fn map_data<R, F>(&self, id: DefId, mut f: F) -> R
-        where F: FnMut(&DefData) -> R
-    {
-        f(self.store().data(id))
-    }
-
-    /// Applies a function to a mutable version of the data for an item already in the store
-    pub fn map_data_mut<R, F>(&mut self, id: DefId, mut f: F) -> R
-        where F: FnMut(&mut DefData) -> R
-    {
-        f(self.store().data_mut(id))
-    }
-
-    /// Applies a function to the symbol associated with the given ID
-    pub fn map_symbol<R, F>(&self, id: DefId, mut f: F) -> R
-        where F: FnMut(&str) -> R
-    {
-        f(self.store().symbol(id))
-    }
-
     fn store(&self) -> MutexGuard<DefStore> {
         self.store.lock().expect("bug: lock poisoned")
     }
