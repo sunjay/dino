@@ -2,5 +2,5 @@ thread 'main' panicked at 'Error: 0: at line 0, in Eof:
 fn main() {
 ^
 
-', src/ast/parser.rs:38:13
+', src/ast2/parser.rs:38:13
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.

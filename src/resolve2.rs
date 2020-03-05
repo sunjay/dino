@@ -12,7 +12,7 @@ use std::collections::{HashSet, HashMap};
 
 use snafu::{Snafu, OptionExt};
 
-use crate::ast;
+use crate::ast2;
 use crate::ir;
 use crate::primitives2::Primitives;
 
@@ -48,9 +48,9 @@ pub struct ModuleDecls<'a> {
     /// A mapping of type ID to its struct
     pub types: HashMap<TyId, ir::Struct<'a>>,
     /// A mapping of the Self type to its resolved methods
-    pub methods: HashMap<TyId, Vec<(ir::FuncSig<'a>, &'a ast::Function<'a>)>>,
+    pub methods: HashMap<TyId, Vec<(ir::FuncSig<'a>, &'a ast2::Function<'a>)>>,
     /// A list of functions and their resolved signatures
-    pub functions: Vec<(ir::FuncSig<'a>, &'a ast::Function<'a>)>,
+    pub functions: Vec<(ir::FuncSig<'a>, &'a ast2::Function<'a>)>,
 }
 
 #[derive(Debug)]
@@ -62,13 +62,13 @@ pub struct ProgramDecls<'a> {
 
 impl<'a> ProgramDecls<'a> {
     /// Extracts the declarations from the given program
-    pub fn extract(prog: &'a ast::Program<'a>) -> Result<(Self, ModuleDecls<'a>), Error> {
+    pub fn extract(prog: &'a ast2::Program<'a>) -> Result<(Self, ModuleDecls<'a>), Error> {
         let mut top_level_decls = DeclMap::default();
         let prims = Primitives::new(&mut top_level_decls);
         let mut program_decls = Self {top_level_decls, prims};
 
-        let ast::Program {top_level_module} = prog;
-        let ast::Module {decls} = top_level_module;
+        let ast2::Program {top_level_module} = prog;
+        let ast2::Module {decls} = top_level_module;
 
         let mut module_decls = ModuleDecls::default();
         program_decls.reserve_types(&decls)?;
@@ -79,19 +79,19 @@ impl<'a> ProgramDecls<'a> {
     }
 
     /// Reserves type IDs for the declared types
-    fn reserve_types(&mut self, decls: &[ast::Decl<'a>]) -> Result<(), Error> {
+    fn reserve_types(&mut self, decls: &[ast2::Decl<'a>]) -> Result<(), Error> {
         // Inserts all the types so they are available for everything resolved after
         for decl in decls {
             match decl {
-                ast::Decl::Struct(struct_decl) => {
-                    let ast::Struct {name, fields: _} = struct_decl;
+                ast2::Decl::Struct(struct_decl) => {
+                    let ast2::Struct {name, fields: _} = struct_decl;
 
                     self.top_level_decls.reserve_type(name)?;
                 },
 
                 // Ignore in this pass
-                ast::Decl::Impl(_) |
-                ast::Decl::Function(_) => {},
+                ast2::Decl::Impl(_) |
+                ast2::Decl::Function(_) => {},
             }
         }
 
@@ -103,13 +103,13 @@ impl<'a> ProgramDecls<'a> {
     /// Assumes that all types (user-defined or otherwise) have been given a type ID at this point.
     fn resolve_fields(
         &mut self,
-        decls: &[ast::Decl<'a>],
+        decls: &[ast2::Decl<'a>],
         module_decls: &mut ModuleDecls<'a>,
     ) -> Result<(), Error> {
         for decl in decls {
             match decl {
-                ast::Decl::Struct(struct_decl) => {
-                    let ast::Struct {name, fields: parsed_fields} = struct_decl;
+                ast2::Decl::Struct(struct_decl) => {
+                    let ast2::Struct {name, fields: parsed_fields} = struct_decl;
 
                     let self_ty = self.top_level_decls.type_id(name)
                         .expect("bug: all types should have been inserted by now");
@@ -117,7 +117,7 @@ impl<'a> ProgramDecls<'a> {
                     // Use a loop to explicitly check for duplicate fields
                     let mut fields = ir::FieldTys::new();
                     for field in parsed_fields {
-                        let ast::StructField {name: field_name, ty} = field;
+                        let ast2::StructField {name: field_name, ty} = field;
                         let field_ty = self.resolve_ty(ty, Some(self_ty))?;
 
                         if fields.insert(field_name, field_ty).is_some() {
@@ -135,8 +135,8 @@ impl<'a> ProgramDecls<'a> {
                 },
 
                 // Ignore in this pass
-                ast::Decl::Impl(_) |
-                ast::Decl::Function(_) => {},
+                ast2::Decl::Impl(_) |
+                ast2::Decl::Function(_) => {},
             }
         }
 
@@ -148,18 +148,18 @@ impl<'a> ProgramDecls<'a> {
     /// Assumes that all types (user-defined or otherwise) have been inserted at this point.
     fn resolve_funcs_methods(
         &mut self,
-        decls: &'a [ast::Decl<'a>],
+        decls: &'a [ast2::Decl<'a>],
         module_decls: &mut ModuleDecls<'a>,
     ) -> Result<(), Error> {
         // Insert everything else, now that the types are there
         for decl in decls {
             match decl {
                 // Already handled in another pass
-                ast::Decl::Struct(_) => {},
+                ast2::Decl::Struct(_) => {},
 
-                ast::Decl::Impl(impl_block) => self.resolve_impl_block(impl_block, module_decls)?,
+                ast2::Decl::Impl(impl_block) => self.resolve_impl_block(impl_block, module_decls)?,
 
-                ast::Decl::Function(func) => {
+                ast2::Decl::Function(func) => {
                     let func_info = self.resolve_function(func, None)?;
                     module_decls.functions.push((func_info.sig.clone(), func));
                     self.top_level_decls.insert_func(func_info)?;
@@ -172,10 +172,10 @@ impl<'a> ProgramDecls<'a> {
 
     fn resolve_impl_block(
         &mut self,
-        impl_block: &'a ast::Impl<'a>,
+        impl_block: &'a ast2::Impl<'a>,
         module_decls: &mut ModuleDecls<'a>,
     ) -> Result<(), Error> {
-        let ast::Impl {self_ty, methods} = impl_block;
+        let ast2::Impl {self_ty, methods} = impl_block;
         let self_ty = self.resolve_ty(self_ty, None)?;
 
         // Multiple impl blocks for the same type are allowed, so we have to be careful here
@@ -190,8 +190,8 @@ impl<'a> ProgramDecls<'a> {
         Ok(())
     }
 
-    fn resolve_function(&self, func: &ast::Function<'a>, self_ty: Option<TyId>) -> Result<FunctionInfo<'a>, Error> {
-        let &ast::Function {name, ref sig, body: _, is_extern} = func;
+    fn resolve_function(&self, func: &ast2::Function<'a>, self_ty: Option<TyId>) -> Result<FunctionInfo<'a>, Error> {
+        let &ast2::Function {name, ref sig, body: _, is_extern} = func;
 
         Ok(FunctionInfo {
             name,
@@ -200,15 +200,15 @@ impl<'a> ProgramDecls<'a> {
         })
     }
 
-    fn resolve_sig(&self, sig: &ast::FuncSig<'a>, self_ty: Option<TyId>) -> Result<ir::FuncSig<'a>, Error> {
-        let ast::FuncSig {return_type, params} = sig;
+    fn resolve_sig(&self, sig: &ast2::FuncSig<'a>, self_ty: Option<TyId>) -> Result<ir::FuncSig<'a>, Error> {
+        let ast2::FuncSig {return_type, params} = sig;
 
         let return_type = self.resolve_ty(return_type, self_ty)?;
 
         // Ensure that parameter names are unique
         let mut param_names = HashSet::new();
         let params = params.iter().map(|param| {
-            let ast::FuncParam {name, ty} = param;
+            let ast2::FuncParam {name, ty} = param;
 
             if !param_names.insert(name) {
                 return Err(Error::DuplicateFuncParam {duplicate: name.to_string()});
@@ -221,18 +221,18 @@ impl<'a> ProgramDecls<'a> {
         Ok(ir::FuncSig {return_type, params})
     }
 
-    fn resolve_ty(&self, ty: &ast::Ty<'a>, self_ty: Option<TyId>) -> Result<TyId, Error> {
+    fn resolve_ty(&self, ty: &ast2::Ty<'a>, self_ty: Option<TyId>) -> Result<TyId, Error> {
         match ty {
-            ast::Ty::Unit => Ok(self.prims.unit()),
+            ast2::Ty::Unit => Ok(self.prims.unit()),
 
-            ast::Ty::SelfType => match self_ty {
+            ast2::Ty::SelfType => match self_ty {
                 Some(ty_id) => Ok(ty_id),
                     None => return Err(Error::UnresolvedType {
                     name: "Self".to_string(),
                 }),
             },
 
-            &ast::Ty::Named(ty_name) => self.top_level_decls.type_id(&ty_name)
+            &ast2::Ty::Named(ty_name) => self.top_level_decls.type_id(&ty_name)
                 .with_context(|| UnresolvedType {name: ty_name}),
         }
     }

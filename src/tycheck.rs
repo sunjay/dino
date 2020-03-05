@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use snafu::Snafu;
 use rayon::prelude::*;
 
-use crate::{ast, ir};
+use crate::{ast2, ir};
 use crate::resolve2::{ModuleDecls, ProgramDecls, DeclMap, TyId};
 use crate::primitives2::Primitives;
 
@@ -149,7 +149,7 @@ impl<'a> ModuleTycheck<'a> {
         &self,
         self_ty: TyId,
         sig: ir::FuncSig<'a>,
-        method: &'a ast::Function<'a>,
+        method: &'a ast2::Function<'a>,
     ) -> Result<ir::Function<'a>, Error> {
         // `ty_ir_method` is a copy of the function's AST with any generated type variables placed inline
         let (constraints, ty_ir_method) = ConstraintSet::method(self_ty, sig, method, self.decls, self.prims)?;
@@ -160,7 +160,7 @@ impl<'a> ModuleTycheck<'a> {
     fn infer_and_check_func(
         &self,
         sig: ir::FuncSig<'a>,
-        func: &'a ast::Function<'a>,
+        func: &'a ast2::Function<'a>,
     ) -> Result<ir::Function<'a>, Error> {
         // `ty_ir_func` is a copy of the function's AST with any generated type variables placed inline
         let (constraints, ty_ir_func) = ConstraintSet::function(sig, func, self.decls, self.prims)?;

@@ -6,7 +6,7 @@ use ena::unify::{InPlaceUnificationTable, UnifyKey, EqUnifyValue};
 
 use crate::resolve2::{DeclMap, TyId};
 use crate::primitives2::Primitives;
-use crate::{ast, ir};
+use crate::{ast2, ir};
 
 use super::{
     Error,
@@ -61,7 +61,7 @@ impl ConstraintSet {
     /// created are annotated inline into the returned `tyir::Function`
     pub fn function<'a>(
         sig: ir::FuncSig<'a>,
-        func: &'a ast::Function<'a>,
+        func: &'a ast2::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
@@ -75,7 +75,7 @@ impl ConstraintSet {
     pub fn method<'a>(
         self_ty: TyId,
     sig: ir::FuncSig<'a>,
-        func: &'a ast::Function<'a>,
+        func: &'a ast2::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &Primitives,
     ) -> Result<(Self, tyir::Function<'a>), Error> {
@@ -158,7 +158,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     pub fn generate(
         self_ty: Option<TyId>,
         sig: ir::FuncSig<'a>,
-        func: &'a ast::Function<'a>,
+        func: &'a ast2::Function<'a>,
         decls: &'a DeclMap<'a>,
         prims: &'b Primitives,
         constraints: &'c mut ConstraintSet,
@@ -179,9 +179,9 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     fn append_func(
         &mut self,
         sig: ir::FuncSig<'a>,
-        func: &'a ast::Function<'a>,
+        func: &'a ast2::Function<'a>,
     ) -> Result<tyir::Function<'a>, Error> {
-        let ast::Function {name, sig: _, body, is_extern} = func;
+        let ast2::Function {name, sig: _, body, is_extern} = func;
         assert!(!is_extern, "bug: attempt to type check an extern function");
 
         let ir::FuncSig {return_type: func_return_type, ref params} = sig;
@@ -211,12 +211,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// a new child scope (created with `child_scope`)
     fn append_block<'s>(
         &mut self,
-        block: &'a ast::Block<'a>,
+        block: &'a ast2::Block<'a>,
         // The type expected from the block
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::Block<'a>, Error> {
-        let ast::Block {stmts, ret} = block;
+        let ast2::Block {stmts, ret} = block;
 
         Ok(tyir::Block {
             stmts: stmts.iter()
@@ -240,17 +240,17 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given statement
     fn append_stmt<'s>(
         &mut self,
-        stmt: &'a ast::Stmt<'a>,
+        stmt: &'a ast2::Stmt<'a>,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::Stmt<'a>, Error> {
         match stmt {
-            ast::Stmt::Cond(cond) => self.append_cond(cond, None, scope)
+            ast2::Stmt::Cond(cond) => self.append_cond(cond, None, scope)
                 .map(tyir::Stmt::Cond),
-            ast::Stmt::WhileLoop(wloop) => self.append_while_loop(wloop, scope)
+            ast2::Stmt::WhileLoop(wloop) => self.append_while_loop(wloop, scope)
                 .map(tyir::Stmt::WhileLoop),
-            ast::Stmt::VarDecl(decl) => self.append_var_decl(decl, scope)
+            ast2::Stmt::VarDecl(decl) => self.append_var_decl(decl, scope)
                 .map(tyir::Stmt::VarDecl),
-            ast::Stmt::Expr(expr) => {
+            ast2::Stmt::Expr(expr) => {
                 // Generate a fresh variable that is never used after this point. By not using the
                 // type variable, we indicate that the type of this expression does not matter.
                 // Statement types do not matter because statements end with semicolons.
@@ -263,10 +263,10 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given variable declaration
     fn append_while_loop<'s>(
         &mut self,
-        wloop: &'a ast::WhileLoop<'a>,
+        wloop: &'a ast2::WhileLoop<'a>,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::WhileLoop<'a>, Error> {
-        let ast::WhileLoop {cond, body} = wloop;
+        let ast2::WhileLoop {cond, body} = wloop;
 
         // Every condition must evaluate to a value of type bool
         let cond_var = self.constraints.fresh_type_var();
@@ -288,10 +288,10 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given variable declaration
     fn append_var_decl<'s>(
         &mut self,
-        var_decl: &'a ast::VarDecl<'a>,
+        var_decl: &'a ast2::VarDecl<'a>,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::VarDecl<'a>, Error> {
-        let ast::VarDecl {ident, ty, expr} = var_decl;
+        let ast2::VarDecl {ident, ty, expr} = var_decl;
 
         if scope.contains(ident) {
             //TODO: To support variable shadowing in this algorithm we just need to make sure that
@@ -328,55 +328,55 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given expression
     fn append_expr<'s>(
         &mut self,
-        expr: &'a ast::Expr<'a>,
+        expr: &'a ast2::Expr<'a>,
         // The type expected from the expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::Expr<'a>, Error> {
         match expr {
-            ast::Expr::VarAssign(assign) => {
+            ast2::Expr::VarAssign(assign) => {
                 self.append_var_assign(assign, return_type, scope)
                     .map(|assign| tyir::Expr::VarAssign(Box::new(assign), return_type))
             },
 
-            ast::Expr::MethodCall(call) => {
+            ast2::Expr::MethodCall(call) => {
                 self.append_method_call(call, return_type, scope)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
-            ast::Expr::FieldAccess(access) => {
+            ast2::Expr::FieldAccess(access) => {
                 self.append_field_access(access, return_type, scope)
                     .map(|access| tyir::Expr::FieldAccess(Box::new(access), return_type))
             },
 
-            ast::Expr::Cond(cond) => {
+            ast2::Expr::Cond(cond) => {
                 self.append_cond(cond, Some(return_type), scope)
                     .map(|cond| tyir::Expr::Cond(Box::new(cond), return_type))
             },
 
-            ast::Expr::Call(call) => {
+            ast2::Expr::Call(call) => {
                 self.append_func_call(call, return_type, scope)
                     .map(|call| tyir::Expr::Call(call, return_type))
             },
 
-            ast::Expr::Return(ret_expr) => {
+            ast2::Expr::Return(ret_expr) => {
                 self.append_return(ret_expr.as_ref().map(|x| x.as_ref()), return_type, scope)
                     .map(|ret_expr| tyir::Expr::Return(ret_expr.map(Box::new), return_type))
             },
 
-            ast::Expr::StructLiteral(struct_lit) => {
+            ast2::Expr::StructLiteral(struct_lit) => {
                 self.append_struct_literal(struct_lit, return_type, scope)
                     .map(|struct_lit| tyir::Expr::StructLiteral(struct_lit, return_type))
             },
 
-            ast::Expr::BStrLiteral(value) => {
+            ast2::Expr::BStrLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.constraints.ty_var_is_ty(return_type, self.prims.bstr())?;
 
                 Ok(tyir::Expr::BStrLiteral(value, return_type))
             },
 
-            &ast::Expr::IntegerLiteral(ast::IntegerLiteral {value, type_hint}) => {
+            &ast2::Expr::IntegerLiteral(ast2::IntegerLiteral {value, type_hint}) => {
                 // Check if the user specified a specific type for the integer literal
                 if let Some(ty_name) = type_hint {
                     let expected_type = self.decls.type_id(&ty_name)
@@ -388,34 +388,34 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
                 Ok(tyir::Expr::IntegerLiteral(value, return_type))
             },
 
-            &ast::Expr::RealLiteral(value) => {
+            &ast2::Expr::RealLiteral(value) => {
                 self.constraints.ty_var_is_real(return_type);
 
                 Ok(tyir::Expr::RealLiteral(value, return_type))
             },
 
-            &ast::Expr::ComplexLiteral(value) => {
+            &ast2::Expr::ComplexLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.constraints.ty_var_is_ty(return_type, self.prims.complex())?;
 
                 Ok(tyir::Expr::ComplexLiteral(value, return_type))
             },
 
-            &ast::Expr::BoolLiteral(value) => {
+            &ast2::Expr::BoolLiteral(value) => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.constraints.ty_var_is_ty(return_type, self.prims.bool())?;
 
                 Ok(tyir::Expr::BoolLiteral(value, return_type))
             },
 
-            &ast::Expr::UnitLiteral => {
+            &ast2::Expr::UnitLiteral => {
                 // Assert that the literal is one of the expected types for this kind of literal
                 self.constraints.ty_var_is_ty(return_type, self.prims.unit())?;
 
                 Ok(tyir::Expr::UnitLiteral(return_type))
             },
 
-            &ast::Expr::SelfLiteral => {
+            &ast2::Expr::SelfLiteral => {
                 let name = "self";
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
                 // Assert that the type of the variable must be equal to the type expected from the
@@ -425,7 +425,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
                 Ok(tyir::Expr::Var(name, var_ty_var))
             },
 
-            &ast::Expr::Var(name) => {
+            &ast2::Expr::Var(name) => {
                 let var_ty_var = scope.get(name).context(UnresolvedName {name})?;
                 // Assert that the type of the variable must be equal to the type expected from the
                 // expression
@@ -439,12 +439,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given method call
     fn append_method_call<'s>(
         &mut self,
-        call: &'a ast::MethodCall<'a>,
+        call: &'a ast2::MethodCall<'a>,
         // The type expected from the call expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::CallExpr<'a>, Error> {
-        let ast::MethodCall {lhs, method_name, args} = call;
+        let ast2::MethodCall {lhs, method_name, args} = call;
 
         // Generate the constraints for the left-hand side expression, with the hope that this
         // type variable gets assigned a type
@@ -468,12 +468,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
 
         let func_name = if func.is_extern {
             // Using the func.name like this works for extern methods but not user-defined methods
-            ast::IdentPath::from(func.name)
+            ast2::IdentPath::from(func.name)
 
         } else {
             // Use the lhs type to call the method as `Type::method`
             let &ty_name = self.decls.type_name(lhs_ty);
-            ast::IdentPath::from(vec![ty_name, func.name])
+            ast2::IdentPath::from(vec![ty_name, func.name])
         };
 
         // Append the `self` argument as the lhs expression
@@ -484,12 +484,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given field access
     fn append_field_access<'s>(
         &mut self,
-        access: &'a ast::FieldAccess<'a>,
+        access: &'a ast2::FieldAccess<'a>,
         // The type expected from the field access
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::FieldAccess<'a>, Error> {
-        let ast::FieldAccess {lhs, field} = access;
+        let ast2::FieldAccess {lhs, field} = access;
 
         // Generate the constraints for the left-hand side expression, with the hope that this
         // type variable gets assigned a type
@@ -518,12 +518,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// If return_type is None, the conditional must result in a unit type
     fn append_cond<'s>(
         &mut self,
-        cond: &'a ast::Cond<'a>,
+        cond: &'a ast2::Cond<'a>,
         // The type expected from the conditional blocks
         return_type: Option<TyVar>,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::Cond<'a>, Error> {
-        let ast::Cond {conds, else_body} = cond;
+        let ast2::Cond {conds, else_body} = cond;
         debug_assert!(!conds.is_empty(), "bug: conditional had no initial if block");
 
         let no_return_type = return_type.is_none();
@@ -561,12 +561,12 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given function call
     fn append_func_call<'s>(
         &mut self,
-        call: &'a ast::CallExpr<'a>,
+        call: &'a ast2::CallExpr<'a>,
         // The type expected from the call expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::CallExpr<'a>, Error> {
-        let ast::CallExpr {func_name, args} = call;
+        let ast2::CallExpr {func_name, args} = call;
 
         let sig = match &func_name.components[..] {
             [] => unreachable!(),
@@ -588,8 +588,8 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         &mut self,
         sig: &ir::FuncSig,
         // The function name to call, not necessarily the original function/method name
-        func_name: ast::IdentPath<'a>,
-        args: &'a [ast::Expr<'a>],
+        func_name: ast2::IdentPath<'a>,
+        args: &'a [ast2::Expr<'a>],
         // An extra argument to prepend on to the list of arguments passed to the call
         // Used to implement methods with a `self` parameter
         mut extra_first_arg: Option<tyir::Expr<'a>>,
@@ -642,26 +642,26 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given assignment expression
     fn append_var_assign<'s>(
         &mut self,
-        assign: &'a ast::VarAssign<'a>,
+        assign: &'a ast2::VarAssign<'a>,
         // The type expected from the assignment expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::VarAssign<'a>, Error> {
-        let ast::VarAssign {lhs, expr} = assign;
+        let ast2::VarAssign {lhs, expr} = assign;
 
         // The return type of a variable assignment is ()
         self.constraints.ty_var_is_ty(return_type, self.prims.unit())?;
 
         // Get the type variable for the lhs expression
         let (lhs, lvalue_ty_var) = match lhs {
-            ast::LValueExpr::FieldAccess(access) => {
+            ast2::LValueExpr::FieldAccess(access) => {
                 let field_ty_var = self.constraints.fresh_type_var();
                 let access = self.append_field_access(access, field_ty_var, scope)?;
                 let field_lvalue = tyir::LValueExpr::FieldAccess(access, field_ty_var);
                 (field_lvalue, field_ty_var)
             },
 
-            ast::LValueExpr::Var(ident) => {
+            ast2::LValueExpr::Var(ident) => {
                 let var_ty_var = scope.get(ident).context(UnresolvedName {name: *ident})?;
                 let var_lvalue = tyir::LValueExpr::Var(ident, var_ty_var);
                 (var_lvalue, var_ty_var)
@@ -678,7 +678,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given return expression
     fn append_return<'s>(
         &mut self,
-        ret_expr: Option<&'a ast::Expr<'a>>,
+        ret_expr: Option<&'a ast2::Expr<'a>>,
         // The type expected from the return expression
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
@@ -703,16 +703,16 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     /// Appends constraints for the given struct literal
     fn append_struct_literal<'s>(
         &mut self,
-        struct_lit: &'a ast::StructLiteral<'a>,
+        struct_lit: &'a ast2::StructLiteral<'a>,
         // The type expected from the struct literal
         return_type: TyVar,
         scope: &mut Scope<'a, 's>,
     ) -> Result<tyir::StructLiteral<'a>, Error> {
-        let ast::StructLiteral {name, field_values: parsed_fields} = struct_lit;
+        let ast2::StructLiteral {name, field_values: parsed_fields} = struct_lit;
 
         let struct_ty = match name {
-            ast::NamedTy::SelfType => self.self_ty.context(UnresolvedType {name: "Self"})?,
-            ast::NamedTy::Named(name) => self.decls.type_id(name).context(UnresolvedType {name: *name})?,
+            ast2::NamedTy::SelfType => self.self_ty.context(UnresolvedType {name: "Self"})?,
+            ast2::NamedTy::Named(name) => self.decls.type_id(name).context(UnresolvedType {name: *name})?,
         };
         // The return type of this expression is a value of the struct type
         self.constraints.ty_var_is_ty(return_type, struct_ty)?;
@@ -720,7 +720,7 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
         // Use a loop to explicitly check for duplicate fields
         let mut field_values = tyir::Fields::new();
         for field in parsed_fields {
-            let ast::StructFieldValue {name: field_name, value} = field;
+            let ast2::StructFieldValue {name: field_name, value} = field;
             let field_ty = self.decls.field_type(struct_ty, field_name)
                 .context(UnresolvedField {field_name: *field_name, ty: struct_ty})?;
 
@@ -743,11 +743,11 @@ impl<'a, 'b, 'c> FunctionConstraintGenerator<'a, 'b, 'c> {
     }
 
     /// Resolves a single type to either a declared type or a primitive
-    fn lookup_type(&self, ty: &ast::Ty) -> Result<TyId, Error> {
+    fn lookup_type(&self, ty: &ast2::Ty) -> Result<TyId, Error> {
         match ty {
-            ast::Ty::Unit => Ok(self.prims.unit()),
-            ast::Ty::SelfType => self.self_ty.context(UnresolvedType {name: "Self"}),
-            ast::Ty::Named(ty) => self.decls.type_id(ty).context(UnresolvedType {name: *ty}),
+            ast2::Ty::Unit => Ok(self.prims.unit()),
+            ast2::Ty::SelfType => self.self_ty.context(UnresolvedType {name: "Self"}),
+            ast2::Ty::Named(ty) => self.decls.type_id(ty).context(UnresolvedType {name: *ty}),
         }
     }
 }

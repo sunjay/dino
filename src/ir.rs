@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-pub use crate::ast::{Ident, IdentPath};
+pub use crate::ast2::{Ident, IdentPath};
 
 use crate::resolve2::TyId;
 

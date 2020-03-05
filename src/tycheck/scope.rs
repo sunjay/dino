@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::ast;
+use crate::ast2;
 
 use super::constraints::TyVar;
 
 /// A map of variable names to their type variables
-type LocalScope<'a> = HashMap<ast::Ident<'a>, TyVar>;
+type LocalScope<'a> = HashMap<ast2::Ident<'a>, TyVar>;
 
 /// A linked list of scopes, used to create an ad-hoc stack where only the "top" is mutable
 ///
@@ -29,12 +29,12 @@ impl<'a, 's> Scope<'a, 's> {
 
     /// Returns true if the given variable name is in scope at the current level, or in any parent
     /// scope.
-    pub fn contains(&self, name: &ast::Ident<'a>) -> bool {
+    pub fn contains(&self, name: &ast2::Ident<'a>) -> bool {
         self.get(name).is_some()
     }
 
     /// Returns the type variable associated with a given variable name
-    pub fn get(&self, name: ast::Ident<'a>) -> Option<TyVar> {
+    pub fn get(&self, name: ast2::Ident<'a>) -> Option<TyVar> {
         self.current.get(name).copied().or_else(|| match self.parent {
             Some(parent) => parent.get(name),
             None => None,
@@ -43,7 +43,7 @@ impl<'a, 's> Scope<'a, 's> {
 
     /// Adds a new variable *only* to the current scope and associates it with the given type
     /// variable
-    pub fn add_variable(&mut self, name: ast::Ident<'a>, ty_var: TyVar) {
+    pub fn add_variable(&mut self, name: ast2::Ident<'a>, ty_var: TyVar) {
         self.current.insert(name, ty_var);
     }
 }

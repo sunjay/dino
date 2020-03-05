@@ -2,8 +2,6 @@
 
 use std::fmt;
 
-use crate::ast;
-
 /// Represents an entire compilation unit
 #[derive(Debug, PartialEq)]
 pub struct Package<'a> {
@@ -260,4 +258,4 @@ impl<'a> fmt::Display for IdentPath<'a> {
     }
 }
 
-pub type Ident<'a> = ast::Ident<'a>;
+pub type Ident<'a> = &'a str;

@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::ir;
-use crate::ast::{Ident, IdentPath};
+use crate::ast2::{Ident, IdentPath};
 use crate::resolve2::TyId;
 
 use super::constraints::TyVar;

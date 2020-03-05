@@ -1,6 +1,6 @@
 #![deny(unused_must_use)]
 
-pub mod ast;
+pub mod ast2;
 pub mod codegen;
 pub mod trans;
 pub mod ir;
@@ -39,7 +39,7 @@ pub enum Error {
     #[snafu(display("Parse error while reading '{}': {}", path.display(), source))]
     ParseError {
         path: PathBuf,
-        source: ast::ParseError,
+        source: ast2::ParseError,
     },
     #[snafu(display("In '{}': {}", path.display(), source))]
     ResolveError {
@@ -63,7 +63,7 @@ pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram,
     let path = path.as_ref();
     let input_program = fs::read_to_string(path)
         .with_context(|| IOError {path: path.to_path_buf()})?;
-    let program = ast::Program::parse(&input_program)
+    let program = ast2::Program::parse(&input_program)
         .with_context(|| ParseError {path: path.to_path_buf()})?;
     let (mut decls, resolved_ast) = resolve2::ProgramDecls::extract(&program)
         .with_context(|| ResolveError {path: path.to_path_buf()})?;
