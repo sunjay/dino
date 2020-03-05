@@ -2,12 +2,7 @@
 
 use std::fmt;
 
-/// Represents an entire compilation unit
-#[derive(Debug, PartialEq)]
-pub struct Package<'a> {
-    pub root: Module<'a>,
-}
-
+/// Represents a single module within the current package
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module<'a> {
     pub decls: Vec<Decl<'a>>,

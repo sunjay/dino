@@ -8,28 +8,6 @@ use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;
 
-pub fn resolve_names(
-    pkg: &hir::Package,
-    def_store: &nir::DefStoreSync,
-    packages: &Packages,
-    prims: &Primitives,
-    diag: &Diagnostics,
-) -> nir::Package {
-    let walker = ModuleWalker {
-        scope_stack: VecDeque::new(),
-        functions: Vec::new(),
-        def_store,
-        packages,
-        prims,
-        diag,
-    };
-
-    let hir::Package {root} = pkg;
-    let root = walker.resolve_root_module(root);
-
-    nir::Package {root}
-}
-
 /// The different kinds of scopes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ScopeKind {
@@ -82,7 +60,7 @@ struct Scope {
 }
 
 /// Resolves the declarations for a single module
-struct ModuleWalker<'a> {
+pub struct ModuleWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
     /// All functions found throughout the module
@@ -98,7 +76,26 @@ struct ModuleWalker<'a> {
 }
 
 impl<'a> ModuleWalker<'a> {
-    fn resolve_root_module(mut self, module: &hir::Module) -> nir::Module {
+    pub fn resolve(
+        module: &hir::Module,
+        def_store: &'a nir::DefStoreSync,
+        packages: &'a Packages,
+        prims: &'a Primitives,
+        diag: &'a Diagnostics,
+    ) -> nir::Module {
+        let walker = Self {
+            scope_stack: VecDeque::new(),
+            functions: Vec::new(),
+            def_store,
+            packages,
+            prims,
+            diag,
+        };
+
+        walker.resolve_module(module)
+    }
+
+    fn resolve_module(mut self, module: &hir::Module) -> nir::Module {
         assert!(self.scope_stack.is_empty(),
             "bug: attempt to add a root module scope onto a non-empty scope stack");
 

@@ -19,11 +19,6 @@ pub use def_table::*;
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct Package {
-    pub root: Module,
-}
-
-#[derive(Debug)]
 pub struct Module {
     /// ALL the functions in the module, including the ones that were once nested within functions,
     /// etc. This works because after name resolution, there is no longer any reason to keep those
