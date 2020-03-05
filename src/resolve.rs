@@ -1,6 +1,6 @@
 //! Name resolution - translates High-level IR (HIR) to Nameless IR (NIR)
 
-use std::collections::{VecDeque, HashSet};
+use std::collections::{VecDeque, HashMap};
 
 use crate::hir;
 use crate::nir::{self, DefId};
@@ -197,6 +197,14 @@ impl<'a> HIRWalker<'a> {
     }
 
     fn insert_struct_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) {
+        // If the struct fields are not currently empty, we must be walking a duplicate decl
+        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+        let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+        if !ty_info.fields.is_empty() {
+            // Ignore this decl
+            return;
+        }
+
         for field in fields {
             let hir::StructField {name: name_ident, ty} = field;
             let ty = self.resolve_ty(ty, Some(self_ty));
@@ -483,24 +491,38 @@ impl<'a> HIRWalker<'a> {
     fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<DefId>) -> nir::StructLiteral {
         let hir::StructLiteral {name, field_values} = struct_lit;
 
-        let mut fields = HashSet::new();
-        let name = self.resolve_named_ty(name, self_ty);
-        let field_values = field_values.iter().map(|field_value| {
-            let hir::StructFieldValue {name: field_name, value} = field_value;
+        let mut fields = HashMap::new();
+        let struct_name = self.resolve_named_ty(name, self_ty);
+        for field_value in field_values {
+            let hir::StructFieldValue {name: field_name_ident, value} = field_value;
 
-            let name = self.resolve_field_name(name, field_name);
-            let value = self.resolve_expr(value, self_ty);
+            let field_name = match self.resolve_field_name(struct_name, field_name_ident) {
+                Some(name) => name,
+                None => continue,
+            };
 
             // Make sure none of the names are specified more than once
-            if fields.contains(&name) {
-                self.diag.emit_error(format!("field `{}` specified more than once", field_name));
+            if fields.contains_key(&field_name) {
+                self.diag.emit_error(format!("field `{}` specified more than once", field_name_ident));
+                continue;
             }
-            fields.insert(name);
 
-            (name, value)
-        }).collect();
+            let value = self.resolve_expr(value, self_ty);
+            fields.insert(field_name, value);
+        }
 
-        nir::StructLiteral {name, field_values}
+        // All the fields in `fields` should be valid and unique, so make sure we have the right
+        // amount of fields for this type
+        let store = self.def_store.lock().expect("bug: lock poisoned");
+        if let nir::DefData::Type(ty_info) = store.data(struct_name) {
+            let expected_fields = ty_info.fields.struct_fields().len();
+            if fields.len() != expected_fields {
+                let name_ident = store.symbol(struct_name);
+                self.diag.emit_error(format!("missing fields in initializer for `{}` (expected: {})", name_ident, expected_fields))
+            }
+        }
+
+        nir::StructLiteral {name: struct_name, field_values: fields}
     }
 
     fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
@@ -518,20 +540,16 @@ impl<'a> HIRWalker<'a> {
         nir::IntegerLiteral {value, type_hint}
     }
 
-    /// Resolves a field name. Returns something even if the field wasn't found so that name
-    /// resolution may continue.
-    fn resolve_field_name(&mut self, self_ty: DefId, field_name: hir::Ident) -> DefId {
+    fn resolve_field_name(&mut self, self_ty: DefId, field_name: hir::Ident) -> Option<DefId> {
         let store = self.def_store.lock().expect("bug: lock poisoned");
-        let ty_info = store.data(self_ty).unwrap_type();
+        let ty_info = match store.data(self_ty) {
+            nir::DefData::Type(ty_info) => ty_info,
+            nir::DefData::Error => return None,
+            _ => unreachable!("bug: expected def to be either type or error"),
+        };
         let field = ty_info.fields.struct_fields().id(field_name);
 
-        match field {
-            Some(field) => field,
-            None => {
-                //HACK: Use a fake variable so name resolution may continue
-                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
-            },
-        }
+        field
     }
 
     /// Resolves a function name. Returns something even if the function wasn't found so that name

@@ -15,6 +15,13 @@ pub enum TypeFields {
 }
 
 impl TypeFields {
+    pub fn is_empty(&self) -> bool {
+        use TypeFields::*;
+        match self {
+            Struct(fields) => fields.is_empty(),
+        }
+    }
+
     pub fn struct_fields(&self) -> &DefTable {
         use TypeFields::*;
         match self {

@@ -24,6 +24,16 @@ impl DefTable {
         }
     }
 
+    /// Returns true if no symbols have been inserted into this table
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+
+    /// Returns the number of symbols have been inserted into this table
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
     /// If the symbol was already present in the table, it will be returned in an `Err`
