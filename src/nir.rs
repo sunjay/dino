@@ -24,13 +24,11 @@ pub struct Package {
 }
 
 #[derive(Debug)]
-pub struct Decls {
-    pub functions: Vec<Function>,
-}
-
-#[derive(Debug)]
 pub struct Module {
-    pub decls: Decls,
+    /// ALL the functions in the module, including the ones that were once nested within functions,
+    /// etc. This works because after name resolution, there is no longer any reason to keep those
+    /// functions within the inner scopes. All concept of "scope" has been handled at this point.
+    pub functions: Vec<Function>,
 }
 
 #[derive(Debug)]
@@ -54,7 +52,6 @@ pub struct FuncParam {
 
 #[derive(Debug)]
 pub struct Block {
-    pub decls: Decls,
     pub stmts: Vec<Stmt>,
     /// The final statement of the block, used as the return value of the block
     pub ret: Option<Expr>,

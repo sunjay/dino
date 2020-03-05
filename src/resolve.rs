@@ -15,15 +15,19 @@ pub fn resolve_names(
     prims: &Primitives,
     diag: &Diagnostics,
 ) -> nir::Package {
-    let mut walker = HIRWalker {
+    let walker = ModuleWalker {
         scope_stack: VecDeque::new(),
+        functions: Vec::new(),
         def_store,
         packages,
         prims,
         diag,
     };
 
-    walker.resolve_package(pkg)
+    let hir::Package {root} = pkg;
+    let root = walker.resolve_root_module(root);
+
+    nir::Package {root}
 }
 
 /// The different kinds of scopes
@@ -77,9 +81,12 @@ struct Scope {
     pub variables: nir::DefTable,
 }
 
-struct HIRWalker<'a> {
+/// Resolves the declarations for a single module
+struct ModuleWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
+    /// All functions found throughout the module
+    functions: Vec<nir::Function>,
     /// The definitions of all `DefId`s
     def_store: &'a nir::DefStoreSync,
     /// The packages available in the root scope
@@ -90,29 +97,23 @@ struct HIRWalker<'a> {
     diag: &'a Diagnostics,
 }
 
-impl<'a> HIRWalker<'a> {
-    fn resolve_package(&mut self, pkg: &hir::Package) -> nir::Package {
-        let hir::Package {root} = pkg;
-
+impl<'a> ModuleWalker<'a> {
+    fn resolve_root_module(mut self, module: &hir::Module) -> nir::Module {
         assert!(self.scope_stack.is_empty(),
             "bug: attempt to add a root module scope onto a non-empty scope stack");
-        let root = self.resolve_module(root);
-        assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
 
-        nir::Package {root}
-    }
-
-    fn resolve_module(&mut self, module: &hir::Module) -> nir::Module {
         let hir::Module {decls} = module;
 
         self.push_scope(ScopeKind::Module);
-        let decls = self.resolve_decls(decls, None);
+        self.insert_decls(decls, None);
         self.pop_scope();
 
-        nir::Module {decls}
+        assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
+
+        nir::Module {functions: self.functions}
     }
 
-    fn resolve_decls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) -> nir::Decls {
+    fn insert_decls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
         // Add imports/types first, so they can be available for everything else
         self.insert_imports_types(decls, self_ty);
         // Insert fields of each type now that all declared types/imports have been inserted
@@ -120,15 +121,8 @@ impl<'a> HIRWalker<'a> {
         // Insert all function names
         self.insert_function_names(decls);
 
-        // Get the methods from each impl in the set of decls
-        let mut functions = self.resolve_impls(decls, self_ty);
-        // Add any free functions
-        functions.extend(decls.iter().filter_map(|decl| match decl {
-            hir::Decl::Function(func) => Some(self.resolve_function(func, self_ty)?),
-            _ => None,
-        }));
-
-        nir::Decls {functions}
+        // Add each function and the methods from each impl in the set of decls
+        self.insert_funcs_impls(decls, self_ty);
     }
 
     fn insert_imports_types(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
@@ -249,8 +243,7 @@ impl<'a> HIRWalker<'a> {
         }
     }
 
-    fn resolve_impls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) -> Vec<nir::Function> {
-        let mut impl_methods = Vec::new();
+    fn insert_funcs_impls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
         for decl in decls {
             match decl {
                 // Already handled
@@ -268,15 +261,18 @@ impl<'a> HIRWalker<'a> {
 
                     // Push a scope so that method names do not clash with free function names
                     self.push_scope(ScopeKind::Impl);
-                    let methods: Vec<nir::Function> = methods.iter().filter_map(|method| {
-                        let func = self.resolve_function(method, Some(self_ty))?;
+                    for method in methods {
+                        let func = match self.resolve_function(method, Some(self_ty)) {
+                            Some(func) => func,
+                            None => continue,
+                        };
 
                         // Insert into type info so the methods can be looked up by name later
                         let mut store = self.def_store.lock().expect("bug: lock poisoned");
                         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
                         if ty_info.methods.contains_key(method.name) {
                             self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
-                            return None;
+                            continue;
 
                         } else {
                             // Only insert the method if a method with that name hasn't been
@@ -285,19 +281,18 @@ impl<'a> HIRWalker<'a> {
                             ty_info.methods.insert(method.name.to_string(), func.name);
                         }
 
-                        Some(func)
-                    }).collect();
+                        self.functions.push(func);
+                    }
                     self.pop_scope();
-
-                    impl_methods.extend(methods);
                 },
 
-                // Ignored in this pass
-                hir::Decl::Function(_) => {},
+                hir::Decl::Function(func) => {
+                    if let Some(func) = self.resolve_function(func, self_ty) {
+                        self.functions.push(func);
+                    }
+                },
             }
         }
-
-        impl_methods
     }
 
     fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> Option<nir::Function> {
@@ -370,7 +365,7 @@ impl<'a> HIRWalker<'a> {
 
         self.push_scope(ScopeKind::Block);
 
-        let decls = self.resolve_decls(decls, self_ty);
+        self.insert_decls(decls, self_ty);
         let stmts = stmts.iter()
             .map(|stmt| self.resolve_stmt(stmt, self_ty))
             .collect();
@@ -378,7 +373,7 @@ impl<'a> HIRWalker<'a> {
 
         self.pop_scope();
 
-        nir::Block {decls, stmts, ret}
+        nir::Block {stmts, ret}
     }
 
     fn resolve_stmt(&mut self, stmt: &hir::Stmt, self_ty: Option<DefId>) -> nir::Stmt {
