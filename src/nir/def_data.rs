@@ -5,7 +5,8 @@ pub enum DefData {
     Module,
     Type(TypeInfo),
     Field {ty: DefId},
-    Function(super::FuncSig),
+    /// The function signature will be initialized exactly once during name resolution
+    Function(Option<super::FuncSig>),
     FuncParam,
     Variable,
     /// A placeholder for a def which could not be computed; this is
@@ -18,8 +19,8 @@ impl DefData {
         DefData::Type(TypeInfo::new_struct(fields))
     }
 
-    pub fn new_func(sig: super::FuncSig) -> Self {
-        DefData::Function(sig)
+    pub fn new_func() -> Self {
+        DefData::Function(None)
     }
 
     pub fn unwrap_type(&self) -> &TypeInfo {

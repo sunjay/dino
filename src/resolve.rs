@@ -113,31 +113,32 @@ impl<'a> HIRWalker<'a> {
     }
 
     fn resolve_decls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) -> nir::Decls {
-        // Add the decl names to the scope so they are available during resolution
-        self.insert_decls(decls);
+        // Add imports/types first, so they can be available for everything else
+        self.insert_imports_types(decls, self_ty);
+        // Insert fields of each type now that all declared types/imports have been inserted
+        self.insert_type_fields(decls);
+        // Insert all function names
+        self.insert_function_names(decls);
 
-        // Insert struct fields now that all types have been inserted
-        self.resolve_structs(decls);
-
-        // Get the methods from any impls in the set of decls
+        // Get the methods from each impl in the set of decls
         let mut functions = self.resolve_impls(decls, self_ty);
         // Add any free functions
         functions.extend(decls.iter().filter_map(|decl| match decl {
-            hir::Decl::Function(func) => Some(self.resolve_function(func, self_ty)),
+            hir::Decl::Function(func) => Some(self.resolve_function(func, self_ty)?),
             _ => None,
         }));
 
         nir::Decls {functions}
     }
 
-    /// Inserts all the decl names into the scope
-    fn insert_decls(&mut self, decls: &[hir::Decl]) {
+    fn insert_imports_types(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
         for decl in decls {
             match decl {
                 hir::Decl::Import(import) => {
                     let hir::ImportPath {path, selection} = import;
 
                     //TODO: Lookup the module at `path`
+                    //TODO: Allow imports from `Self`
                     use hir::ImportSelection::*;
                     match selection {
                         //TODO: Lookup each name in the `path` module
@@ -150,6 +151,8 @@ impl<'a> HIRWalker<'a> {
                 hir::Decl::Struct(struct_decl) => {
                     let &hir::Struct {name, fields: _} = struct_decl;
 
+                    // Create an empty table for fields for now since we can't insert them until
+                    // we've walked all the types
                     let field_names = nir::DefTable::new(self.def_store.clone());
                     let struct_data = nir::DefData::new_struct(field_names);
                     // You're allowed to redefine structs that are already at higher levels of
@@ -160,26 +163,14 @@ impl<'a> HIRWalker<'a> {
                     }
                 },
 
-                hir::Decl::Function(func) => {
-                    let &hir::Function {name, sig: _, body: _} = func;
-
-                    //HACK: Using a default `FuncSig` until we can insert it properly. Is there a better way?
-                    let sig = nir::FuncSig {params: Vec::new(), return_type: self.prims.unit()};
-                    // You're allowed to redefine functions that are already at higher levels of
-                    // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), nir::DefData::new_func(sig));
-                    if let Err(_) = insert_res {
-                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
-                    }
-                },
-
                 // Ignored until we get all the types that are in scope
+                hir::Decl::Function(_) |
                 hir::Decl::Impl(_) => {},
             }
         }
     }
 
-    fn resolve_structs(&mut self, decls: &[hir::Decl]) {
+    fn insert_type_fields(&mut self, decls: &[hir::Decl]) {
         for decl in decls {
             match decl {
                 // Already handled
@@ -195,7 +186,7 @@ impl<'a> HIRWalker<'a> {
                     // Insert into type info so the fields are available by ID
                     // We don't have to worry about overwriting fields because we've already
                     // checked that there is only one decl of this name in this scope
-                    self.resolve_fields(struct_id, fields);
+                    self.insert_struct_fields(struct_id, fields);
                 },
 
                 // Ignored in this pass
@@ -205,8 +196,52 @@ impl<'a> HIRWalker<'a> {
         }
     }
 
+    fn insert_struct_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) {
+        for field in fields {
+            let hir::StructField {name: name_ident, ty} = field;
+            let ty = self.resolve_ty(ty, Some(self_ty));
+
+            let mut store = self.def_store.lock().expect("bug: lock poisoned");
+            let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+            let struct_fields = ty_info.fields.struct_fields_mut();
+            // Need to check that field names are unique
+            match struct_fields.insert_with(name_ident.to_string(), nir::DefData::Field {ty}) {
+                Ok(_) => {},
+                Err(_) => {
+                    self.diag.emit_error(format!("field `{}` is already declared", name_ident));
+                },
+            };
+        }
+    }
+
+    fn insert_function_names(&mut self, decls: &[hir::Decl]) {
+        for decl in decls {
+            match decl {
+                // Already handled
+                hir::Decl::Import(_) |
+                hir::Decl::Struct(_) => {},
+
+                hir::Decl::Function(func) => {
+                    let &hir::Function {name, sig: _, body: _} = func;
+
+                    // Note that we can't actually insert the resolved signature here because then
+                    // the parameters of the function wouldn't be in scope when resolving the body.
+                    let func_data = nir::DefData::new_func();
+                    // You're allowed to redefine functions that are already at higher levels of
+                    // scope as long as the same level doesn't define the same name more than once
+                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), func_data);
+                    if let Err(_) = insert_res {
+                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
+                    }
+                },
+
+                // Ignored in this pass
+                hir::Decl::Impl(_) => {},
+            }
+        }
+    }
+
     fn resolve_impls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) -> Vec<nir::Function> {
-        // Need to do impls after all the fields have been inserted in case those fields are used
         let mut impl_methods = Vec::new();
         for decl in decls {
             match decl {
@@ -225,14 +260,16 @@ impl<'a> HIRWalker<'a> {
 
                     // Push a scope so that method names do not clash with free function names
                     self.push_scope(ScopeKind::Impl);
-                    let methods: Vec<nir::Function> = methods.iter().map(|method| {
-                        let func = self.resolve_function(method, Some(self_ty));
+                    let methods: Vec<nir::Function> = methods.iter().filter_map(|method| {
+                        let func = self.resolve_function(method, Some(self_ty))?;
 
                         // Insert into type info so the methods can be looked up by name later
                         let mut store = self.def_store.lock().expect("bug: lock poisoned");
                         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
                         if ty_info.methods.contains_key(method.name) {
                             self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
+                            return None;
+
                         } else {
                             // Only insert the method if a method with that name hasn't been
                             // inserted yet. This means that the first decl of every method name
@@ -240,7 +277,7 @@ impl<'a> HIRWalker<'a> {
                             ty_info.methods.insert(method.name.to_string(), func.name);
                         }
 
-                        func
+                        Some(func)
                     }).collect();
                     self.pop_scope();
 
@@ -255,25 +292,7 @@ impl<'a> HIRWalker<'a> {
         impl_methods
     }
 
-    fn resolve_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) {
-        for field in fields {
-            let hir::StructField {name: name_ident, ty} = field;
-            let ty = self.resolve_ty(ty, Some(self_ty));
-
-            let mut store = self.def_store.lock().expect("bug: lock poisoned");
-            let ty_info = store.data_mut(self_ty).unwrap_type_mut();
-            let struct_fields = ty_info.fields.struct_fields_mut();
-            // Need to check that field names are unique
-            match struct_fields.insert_with(name_ident.to_string(), nir::DefData::Field {ty}) {
-                Ok(_) => {},
-                Err(_) => {
-                    self.diag.emit_error(format!("field `{}` is already declared", name_ident));
-                },
-            };
-        }
-    }
-
-    fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> nir::Function {
+    fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> Option<nir::Function> {
         let hir::Function {name, sig, body} = func;
 
         // Name should be in the top scope at this point
@@ -290,7 +309,21 @@ impl<'a> HIRWalker<'a> {
 
         self.pop_scope();
 
-        nir::Function {name, sig, body}
+        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+        match store.data_mut(name) {
+            nir::DefData::Function(dsig@None) => {
+                *dsig = Some(sig.clone());
+            },
+            nir::DefData::Function(Some(_)) => {
+                // Signature was already initialized, this must be from a duplicate function decl
+                // that we allowed through in order to keep name resolution going. This is where
+                // we should ignore it.
+                return None;
+            },
+            _ => unreachable!("bug: expected a function"),
+        }
+
+        Some(nir::Function {name, sig, body})
     }
 
     fn resolve_sig(&mut self, sig: &hir::FuncSig, self_ty: Option<DefId>) -> nir::FuncSig {
