@@ -6,7 +6,9 @@ use termcolor::{StandardStream, ColorChoice, ColorSpec, Color, WriteColor};
 
 pub struct Diagnostics {
     out: Mutex<StandardStream>,
+    /// The number of errors that have been emitted
     errors: AtomicUsize,
+    /// The number of warnings that have been emitted
     warnings: AtomicUsize,
 }
 
