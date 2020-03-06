@@ -1,26 +1,11 @@
+use std::io::Write;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use annotate_snippets::formatter::DisplayListFormatter;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorChoice {
-    /// Colors are enabled
-    Enabled,
-    /// Colors are disabled
-    Disabled,
-}
-
-impl ColorChoice {
-    fn into_bool(self) -> bool {
-        match self {
-            ColorChoice::Enabled => true,
-            ColorChoice::Disabled => false,
-        }
-    }
-}
+use termcolor::{StandardStream, ColorChoice, ColorSpec, Color, WriteColor};
 
 pub struct Diagnostics {
-    formatter: DisplayListFormatter,
+    out: Mutex<StandardStream>,
     /// The number of errors that have been emitted
     errors: AtomicUsize,
     /// The number of warnings that have been emitted
@@ -30,7 +15,7 @@ pub struct Diagnostics {
 impl Diagnostics {
     pub fn new(color_choice: ColorChoice) -> Self {
         Self {
-            formatter: DisplayListFormatter::new(color_choice.into_bool(), false),
+            out: Mutex::new(StandardStream::stderr(color_choice)),
             errors: AtomicUsize::default(),
             warnings: AtomicUsize::default(),
         }
