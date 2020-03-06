@@ -1,3 +1,4 @@
+use crate::diagnostics::Diagnostics;
 use super::scanner::Scanner;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -120,16 +121,14 @@ pub struct Token<'a> {
     pub span: &'a [u8],
 }
 
-#[derive(Debug)]
 pub struct Lexer<'a> {
     scanner: Scanner<'a>,
+    diag: &'a Diagnostics,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(scanner: Scanner<'a>) -> Self {
-        Self {
-            scanner,
-        }
+    pub fn new(scanner: Scanner<'a>, diag: &'a Diagnostics) -> Self {
+        Self {scanner, diag}
     }
 
     /// Returns the next token in the input
@@ -202,8 +201,10 @@ impl<'a> Lexer<'a> {
             (b'A' ..= b'Z', _) |
             (b'_', _) => self.ident(start),
 
-            //TODO: Produce an error: "unknown start of token"
-            (ch, ch2) => todo!("{} {:?}", ch as char, ch2),
+            (ch, _) => {
+                self.diag.emit_error(format!("unknown start of token `{}`", ch as char));
+                self.byte_token(start, TokenKind::Error)
+            },
         }
     }
 
@@ -268,9 +269,9 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        //TODO: Produce an error: "unterminated block comment"
         if count > 0 {
-            todo!()
+            //TODO: Emit the span of the block comment (from current pos at the start of this function)
+            self.diag.emit_error("unterminated block comment");
         }
     }
 
@@ -302,10 +303,16 @@ impl<'a> Lexer<'a> {
                     //TODO: Support more kinds of escapes:
                     // ASCII/Byte strings: https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
                     // Unicode strings: https://doc.rust-lang.org/reference/tokens.html#unicode-escapes
-                    //TODO: Produce an error: "unknown character escape: `{}`"
-                    Some(_) => todo!(),
-                    //TODO: Produce an error: "unterminated double quote byte string"
-                    None => todo!(),
+
+                    Some(ch) => {
+                        self.diag.emit_error(format!("unknown character escape: `\\{}`", ch as char));
+                        return self.byte_token(start, TokenKind::Error);
+                    },
+                    None => {
+                        //TODO: Emit span for the start of the byte string literal
+                        self.diag.emit_error("unterminated double quote byte string");
+                        return self.byte_token(start, TokenKind::Error);
+                    },
                 };
                 unescaped_text.push(unescaped_char);
 
@@ -356,8 +363,8 @@ impl<'a> Lexer<'a> {
                 // Find remaining digits
                 let found_digits = self.digits();
                 if found_digits == 0 {
-                    //TODO: Produce an error: "expected at least one digit in exponent"
-                    todo!()
+                    self.diag.emit_error("expected at least one digit in exponent");
+                    return self.byte_token(start, TokenKind::Error);
                 }
 
                 real = true;
@@ -387,10 +394,10 @@ impl<'a> Lexer<'a> {
                             .expect("bug: should have been a valid `f64` literal");
                         return self.token_to_current(start, TokenKind::Literal(Lit::Complex(value)));
                     },
-                    _ => {
-                        //TODO: Produce an error: "invalid suffix `{}` for numeric literal"
-                        todo!()
-                    }
+                    suffix => {
+                        self.diag.emit_error(format!("invalid suffix `{}` for numeric literal", suffix));
+                        return self.token_to_current(suffix_start, TokenKind::Error);
+                    },
                 }
             },
             _ => None,
@@ -399,8 +406,10 @@ impl<'a> Lexer<'a> {
         if real {
             if suffix.is_some() {
                 //TODO: Produce an error: "real number literals may not have a suffix"
-                todo!()
+                self.diag.emit_error("real number literals may not have a suffix");
+                return self.token_to_current(start, TokenKind::Error);
             }
+
             let value = self.scanner.slice(start, lit_end).parse()
                 .expect("bug: should have been a valid `f64` literal");
             self.token_to_current(start, TokenKind::Literal(Lit::Real(value)))
@@ -466,95 +475,110 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
 
+    use TokenKind::*;
+
     macro_rules! expect_token {
         ($source:literal, $expected:expr) => {
+            let diag = Diagnostics::new(termcolor::ColorChoice::Always);
             let scanner = Scanner::new($source);
-            let mut lexer = Lexer::new(scanner);
+            let mut lexer = Lexer::new(scanner, &diag);
             let token = lexer.next();
             assert_eq!(token.kind, $expected);
             let token = lexer.next();
-            assert_eq!(token.kind, TokenKind::Eof);
+            assert_eq!(token.kind, Eof);
+        };
+    }
+
+    macro_rules! expect_tokens {
+        ($source:literal, $expected:expr) => {
+            let diag = Diagnostics::new(termcolor::ColorChoice::Always);
+            let scanner = Scanner::new($source);
+            let mut lexer = Lexer::new(scanner, &diag);
+            for expected_token in $expected {
+                let token = lexer.next();
+                assert_eq!(&token.kind, expected_token);
+            }
+            // Ensure that the input is exhausted
+            let token = lexer.next();
+            assert_eq!(token.kind, Eof);
         };
     }
 
     macro_rules! expect_error {
         ($source:literal) => {
-            expect_token!($source, TokenKind::Error);
+            expect_token!($source, Error);
         };
     }
 
     #[test]
     fn integer_literals() {
-        expect_token!(b"0", TokenKind::Literal(Lit::Integer(0, None)));
-        expect_token!(b"000", TokenKind::Literal(Lit::Integer(0, None)));
-        expect_token!(b"013", TokenKind::Literal(Lit::Integer(013, None)));
-        expect_token!(b"123", TokenKind::Literal(Lit::Integer(123, None)));
-        expect_token!(b"9999", TokenKind::Literal(Lit::Integer(9999, None)));
+        expect_token!(b"0", Literal(Lit::Integer(0, None)));
+        expect_token!(b"000", Literal(Lit::Integer(0, None)));
+        expect_token!(b"013", Literal(Lit::Integer(013, None)));
+        expect_token!(b"123", Literal(Lit::Integer(123, None)));
+        expect_token!(b"9999", Literal(Lit::Integer(9999, None)));
 
-        expect_token!(b"0int", TokenKind::Literal(Lit::Integer(0, Some(Suffix::Int))));
-        expect_token!(b"9301int", TokenKind::Literal(Lit::Integer(9301, Some(Suffix::Int))));
-        expect_token!(b"256real", TokenKind::Literal(Lit::Integer(256, Some(Suffix::Real))));
+        expect_token!(b"0int", Literal(Lit::Integer(0, Some(Suffix::Int))));
+        expect_token!(b"9301int", Literal(Lit::Integer(9301, Some(Suffix::Int))));
+        expect_token!(b"256real", Literal(Lit::Integer(256, Some(Suffix::Real))));
     }
 
     #[test]
-    #[ignore] //TODO
     fn integer_literals_invalid_suffix() {
         expect_error!(b"0foo");
     }
 
     #[test]
     fn real_literals() {
-        expect_token!(b"0.0", TokenKind::Literal(Lit::Real(0.0)));
-        expect_token!(b"0.00", TokenKind::Literal(Lit::Real(0.0)));
-        expect_token!(b"0.13", TokenKind::Literal(Lit::Real(0.13)));
-        expect_token!(b"123.0", TokenKind::Literal(Lit::Real(123.)));
-        expect_token!(b"123.0000", TokenKind::Literal(Lit::Real(123.0000)));
-        expect_token!(b"999e9", TokenKind::Literal(Lit::Real(999e9)));
-        expect_token!(b"99.9e-9", TokenKind::Literal(Lit::Real(99.9e-9)));
-        expect_token!(b"99.9e+9", TokenKind::Literal(Lit::Real(99.9e+9)));
-        expect_token!(b"99.9E-10", TokenKind::Literal(Lit::Real(99.9e-10)));
-        expect_token!(b"99.9E+9", TokenKind::Literal(Lit::Real(99.9e+9)));
+        expect_token!(b"0.0", Literal(Lit::Real(0.0)));
+        expect_token!(b"0.00", Literal(Lit::Real(0.0)));
+        expect_token!(b"0.13", Literal(Lit::Real(0.13)));
+        expect_token!(b"123.0", Literal(Lit::Real(123.)));
+        expect_token!(b"123.0000", Literal(Lit::Real(123.0000)));
+        expect_token!(b"999e9", Literal(Lit::Real(999e9)));
+        expect_token!(b"99.9e-9", Literal(Lit::Real(99.9e-9)));
+        expect_token!(b"99.9e+9", Literal(Lit::Real(99.9e+9)));
+        expect_token!(b"99.9E-10", Literal(Lit::Real(99.9e-10)));
+        expect_token!(b"99.9E+9", Literal(Lit::Real(99.9e+9)));
     }
 
     #[test]
-    #[ignore] //TODO
     fn real_literals_invalid() {
-        expect_error!(b"..0");
-        expect_error!(b"0.e");
+        expect_tokens!(b"..0", &[Period, Period, Literal(Lit::Integer(0, None))]);
+        expect_tokens!(b"0.e", &[Literal(Lit::Integer(0, None)), Period, Ident]);
         expect_error!(b"0.0e");
         expect_error!(b"0.0e+");
         expect_error!(b"0.0e-");
-        expect_error!(b".0foo");
-        expect_error!(b".0int");
-        expect_error!(b".0real");
+        expect_tokens!(b".0foo", &[Period, Error]);
+        expect_tokens!(b".0int", &[Period, Literal(Lit::Integer(0, Some(Suffix::Int)))]);
+        expect_tokens!(b".0real", &[Period, Literal(Lit::Integer(0, Some(Suffix::Real)))]);
     }
 
     #[test]
     fn complex_literals() {
-        expect_token!(b"0j", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"0J", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"0i", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"0I", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"000j", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"013j", TokenKind::Literal(Lit::Complex(013.0)));
-        expect_token!(b"123j", TokenKind::Literal(Lit::Complex(123.0)));
-        expect_token!(b"9999j", TokenKind::Literal(Lit::Complex(9999.0)));
-        expect_token!(b"0.0j", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"0.00j", TokenKind::Literal(Lit::Complex(0.0)));
-        expect_token!(b"0.13j", TokenKind::Literal(Lit::Complex(0.13)));
-        expect_token!(b"123.0j", TokenKind::Literal(Lit::Complex(123.)));
-        expect_token!(b"999e9j", TokenKind::Literal(Lit::Complex(999e9)));
-        expect_token!(b"99.9e-9j", TokenKind::Literal(Lit::Complex(99.9e-9)));
-        expect_token!(b"99.9e+9j", TokenKind::Literal(Lit::Complex(99.9e+9)));
-        expect_token!(b"99.9E-10j", TokenKind::Literal(Lit::Complex(99.9e-10)));
-        expect_token!(b"99.9E+9j", TokenKind::Literal(Lit::Complex(99.9e+9)));
-        expect_token!(b"0.9E-10j", TokenKind::Literal(Lit::Complex(0.9e-10)));
-        expect_token!(b"0.9E+9j", TokenKind::Literal(Lit::Complex(0.9e+9)));
+        expect_token!(b"0j", Literal(Lit::Complex(0.0)));
+        expect_token!(b"0J", Literal(Lit::Complex(0.0)));
+        expect_token!(b"0i", Literal(Lit::Complex(0.0)));
+        expect_token!(b"0I", Literal(Lit::Complex(0.0)));
+        expect_token!(b"000j", Literal(Lit::Complex(0.0)));
+        expect_token!(b"013j", Literal(Lit::Complex(013.0)));
+        expect_token!(b"123j", Literal(Lit::Complex(123.0)));
+        expect_token!(b"9999j", Literal(Lit::Complex(9999.0)));
+        expect_token!(b"0.0j", Literal(Lit::Complex(0.0)));
+        expect_token!(b"0.00j", Literal(Lit::Complex(0.0)));
+        expect_token!(b"0.13j", Literal(Lit::Complex(0.13)));
+        expect_token!(b"123.0j", Literal(Lit::Complex(123.)));
+        expect_token!(b"999e9j", Literal(Lit::Complex(999e9)));
+        expect_token!(b"99.9e-9j", Literal(Lit::Complex(99.9e-9)));
+        expect_token!(b"99.9e+9j", Literal(Lit::Complex(99.9e+9)));
+        expect_token!(b"99.9E-10j", Literal(Lit::Complex(99.9e-10)));
+        expect_token!(b"99.9E+9j", Literal(Lit::Complex(99.9e+9)));
+        expect_token!(b"0.9E-10j", Literal(Lit::Complex(0.9e-10)));
+        expect_token!(b"0.9E+9j", Literal(Lit::Complex(0.9e+9)));
     }
 
     #[test]
-    #[ignore] //TODO
     fn complex_literals_invalid() {
-        expect_error!(b".0jfoo");
+        expect_tokens!(b".0jfoo", &[Period, Error]);
     }
 }

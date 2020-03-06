@@ -1,12 +1,15 @@
 //! Just for testing -- DELETE ME
 
+use termcolor::ColorChoice;
 use dino::parser::parse_module;
+use dino::diagnostics::Diagnostics;
 use dino::cprintln;
 use dino::cir::CSymbols;
 use dino::cgenir::*;
 
 fn main() {
-    parse_module(include_str!("../../tests/run-pass/merge-sort.dino"));
+    let diag = Diagnostics::new(ColorChoice::Always);
+    parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag);
     let mut syms = CSymbols::default();
 
     let type_dint = syms.insert_overwrite("DInt".to_string());
