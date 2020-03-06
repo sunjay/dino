@@ -581,4 +581,9 @@ mod tests {
     fn complex_literals_invalid() {
         expect_tokens!(b".0jfoo", &[Period, Error]);
     }
+
+    #[test]
+    fn integer_field_access() {
+        expect_tokens!(b"123.foo", &[Literal(Lit::Integer(123, None)), Period, Ident]);
+    }
 }
