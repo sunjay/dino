@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use crate::ast;
+
 /// Represents a single module within the current package
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module<'a> {
@@ -253,4 +255,4 @@ impl<'a> fmt::Display for IdentPath<'a> {
     }
 }
 
-pub type Ident<'a> = &'a str;
+pub type Ident<'a> = ast::Ident<'a>;
