@@ -155,6 +155,7 @@ impl<'a> Lexer<'a> {
             (b'{', _) => self.byte_token(start, OpenDelim(Brace)),
             (b'}', _) => self.byte_token(start, CloseDelim(Brace)),
 
+            (b'.', _) => self.byte_token(start, Period),
             (b',', _) => self.byte_token(start, Comma),
             (b';', _) => self.byte_token(start, Semicolon),
 
@@ -195,9 +196,7 @@ impl<'a> Lexer<'a> {
                 self.bstr_lit(start)
             },
 
-            (ch@b'0' ..= b'9', _) |
-            (ch@b'.', Some(b'0' ..= b'9')) => self.num_lit(start, ch),
-            (b'.', _) => self.byte_token(start, Period),
+            (b'0' ..= b'9', _) => self.num_lit(start),
 
             (b'a' ..= b'z', _) |
             (b'A' ..= b'Z', _) |
@@ -318,28 +317,32 @@ impl<'a> Lexer<'a> {
         self.token_to_current(start, TokenKind::Literal(Lit::BStr {unescaped_text}))
     }
 
-    /// Parses a numeric literal, given the starting character which must be either a digit or '.'
-    /// followed by at least one digit.
+    /// Parses a numeric literal, given a starting digit
     ///
     /// If the literal is immediately followed by an ident, we will attempt to parse that as a
     /// literal suffix (e.g. `123int` or `3.4j`).
-    fn num_lit(&mut self, start: usize, start_ch: u8) -> Token {
+    fn num_lit(&mut self, start: usize) -> Token {
         // true if this is a real number literal
-        let mut real = start_ch == b'.';
-        // Starting at either a digit or '.' + digit, so try to get as many additional digits as
-        // possible. Totally fine if we get zero more digits, because we already have at least one.
+        let mut real = false;
+        // Try to get as many additional digits as possible. Totally fine if we get zero more
+        // digits, because we already have one.
         self.digits();
 
-        // Check for floating-point part
-        if start_ch != b'.' && self.scanner.peek() == Some(b'.') {
-            // Check for digits after the '.'
-            self.scanner.next();
-            // Zero digits are allowed after '.'
-            self.digits();
-            real = true;
+        // Check for floating-point part (optional)
+        // Only a floating point part if followed by a digit since otherwise this could be a period
+        // followed by an ident (i.e. a field access) or something
+        match (self.scanner.peek(), self.scanner.peek2()) {
+            (Some(b'.'), Some(b'0' ..= b'9')) => {
+                // Skip the '.'
+                self.scanner.next();
+                // Scan for one or more digits
+                self.digits();
+                real = true;
+            },
+
+            _ => {},
         }
 
-        // Check for exponent part (optional)
         match self.scanner.peek() {
             Some(b'e') | Some(b'E') => {
                 self.scanner.next();
@@ -501,24 +504,23 @@ mod tests {
 
     #[test]
     fn real_literals() {
-        expect_token!(b".0", TokenKind::Literal(Lit::Real(0.0)));
+        expect_token!(b"0.0", TokenKind::Literal(Lit::Real(0.0)));
         expect_token!(b"0.00", TokenKind::Literal(Lit::Real(0.0)));
         expect_token!(b"0.13", TokenKind::Literal(Lit::Real(0.13)));
-        expect_token!(b"123.", TokenKind::Literal(Lit::Real(123.)));
+        expect_token!(b"123.0", TokenKind::Literal(Lit::Real(123.)));
         expect_token!(b"123.0000", TokenKind::Literal(Lit::Real(123.0000)));
         expect_token!(b"999e9", TokenKind::Literal(Lit::Real(999e9)));
         expect_token!(b"99.9e-9", TokenKind::Literal(Lit::Real(99.9e-9)));
         expect_token!(b"99.9e+9", TokenKind::Literal(Lit::Real(99.9e+9)));
         expect_token!(b"99.9E-10", TokenKind::Literal(Lit::Real(99.9e-10)));
         expect_token!(b"99.9E+9", TokenKind::Literal(Lit::Real(99.9e+9)));
-        expect_token!(b".9E-10", TokenKind::Literal(Lit::Real(0.9e-10)));
-        expect_token!(b".9E+9", TokenKind::Literal(Lit::Real(0.9e+9)));
     }
 
     #[test]
     #[ignore] //TODO
     fn real_literals_invalid() {
         expect_error!(b"..0");
+        expect_error!(b"0.e");
         expect_error!(b"0.0e");
         expect_error!(b"0.0e+");
         expect_error!(b"0.0e-");
@@ -537,17 +539,17 @@ mod tests {
         expect_token!(b"013j", TokenKind::Literal(Lit::Complex(013.0)));
         expect_token!(b"123j", TokenKind::Literal(Lit::Complex(123.0)));
         expect_token!(b"9999j", TokenKind::Literal(Lit::Complex(9999.0)));
-        expect_token!(b".0j", TokenKind::Literal(Lit::Complex(0.0)));
+        expect_token!(b"0.0j", TokenKind::Literal(Lit::Complex(0.0)));
         expect_token!(b"0.00j", TokenKind::Literal(Lit::Complex(0.0)));
         expect_token!(b"0.13j", TokenKind::Literal(Lit::Complex(0.13)));
-        expect_token!(b"123.j", TokenKind::Literal(Lit::Complex(123.)));
+        expect_token!(b"123.0j", TokenKind::Literal(Lit::Complex(123.)));
         expect_token!(b"999e9j", TokenKind::Literal(Lit::Complex(999e9)));
         expect_token!(b"99.9e-9j", TokenKind::Literal(Lit::Complex(99.9e-9)));
         expect_token!(b"99.9e+9j", TokenKind::Literal(Lit::Complex(99.9e+9)));
         expect_token!(b"99.9E-10j", TokenKind::Literal(Lit::Complex(99.9e-10)));
         expect_token!(b"99.9E+9j", TokenKind::Literal(Lit::Complex(99.9e+9)));
-        expect_token!(b".9E-10j", TokenKind::Literal(Lit::Complex(0.9e-10)));
-        expect_token!(b".9E+9j", TokenKind::Literal(Lit::Complex(0.9e+9)));
+        expect_token!(b"0.9E-10j", TokenKind::Literal(Lit::Complex(0.9e-10)));
+        expect_token!(b"0.9E+9j", TokenKind::Literal(Lit::Complex(0.9e+9)));
     }
 
     #[test]
