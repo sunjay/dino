@@ -121,13 +121,13 @@ pub struct Token<'a> {
     pub span: &'a [u8],
 }
 
-pub struct Lexer<'a> {
+pub struct Lexer<'a, 'b> {
     scanner: Scanner<'a>,
-    diag: &'a Diagnostics,
+    diag: &'b Diagnostics,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(scanner: Scanner<'a>, diag: &'a Diagnostics) -> Self {
+impl<'a, 'b> Lexer<'a, 'b> {
+    pub fn new(scanner: Scanner<'a>, diag: &'b Diagnostics) -> Self {
         Self {scanner, diag}
     }
 

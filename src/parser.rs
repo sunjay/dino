@@ -5,17 +5,26 @@ use crate::ast::*;
 use crate::diagnostics::Diagnostics;
 
 use scanner::Scanner;
-use lexer::{Lexer, TokenKind};
+use lexer::{Lexer, Token, TokenKind, Lit, Delim};
 
-pub fn parse_module<'a>(source: &'a str, diag: &Diagnostics) -> Module<'a> {
+pub fn parse_module<'a, 'b>(source: &'a str, diag: &'b Diagnostics) -> Module<'a> {
     let scanner = Scanner::new(source.as_bytes());
-    let mut lexer = Lexer::new(scanner, diag);
-    loop {
-        let token = lexer.next();
-        println!("{:?} {:?}", token.kind, std::str::from_utf8(token.span).unwrap());
-        if token.kind == TokenKind::Eof {
-            break;
-        }
+    let lexer = Lexer::new(scanner, diag);
+    let mut parser = ModuleParser {
+        lexer,
+        diag,
+    };
+
+    parser.module()
+}
+
+struct ModuleParser<'a, 'b> {
+    lexer: Lexer<'a, 'b>,
+    diag: &'b Diagnostics,
+}
+
+impl<'a, 'b> ModuleParser<'a, 'b> {
+    fn module(&mut self) -> Module<'a> {
+        todo!()
     }
-    todo!()
 }
