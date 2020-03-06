@@ -11,7 +11,7 @@ pub fn parse_module(source: &str) -> Module {
     let mut lexer = Lexer::new(scanner);
     loop {
         let token = lexer.next();
-        println!("{:?}", token);
+        println!("{:?} {:?}", token.kind, std::str::from_utf8(token.span).unwrap());
         if token.kind == TokenKind::Eof {
             break;
         }

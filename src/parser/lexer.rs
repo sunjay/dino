@@ -22,7 +22,7 @@ pub enum Lit {
     ///
     /// Any escaped characters will be unescaped
     BStr {
-        unescaped_text: String,
+        unescaped_text: Vec<u8>,
     },
 }
 
@@ -135,6 +135,8 @@ impl<'a> Lexer<'a> {
             None => return self.byte_token(start, Eof),
         };
 
+        // Allows the compiler to help us a bit here
+        #[deny(unreachable_patterns)]
         match (next, self.scanner.peek()) {
             (b'(', _) => self.byte_token(start, OpenDelim(Paren)),
             (b')', _) => self.byte_token(start, CloseDelim(Paren)),
@@ -178,7 +180,11 @@ impl<'a> Lexer<'a> {
             (b'%', _) => self.byte_token(start, Percent),
             (b'^', _) => self.byte_token(start, Caret),
 
-            (b'b', Some(b'"')) => self.bstr_lit(start),
+            (b'b', Some(b'"')) => {
+                // Skip the quote
+                self.scanner.next();
+                self.bstr_lit(start)
+            },
 
             (b'0' ..= b'9', _) => self.num_lit(start),
 
@@ -186,6 +192,7 @@ impl<'a> Lexer<'a> {
             (b'A' ..= b'Z', _) |
             (b'_', _) => self.ident(start),
 
+            //TODO: Produce an error: "unknown start of token"
             (ch, ch2) => todo!("{} {:?}", ch as char, ch2),
         }
     }
@@ -250,6 +257,11 @@ impl<'a> Lexer<'a> {
                 _ => {},
             }
         }
+
+        //TODO: Produce an error: "unterminated block comment"
+        if count > 0 {
+            todo!()
+        }
     }
 
     /// Ignores until the end of the line
@@ -261,8 +273,33 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // Parses the remaining byte string literal after `b"`
     fn bstr_lit(&mut self, start: usize) -> Token {
-        todo!()
+        let mut unescaped_text = Vec::new();
+        while let Some(ch) = self.scanner.next() {
+            if ch == b'"' {
+                break;
+
+            } else if ch == b'\\' {
+                let unescaped_char = match self.scanner.next() {
+                    Some(b'\\') => b'\\',
+                    Some(b'"') => b'\"',
+                    Some(b'n') => b'\n',
+                    Some(b'r') => b'\r',
+                    Some(b't') => b'\t',
+                    //TODO: Produce an error: "unknown character escape: `{}`"
+                    Some(_) => todo!(),
+                    //TODO: Produce an error: "unterminated double quote byte string"
+                    None => todo!(),
+                };
+                unescaped_text.push(unescaped_char);
+
+            } else {
+                unescaped_text.push(ch);
+            }
+        }
+
+        self.token_to_current(start, TokenKind::Literal(Lit::BStr {unescaped_text}))
     }
 
     fn num_lit(&mut self, start: usize) -> Token {
@@ -272,7 +309,7 @@ impl<'a> Lexer<'a> {
     fn ident(&mut self, start: usize) -> Token {
         // We've already got a valid start character, so let's just look for further characters
         while let Some(ch) = self.scanner.peek() {
-            if ch.is_ascii_alphanumeric() {
+            if ch.is_ascii_alphanumeric() || ch == b'_' {
                 self.scanner.next();
             } else {
                 break;
