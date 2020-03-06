@@ -1,10 +1,12 @@
 //! Just for testing -- DELETE ME
 
+use dino::parser::parse_module;
 use dino::cprintln;
 use dino::cir::CSymbols;
 use dino::cgenir::*;
 
 fn main() {
+    parse_module(include_str!("../../tests/run-pass/merge-sort.dino"));
     let mut syms = CSymbols::default();
 
     let type_dint = syms.insert_overwrite("DInt".to_string());
