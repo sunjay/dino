@@ -550,8 +550,9 @@ mod tests {
         expect_error!(b"0.0e+");
         expect_error!(b"0.0e-");
         expect_tokens!(b".0foo", &[Period, Error]);
-        expect_tokens!(b".0int", &[Period, Literal(Lit::Integer(0, Some(Suffix::Int)))]);
-        expect_tokens!(b".0real", &[Period, Literal(Lit::Integer(0, Some(Suffix::Real)))]);
+        // Real number literals may not have a suffix
+        expect_tokens!(b"0.0int", &[Error]);
+        expect_tokens!(b"0.0real", &[Error]);
     }
 
     #[test]
@@ -585,5 +586,10 @@ mod tests {
     #[test]
     fn integer_field_access() {
         expect_tokens!(b"123.foo", &[Literal(Lit::Integer(123, None)), Period, Ident]);
+    }
+
+    #[test]
+    fn unknown_token_start() {
+        expect_tokens!(b"123\0456", &[Literal(Lit::Integer(123, None)), Error, Literal(Lit::Integer(456, None))]);
     }
 }
