@@ -284,9 +284,11 @@ impl<'a> Lexer<'a> {
                 let unescaped_char = match self.scanner.next() {
                     Some(b'\\') => b'\\',
                     Some(b'"') => b'\"',
+                    Some(b'\'') => b'\'',
                     Some(b'n') => b'\n',
                     Some(b'r') => b'\r',
                     Some(b't') => b'\t',
+                    Some(b'0') => b'\0',
                     //TODO: Produce an error: "unknown character escape: `{}`"
                     Some(_) => todo!(),
                     //TODO: Produce an error: "unterminated double quote byte string"
