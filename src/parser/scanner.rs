@@ -1,3 +1,5 @@
+use std::str;
+
 #[derive(Debug)]
 pub struct Scanner<'a> {
     source: &'a [u8],
@@ -43,6 +45,11 @@ impl<'a> Scanner<'a> {
         self.source.get(self.current+1).copied()
     }
 
+    /// Creates a new span that is empty (from `index` to `index`)
+    pub fn empty_span(&self, index: usize) -> &'a [u8] {
+        self.span(index, index)
+    }
+
     /// Creates a new span for a single byte
     pub fn byte_span(&self, index: usize) -> &'a [u8] {
         self.span(index, index+1)
@@ -61,5 +68,17 @@ impl<'a> Scanner<'a> {
     /// `start` is included in the range, `end` is not.
     pub fn span(&self, start: usize, end: usize) -> &'a [u8] {
         &self.source[start..end]
+    }
+
+    /// Creates a new slice of the source between the given byte indexes and parse it as unicode
+    ///
+    /// `start` is included in the range, `end` is not.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the sliced source bytes are not valid unicode.
+    pub fn slice(&self, start: usize, end: usize) -> &'a str {
+        str::from_utf8(&self.source[start..end])
+            .expect("bug: not valid unicode")
     }
 }

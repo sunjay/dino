@@ -10,13 +10,22 @@ pub enum Delim {
     Brace,
 }
 
+/// Some literals may end with a suffix that is meant as hint for type inference
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Suffix {
+    /// The suffix `int`
+    Int,
+    /// The suffix `real`
+    Real,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Lit {
-    /// An integer literal
-    Integer(i64),
-    /// A real number literal
-    Real(f64),
-    /// A complex number literal
+    /// An integer literal, e.g. `1`, `31`, `49928`
+    Integer(i64, Option<Suffix>),
+    /// A real number literal, e.g. `1.0`, `2.5`, `0.5`
+    Real(f64, Option<Suffix>),
+    /// A complex number literal, e.g. `1i`, `2.5j`, `.5J`
     Complex(f64),
     /// A byte string literal (e.g. `b"abc"`)
     ///
@@ -132,7 +141,7 @@ impl<'a> Lexer<'a> {
         let start = self.scanner.current_pos();
         let next = match self.scanner.next() {
             Some(next) => next,
-            None => return self.byte_token(start, Eof),
+            None => return self.empty_token(start, Eof),
         };
 
         // Allows the compiler to help us a bit here
@@ -145,7 +154,6 @@ impl<'a> Lexer<'a> {
             (b'{', _) => self.byte_token(start, OpenDelim(Brace)),
             (b'}', _) => self.byte_token(start, CloseDelim(Brace)),
 
-            (b'.', _) => self.byte_token(start, Period),
             (b',', _) => self.byte_token(start, Comma),
             (b';', _) => self.byte_token(start, Semicolon),
 
@@ -186,7 +194,9 @@ impl<'a> Lexer<'a> {
                 self.bstr_lit(start)
             },
 
-            (b'0' ..= b'9', _) => self.num_lit(start),
+            (ch@b'0' ..= b'9', _) |
+            (ch@b'.', Some(b'0' ..= b'9')) => self.num_lit(start, ch),
+            (b'.', _) => self.byte_token(start, Period),
 
             (b'a' ..= b'z', _) |
             (b'A' ..= b'Z', _) |
@@ -289,6 +299,9 @@ impl<'a> Lexer<'a> {
                     Some(b'r') => b'\r',
                     Some(b't') => b'\t',
                     Some(b'0') => b'\0',
+                    //TODO: Support more kinds of escapes:
+                    // ASCII/Byte strings: https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
+                    // Unicode strings: https://doc.rust-lang.org/reference/tokens.html#unicode-escapes
                     //TODO: Produce an error: "unknown character escape: `{}`"
                     Some(_) => todo!(),
                     //TODO: Produce an error: "unterminated double quote byte string"
@@ -304,10 +317,112 @@ impl<'a> Lexer<'a> {
         self.token_to_current(start, TokenKind::Literal(Lit::BStr {unescaped_text}))
     }
 
-    fn num_lit(&mut self, start: usize) -> Token {
-        todo!()
+    /// Parses a numeric literal, given the starting character which must be either a digit or '.'
+    ///
+    /// If the literal is immediately followed by an ident, we will attempt to parse that as a
+    /// literal suffix (e.g. `123int` or `3.4j`).
+    fn num_lit(&mut self, start: usize, start_ch: u8) -> Token {
+        // true if this is a real number literal
+        let mut real = false;
+        // Starting at either a digit or '.', so try to get as many additional digits as possible
+        let found_digits = self.digits();
+        if start_ch == b'.' {
+            if found_digits == 0 {
+                //TODO: Produce an error: "expected at least one digit in real number literal"
+                todo!()
+            }
+
+            real = true;
+        } else if self.scanner.peek() == Some(b'.') {
+            // Check for digits after the '.'
+            self.scanner.next();
+            // Zero digits are allowed after '.'
+            self.digits();
+            real = true;
+        }
+
+        // Check for exponent part (optional)
+        match self.scanner.peek() {
+            Some(b'e') | Some(b'E') => {
+                self.scanner.next();
+                // Check for a sign, `+` or `-`
+                match self.scanner.peek() {
+                    Some(b'+') | Some(b'-') => {
+                        self.scanner.next();
+                    },
+                    _ => {},
+                }
+                // Find remaining digits
+                let found_digits = self.digits();
+                if found_digits == 0 {
+                    //TODO: Produce an error: "expected at least one digit in exponent"
+                    todo!()
+                }
+
+                real = true;
+            },
+            _ => {},
+        }
+
+        // One past the end index of the literal
+        let lit_end = self.scanner.current_pos();
+
+        // Check for suffix
+        let suffix = match self.scanner.peek() {
+            Some(b'a' ..= b'z') |
+            Some(b'A' ..= b'Z') |
+            Some(b'_') => {
+                let start = self.scanner.current_pos();
+                self.scanner.next();
+                // Find an ident, but ignore the token
+                self.ident(start);
+
+                // Parse the suffix
+                match self.scanner.slice(start, self.scanner.current_pos()) {
+                    "int" => Some(Suffix::Int),
+                    "real" => Some(Suffix::Real),
+                    "j" | "J" | "i" | "I" => {
+                        let value = self.scanner.slice(start, lit_end).parse()
+                            .expect("bug: should have been a valid `f64` literal");
+                        return self.token_to_current(start, TokenKind::Literal(Lit::Complex(value)));
+                    },
+                    _ => {
+                        //TODO: Produce an error: "invalid suffix `{}` for float literal"
+                        todo!()
+                    }
+                }
+            },
+            _ => None,
+        };
+
+        if real {
+            let value = self.scanner.slice(start, lit_end).parse()
+                .expect("bug: should have been a valid `f64` literal");
+            self.token_to_current(start, TokenKind::Literal(Lit::Real(value, suffix)))
+        } else {
+            let value = self.scanner.slice(start, lit_end).parse()
+                .expect("bug: should have been a valid `i64` literal");
+            self.token_to_current(start, TokenKind::Literal(Lit::Integer(value, suffix)))
+        }
     }
 
+    /// Advances the scanner until no more digits are found. Returns the number of digits found.
+    ///
+    /// The final, non-digit character is NOT consumed
+    fn digits(&mut self) -> usize {
+        let mut digits = 0;
+        while let Some(ch) = self.scanner.peek() {
+            if ch.is_ascii_digit() {
+                digits += 1;
+                self.scanner.next();
+            } else {
+                break;
+            }
+        }
+        digits
+    }
+
+    /// Parses an identifier, assuming that the first character has already been parsed
     fn ident(&mut self, start: usize) -> Token {
         // We've already got a valid start character, so let's just look for further characters
         while let Some(ch) = self.scanner.peek() {
@@ -319,6 +434,11 @@ impl<'a> Lexer<'a> {
         }
 
         self.token_to_current(start, TokenKind::Ident)
+    }
+
+    fn empty_token(&self, start: usize, kind: TokenKind) -> Token {
+        let span = self.scanner.empty_span(start);
+        Token {kind, span}
     }
 
     fn byte_token(&self, start: usize, kind: TokenKind) -> Token {
