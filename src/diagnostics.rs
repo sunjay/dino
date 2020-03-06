@@ -35,18 +35,28 @@ impl Diagnostics {
 //TODO: Create the real diagnostics API
 impl Diagnostics {
     pub fn emit_error(&self, message: impl Into<String>) {
-        let mut out = self.out.lock().expect("lock poisoned");
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Red))).expect("IO Error");
-        writeln!(out, "Error: {}", message.into()).expect("IO Error");
+        let out = self.out.lock().expect("lock poisoned");
+        let mut out = out.lock();
+
+        out.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(true)).expect("IO Error");
+        write!(out, "error: ").expect("IO Error");
         out.reset().expect("IO Error");
+
+        writeln!(out, "{}", message.into()).expect("IO Error");
+
         self.errors.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn emit_warning(&self, message: impl Into<String>) {
-        let mut out = self.out.lock().expect("lock poisoned");
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).expect("IO Error");
-        writeln!(out, "Warning: {}", message.into()).expect("IO Error");
+        let out = self.out.lock().expect("lock poisoned");
+        let mut out = out.lock();
+
+        out.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(true)).expect("IO Error");
+        write!(out, "warning: ").expect("IO Error");
         out.reset().expect("IO Error");
+
+        writeln!(out, "{}", message.into()).expect("IO Error");
+
         self.warnings.fetch_add(1, Ordering::SeqCst);
     }
 }
