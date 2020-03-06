@@ -592,4 +592,16 @@ mod tests {
     fn unknown_token_start() {
         expect_tokens!(b"123\0456", &[Literal(Lit::Integer(123, None)), Error, Literal(Lit::Integer(456, None))]);
     }
+
+    #[test]
+    fn nested_block_comment() {
+        expect_tokens!(b"/**/", &[]);
+        expect_tokens!(b"/*/**/*/", &[]);
+        expect_tokens!(b"/* foo
+
+        /* test 123
+                */ cool
+    *//* okokok */
+        ", &[]);
+    }
 }
