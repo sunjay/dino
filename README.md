@@ -64,3 +64,23 @@ a test's output is modified.
 ```sh
 TESTCOMPILE=overwrite cargo test
 ```
+
+## Code Coverage
+
+Step 1: [install kcov](https://blog.knoldus.com/bid-adieu-to-tarpaulin-html-reports-are-here-for-rust/)
+
+Step 2: Run the command:
+```bash
+cargo test --no-run --lib && kcov --exclude-pattern=/.cargo,/usr/lib --verify target/cov target/debug/dino-<HASH>
+```
+
+**You need to replace `<HASH>` with the right hash for the test executable.**
+This can be tricky to determine. If you run `cargo test --no-run --lib` and
+then `ls -la target/debug` you can usually figure out which one it is by
+looking at the most recently modified executable with the largest size. Be
+careful because `cargo test --no-run` will regenerate all the binary targets
+too, so it becomes hard to tell which executable is the test executable. That's
+why we pass in `--lib` to make sure those executables aren't built. Worst come
+worse: just guess and check!
+
+The generated report will be in `target/cov/index.html`.
