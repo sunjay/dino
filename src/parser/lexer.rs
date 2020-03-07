@@ -1,7 +1,7 @@
 use crate::diagnostics::Diagnostics;
 use super::scanner::Scanner;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delim {
     /// A round parenthesis (i.e., `(` or `)`).
     Paren,
@@ -12,7 +12,7 @@ pub enum Delim {
 }
 
 /// Some literals may end with a suffix that is meant as hint for type inference
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Suffix {
     /// The suffix `int`
     Int,
@@ -39,9 +39,9 @@ pub enum Lit {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     /// An identifier
-    ///
-    /// Keywords are just identifiers at this point
     Ident,
+    /// A keyword
+    Keyword(Keyword),
     /// A literal of some kind
     Literal(Lit),
 
@@ -447,7 +447,12 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        self.token_to_current(start, TokenKind::Ident)
+        let kind = match match_keyword(self.scanner.slice(start, self.scanner.current_pos())) {
+            Some(kw) => TokenKind::Keyword(kw),
+            None => TokenKind::Ident,
+        };
+
+        self.token_to_current(start, kind)
     }
 
     fn empty_token(&self, start: usize, kind: TokenKind) -> Token<'a> {
@@ -469,6 +474,78 @@ impl<'a> Lexer<'a> {
         let span = self.scanner.span(start, self.scanner.current_pos());
         Token {kind, span}
     }
+}
+
+macro_rules! keywords {
+    ($($variant:ident : $kw:literal)*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum Keyword {
+            $($variant),*
+        }
+
+        fn match_keyword(ident: &str) -> Option<Keyword> {
+            use Keyword::*;
+            match ident {
+                $($kw => Some($variant),)*
+                _ => None,
+            }
+        }
+    };
+}
+
+keywords! {
+    Abstract : "abstract"
+    As : "as"
+    Async : "async"
+    Await : "await"
+    Become : "become"
+    Box : "box"
+    Break : "break"
+    Const : "const"
+    Continue : "continue"
+    Do : "do"
+    Dyn : "dyn"
+    Else : "else"
+    Enum : "enum"
+    Extern : "extern"
+    False : "false"
+    Final : "final"
+    Fn : "fn"
+    For : "for"
+    If : "if"
+    Impl : "impl"
+    In : "in"
+    Let : "let"
+    Loop : "loop"
+    Macro : "macro"
+    Match : "match"
+    Mod : "mod"
+    Move : "move"
+    Mut : "mut"
+    Override : "override"
+    Package : "package"
+    Priv : "priv"
+    Pub : "pub"
+    Ref : "ref"
+    Return : "return"
+    SelfType : "Self"
+    SelfValue : "self"
+    Static : "static"
+    Struct : "struct"
+    Super : "super"
+    Trait : "trait"
+    True : "true"
+    Try : "try"
+    Type : "type"
+    Typeof : "typeof"
+    Union : "union"
+    Unsafe : "unsafe"
+    Unsized : "unsized"
+    Use : "use"
+    Virtual : "virtual"
+    Where : "where"
+    While : "while"
+    Yield : "yield"
 }
 
 #[cfg(test)]
