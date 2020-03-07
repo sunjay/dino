@@ -177,6 +177,10 @@ impl<'a> ModuleParser<'a> {
     }
 
     fn unexpected_token(&self, token: Token<'a>, expected: &[TokenKind]) {
+        if token.kind == Error {
+            // No need to produce further errors on an error token
+            return;
+        }
         todo!()
     }
 }
