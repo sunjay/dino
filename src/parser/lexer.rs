@@ -121,18 +121,18 @@ pub struct Token<'a> {
     pub span: &'a [u8],
 }
 
-pub struct Lexer<'d, 's: 'd> {
-    scanner: Scanner<'s>,
-    diag: &'d Diagnostics,
+pub struct Lexer<'a> {
+    scanner: Scanner<'a>,
+    diag: &'a Diagnostics,
 }
 
-impl<'d, 's: 'd> Lexer<'d, 's> {
-    pub fn new(scanner: Scanner<'s>, diag: &'d Diagnostics) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(scanner: Scanner<'a>, diag: &'a Diagnostics) -> Self {
         Self {scanner, diag}
     }
 
     /// Returns the next token in the input
-    pub fn next(&mut self) -> Token<'s> {
+    pub fn next(&mut self) -> Token<'a> {
         use TokenKind::*;
         use Delim::*;
 
@@ -285,7 +285,7 @@ impl<'d, 's: 'd> Lexer<'d, 's> {
     }
 
     // Parses the remaining byte string literal after `b"`
-    fn bstr_lit(&mut self, start: usize) -> Token {
+    fn bstr_lit(&mut self, start: usize) -> Token<'a> {
         let mut unescaped_text = Vec::new();
         while let Some(ch) = self.scanner.next() {
             if ch == b'"' {
@@ -328,7 +328,7 @@ impl<'d, 's: 'd> Lexer<'d, 's> {
     ///
     /// If the literal is immediately followed by an ident, we will attempt to parse that as a
     /// literal suffix (e.g. `123int` or `3.4j`).
-    fn num_lit(&mut self, start: usize) -> Token {
+    fn num_lit(&mut self, start: usize) -> Token<'a> {
         // true if this is a real number literal
         let mut real = false;
         // Try to get as many additional digits as possible. Totally fine if we get zero more
@@ -437,7 +437,7 @@ impl<'d, 's: 'd> Lexer<'d, 's> {
     }
 
     /// Parses an identifier, assuming that the first character has already been parsed
-    fn ident(&mut self, start: usize) -> Token {
+    fn ident(&mut self, start: usize) -> Token<'a> {
         // We've already got a valid start character, so let's just look for further characters
         while let Some(ch) = self.scanner.peek() {
             if ch.is_ascii_alphanumeric() || ch == b'_' {
@@ -450,22 +450,22 @@ impl<'d, 's: 'd> Lexer<'d, 's> {
         self.token_to_current(start, TokenKind::Ident)
     }
 
-    fn empty_token(&self, start: usize, kind: TokenKind) -> Token {
+    fn empty_token(&self, start: usize, kind: TokenKind) -> Token<'a> {
         let span = self.scanner.empty_span(start);
         Token {kind, span}
     }
 
-    fn byte_token(&self, start: usize, kind: TokenKind) -> Token {
+    fn byte_token(&self, start: usize, kind: TokenKind) -> Token<'a> {
         let span = self.scanner.byte_span(start);
         Token {kind, span}
     }
 
-    fn next_token(&mut self, start: usize, kind: TokenKind) -> Token {
+    fn next_token(&mut self, start: usize, kind: TokenKind) -> Token<'a> {
         let span = self.scanner.next_span(start);
         Token {kind, span}
     }
 
-    fn token_to_current(&self, start: usize, kind: TokenKind) -> Token {
+    fn token_to_current(&self, start: usize, kind: TokenKind) -> Token<'a> {
         let span = self.scanner.span(start, self.scanner.current_pos());
         Token {kind, span}
     }

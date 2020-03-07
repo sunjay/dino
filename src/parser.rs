@@ -9,7 +9,7 @@ use lexer::{Lexer, Token, TokenKind, Lit, Delim};
 
 use TokenKind::*;
 
-pub fn parse_module<'d, 's: 'd>(source: &'s str, diag: &'d Diagnostics) -> Module<'s> {
+pub fn parse_module<'a>(source: &'a str, diag: &'a Diagnostics) -> Module<'a> {
     let scanner = Scanner::new(source.as_bytes());
     let lexer = Lexer::new(scanner, diag);
     let mut parser = ModuleParser {
@@ -20,13 +20,13 @@ pub fn parse_module<'d, 's: 'd>(source: &'s str, diag: &'d Diagnostics) -> Modul
     parser.module()
 }
 
-struct ModuleParser<'d, 's: 'd> {
-    lexer: Lexer<'s, 'd>,
-    diag: &'d Diagnostics,
+struct ModuleParser<'a> {
+    lexer: Lexer<'a>,
+    diag: &'a Diagnostics,
 }
 
-impl<'d, 's: 'd> ModuleParser<'d, 's> {
-    fn module(&mut self) -> Module<'s> {
+impl<'a> ModuleParser<'a> {
+    fn module(&mut self) -> Module<'a> {
         let mut decls = Vec::new();
         loop {
             let token = self.lexer.next();
@@ -40,7 +40,7 @@ impl<'d, 's: 'd> ModuleParser<'d, 's> {
         Module {decls}
     }
 
-    fn decl(&mut self, token: Token<'s>) -> Decl<'s> {
+    fn decl(&mut self, token: Token<'a>) -> Decl<'a> {
         todo!()
     }
 }
