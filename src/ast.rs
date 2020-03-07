@@ -21,7 +21,8 @@ pub enum Decl<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportPath<'a> {
     pub path: IdentPath<'a>,
-    pub selection: ImportSelection<'a>,
+    /// If `None`, only the path itself is imported
+    pub selection: Option<ImportSelection<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
