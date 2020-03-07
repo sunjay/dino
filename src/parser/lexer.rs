@@ -121,18 +121,18 @@ pub struct Token<'a> {
     pub span: &'a [u8],
 }
 
-pub struct Lexer<'a, 'b> {
-    scanner: Scanner<'a>,
-    diag: &'b Diagnostics,
+pub struct Lexer<'d, 's: 'd> {
+    scanner: Scanner<'s>,
+    diag: &'d Diagnostics,
 }
 
-impl<'a, 'b> Lexer<'a, 'b> {
-    pub fn new(scanner: Scanner<'a>, diag: &'b Diagnostics) -> Self {
+impl<'d, 's: 'd> Lexer<'d, 's> {
+    pub fn new(scanner: Scanner<'s>, diag: &'d Diagnostics) -> Self {
         Self {scanner, diag}
     }
 
     /// Returns the next token in the input
-    pub fn next(&mut self) -> Token {
+    pub fn next(&mut self) -> Token<'s> {
         use TokenKind::*;
         use Delim::*;
 
