@@ -125,6 +125,12 @@ pub struct Token<'a> {
     pub span: &'a [u8],
 }
 
+impl<'a> Token<'a> {
+    pub fn to_str(&self) -> Option<&'a str> {
+        str::from_utf8(self.span).ok()
+    }
+}
+
 pub struct Lexer<'a> {
     scanner: Scanner<'a>,
     diag: &'a Diagnostics,
