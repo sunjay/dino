@@ -1,21 +1,26 @@
 use std::collections::VecDeque;
 
-use super::lexer::{Lexer, Token};
+use super::lexer::{Lexer, Token, TokenKind};
 
 /// Abstraction over Lexer to provide access to tokens in a way that is convenient for the parser
 pub struct TokenStream<'a> {
-    lexer: Lexer<'a>,
-    /// The next queued tokens, used to peek ahead at what's next
-    look_ahead: VecDeque<Token<'a>>,
+    tokens: VecDeque<Token<'a>>,
 }
 
 impl<'a> From<Lexer<'a>> for TokenStream<'a> {
-    fn from(lexer: Lexer<'a>) -> Self {
-        Self {
-            lexer,
-            // capacity = 2 since that's the max supported lookahead
-            look_ahead: VecDeque::with_capacity(2),
+    fn from(mut lexer: Lexer<'a>) -> Self {
+        // Read all tokens from lexer so that any lexing errors are reported even if the entire
+        // token stream isn't consumed
+        let mut tokens = VecDeque::new();
+        loop {
+            let token = lexer.next();
+            if token.kind == TokenKind::Eof {
+                break;
+            }
+            tokens.push_back(token);
         }
+
+        Self {tokens}
     }
 }
 
@@ -31,28 +36,15 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Returns the next nth token in the input, but does not consume it
-    ///
-    /// Not public until we decide whether we want arbitrary lookahead
     fn peek_nth(&mut self, n: usize) -> &Token<'a> {
         debug_assert!(n > 0);
 
-        // Read just enough to be able to get this token
-        while self.look_ahead.len() < n {
-            let next_token = self.lexer.next();
-            self.look_ahead.push_back(next_token);
-        }
-
-        // This unwrap is safe because we just checked if there are enough next tokens
-        self.look_ahead.get(n - 1).unwrap()
+        &self.tokens[n - 1]
     }
 
     /// Returns the next token in the input
     pub fn next(&mut self) -> Token<'a> {
-        // Return the next queued token, if any
-        if let Some(token) = self.look_ahead.pop_front() {
-            return token;
-        }
-
-        self.lexer.next()
+        self.tokens.pop_front()
+            .expect("bug: popped past the end of token stream")
     }
 }
