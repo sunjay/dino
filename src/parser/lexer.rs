@@ -1,4 +1,5 @@
 use std::str;
+use std::sync::Arc;
 
 use crate::diagnostics::Diagnostics;
 
@@ -35,7 +36,7 @@ pub enum Lit {
     ///
     /// Any escaped characters will be unescaped
     BStr {
-        unescaped_text: Vec<u8>,
+        unescaped_text: Arc<Vec<u8>>,
     },
 }
 
@@ -330,6 +331,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
+        let unescaped_text = Arc::new(unescaped_text);
         self.token_to_current(start, TokenKind::Literal(Lit::BStr {unescaped_text}))
     }
 
