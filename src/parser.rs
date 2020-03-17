@@ -14,7 +14,7 @@ use crate::diagnostics::Diagnostics;
 
 use TokenKind::*;
 
-pub fn parse_module<'a>(source: &'a str, diag: &'a Diagnostics) -> Module<'a> {
+pub fn parse_module(source: &str, diag: &Diagnostics) -> Module {
     let scanner = Scanner::new(source.as_bytes());
     let lexer = Lexer::new(scanner, diag);
     let tstream = lexer.into();
@@ -32,7 +32,7 @@ struct ModuleParser<'a> {
 }
 
 impl<'a> ModuleParser<'a> {
-    fn module(&mut self) -> Module<'a> {
+    fn module(&mut self) -> Module {
         let mut decls = Vec::new();
         while self.tstream.peek().kind != Eof {
             if let Some(decl) = self.decl() {
@@ -43,7 +43,7 @@ impl<'a> ModuleParser<'a> {
         Module {decls}
     }
 
-    fn decl(&mut self) -> Option<Decl<'a>> {
+    fn decl(&mut self) -> Option<Decl> {
         use token::Keyword::*;
         Some(match self.tstream.peek().kind {
             Keyword(Use) => Decl::Import(self.use_decl()?),
@@ -64,32 +64,32 @@ impl<'a> ModuleParser<'a> {
     /// import_path_selection := path_component | "*" | "{" import_names_list "}"
     /// import_names_list := (import_name ",")* import_name?
     /// import_name := (ident | self_value) ("as" ident)?
-    fn use_decl(&mut self) -> Option<ImportPath<'a>> {
+    fn use_decl(&mut self) -> Option<ImportPath> {
         // The `use` token
         self.tstream.next();
 
         self.import_path()
     }
 
-    fn struct_decl(&mut self) -> Struct<'a> {
+    fn struct_decl(&mut self) -> Struct {
         // The `struct` token
         self.tstream.next();
         todo!()
     }
 
-    fn impl_decl(&mut self) -> Impl<'a> {
+    fn impl_decl(&mut self) -> Impl {
         // The `impl` token
         self.tstream.next();
         todo!()
     }
 
-    fn func_decl(&mut self) -> Function<'a> {
+    fn func_decl(&mut self) -> Function {
         // The `fn` token
         self.tstream.next();
         todo!()
     }
 
-    fn import_path(&mut self) -> Option<ImportPath<'a>> {
+    fn import_path(&mut self) -> Option<ImportPath> {
         let mut components = Vec::new();
         let selection = loop {
             let token = self.tstream.next();
@@ -118,19 +118,19 @@ impl<'a> ModuleParser<'a> {
         Some(ImportPath {path: IdentPath {components}, selection})
     }
 
-    fn import_names_list(&mut self) -> Option<Vec<ast::Ident<'a>>> {
+    fn import_names_list(&mut self) -> Option<Vec<ast::Ident>> {
         let mut names = Vec::new();
 
         while self.tstream.peek().kind != CloseDelim(Delim::Brace) {
             let token = self.match_next(Ident)?;
-            let ident = "TODO";
+            let ident = token.unwrap_ident().clone();
             names.push(ident)
         }
 
         Some(names)
     }
 
-    fn ident_path(&mut self) -> Option<IdentPath<'a>> {
+    fn ident_path(&mut self) -> Option<IdentPath> {
         let mut components = Vec::new();
         loop {
             let token = self.tstream.next();
@@ -151,12 +151,12 @@ impl<'a> ModuleParser<'a> {
         Some(IdentPath {components})
     }
 
-    fn path_component(&mut self, token: Token) -> Option<PathComponent<'a>> {
+    fn path_component(&mut self, token: Token) -> Option<PathComponent> {
         use token::Keyword::*;
 
         Some(match &token.kind {
             Ident => {
-                let ident = "TODO";
+                let ident = token.unwrap_ident().clone();
                 PathComponent::Ident(ident)
             },
 

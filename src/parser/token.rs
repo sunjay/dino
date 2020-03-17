@@ -136,6 +136,48 @@ pub struct Token {
     pub data: Option<TokenData>,
 }
 
+impl Token {
+    /// Returns the data as an identifier or panics
+    pub fn unwrap_ident(&self) -> &Arc<str> {
+        match &self.data {
+            Some(TokenData::Ident(ident)) => ident,
+            _ => panic!("bug: expected an identifier"),
+        }
+    }
+
+    /// Returns the data as an integer and its suffix or panics
+    pub fn unwrap_integer(&self) -> (i64, Option<Suffix>) {
+        match &self.data {
+            &Some(TokenData::Integer(value, suffix)) => (value, suffix),
+            _ => panic!("bug: expected an integer"),
+        }
+    }
+
+    /// Returns the data as a real number or panics
+    pub fn unwrap_real(&self) -> f64 {
+        match &self.data {
+            &Some(TokenData::Real(value)) => value,
+            _ => panic!("bug: expected a real number"),
+        }
+    }
+
+    /// Returns the data as a complex number or panics
+    pub fn unwrap_complex(&self) -> f64 {
+        match &self.data {
+            &Some(TokenData::Complex(value)) => value,
+            _ => panic!("bug: expected a complex number"),
+        }
+    }
+
+    /// Returns the data as the unescaped text of a byte string or panics
+    pub fn unwrap_bstr(&self) -> &Arc<[u8]> {
+        match &self.data {
+            Some(TokenData::BStr {unescaped_text}) => unescaped_text,
+            _ => panic!("bug: expected a byte string"),
+        }
+    }
+}
+
 macro_rules! keywords {
     ($($variant:ident : $kw:literal)*) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

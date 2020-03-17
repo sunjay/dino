@@ -298,7 +298,6 @@ impl<'a> Lexer<'a> {
 
         if real {
             if suffix.is_some() {
-                //TODO: Produce an error: "real number literals may not have a suffix"
                 self.diag.emit_error("real number literals may not have a suffix");
                 return self.token_to_current(start, TokenKind::Error, None);
             }
