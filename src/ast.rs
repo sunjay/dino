@@ -1,6 +1,6 @@
 //! The abstract syntax tree of the program.
 //!
-//! This representation removes some of the information in the parse tree
+//! This is the closest representation to the actual syntax.
 
 use std::fmt;
 

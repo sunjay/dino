@@ -15,7 +15,6 @@ pub mod span;
 pub mod diagnostics;
 pub mod fmt_ctx;
 pub mod primitives;
-pub mod parse_tree;
 pub mod ast;
 pub mod parser;
 pub mod hir;
