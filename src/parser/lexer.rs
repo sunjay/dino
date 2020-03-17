@@ -386,7 +386,51 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
 
-    use TokenKind::*;
+    use crate::span::Span;
+
+    macro_rules! t {
+        ($kind:expr) => (
+            Token {
+                kind: $kind,
+                span: Span {start: 0, end: 0},
+                data: None,
+            }
+        );
+        ($kind:expr, $data:expr) => (
+            Token {
+                kind: $kind,
+                span: Span {start: 0, end: 0},
+                data: Some($data),
+            }
+        );
+    }
+
+    macro_rules! ident {
+        ($value:expr) => (
+            t!(Ident, TokenData::Ident($value.into()))
+        );
+    }
+
+    macro_rules! int {
+        ($value:expr) => (
+            t!(Literal(LitKind::Integer), TokenData::Integer($value, None))
+        );
+        ($value:expr, $suffix:expr) => (
+            t!(Literal(LitKind::Integer), TokenData::Integer($value, Some($suffix)))
+        );
+    }
+
+    macro_rules! real {
+        ($value:expr) => (
+            t!(Literal(LitKind::Real), TokenData::Real($value))
+        );
+    }
+
+    macro_rules! complex {
+        ($value:expr) => (
+            t!(Literal(LitKind::Complex), TokenData::Complex($value))
+        );
+    }
 
     macro_rules! expect_token {
         ($source:literal, $expected:expr) => {
@@ -394,7 +438,9 @@ mod tests {
             let scanner = Scanner::new($source);
             let mut lexer = Lexer::new(scanner, &diag);
             let token = lexer.next();
-            assert_eq!(token.kind, $expected);
+            let expected = $expected;
+            assert_eq!(token.kind, expected.kind);
+            assert_eq!(token.data, expected.data);
             let token = lexer.next();
             assert_eq!(token.kind, Eof);
         };
@@ -405,9 +451,11 @@ mod tests {
             let diag = Diagnostics::new(termcolor::ColorChoice::Always);
             let scanner = Scanner::new($source);
             let mut lexer = Lexer::new(scanner, &diag);
-            for expected_token in $expected {
+            let expected_tokens: &[Token] = $expected;
+            for expected_token in expected_tokens {
                 let token = lexer.next();
-                assert_eq!(&token.kind, expected_token);
+                assert_eq!(token.kind, expected_token.kind);
+                assert_eq!(token.data, expected_token.data);
             }
             // Ensure that the input is exhausted
             let token = lexer.next();
@@ -417,21 +465,21 @@ mod tests {
 
     macro_rules! expect_error {
         ($source:literal) => {
-            expect_token!($source, Error);
+            expect_token!($source, t!(Error));
         };
     }
 
     #[test]
     fn integer_literals() {
-        expect_token!(b"0", Literal(Lit::Integer(0, None)));
-        expect_token!(b"000", Literal(Lit::Integer(0, None)));
-        expect_token!(b"013", Literal(Lit::Integer(013, None)));
-        expect_token!(b"123", Literal(Lit::Integer(123, None)));
-        expect_token!(b"9999", Literal(Lit::Integer(9999, None)));
+        expect_token!(b"0", int!(0));
+        expect_token!(b"000", int!(0));
+        expect_token!(b"013", int!(013));
+        expect_token!(b"123", int!(123));
+        expect_token!(b"9999", int!(9999));
 
-        expect_token!(b"0int", Literal(Lit::Integer(0, Some(Suffix::Int))));
-        expect_token!(b"9301int", Literal(Lit::Integer(9301, Some(Suffix::Int))));
-        expect_token!(b"256real", Literal(Lit::Integer(256, Some(Suffix::Real))));
+        expect_token!(b"0int", int!(0, Suffix::Int));
+        expect_token!(b"9301int", int!(9301, Suffix::Int));
+        expect_token!(b"256real", int!(256, Suffix::Real));
     }
 
     #[test]
@@ -441,67 +489,67 @@ mod tests {
 
     #[test]
     fn real_literals() {
-        expect_token!(b"0.0", Literal(Lit::Real(0.0)));
-        expect_token!(b"0.00", Literal(Lit::Real(0.0)));
-        expect_token!(b"0.13", Literal(Lit::Real(0.13)));
-        expect_token!(b"123.0", Literal(Lit::Real(123.)));
-        expect_token!(b"123.0000", Literal(Lit::Real(123.0000)));
-        expect_token!(b"999e9", Literal(Lit::Real(999e9)));
-        expect_token!(b"99.9e-9", Literal(Lit::Real(99.9e-9)));
-        expect_token!(b"99.9e+9", Literal(Lit::Real(99.9e+9)));
-        expect_token!(b"99.9E-10", Literal(Lit::Real(99.9e-10)));
-        expect_token!(b"99.9E+9", Literal(Lit::Real(99.9e+9)));
+        expect_token!(b"0.0", real!(0.0));
+        expect_token!(b"0.00", real!(0.0));
+        expect_token!(b"0.13", real!(0.13));
+        expect_token!(b"123.0", real!(123.));
+        expect_token!(b"123.0000", real!(123.0000));
+        expect_token!(b"999e9", real!(999e9));
+        expect_token!(b"99.9e-9", real!(99.9e-9));
+        expect_token!(b"99.9e+9", real!(99.9e+9));
+        expect_token!(b"99.9E-10", real!(99.9e-10));
+        expect_token!(b"99.9E+9", real!(99.9e+9));
     }
 
     #[test]
     fn real_literals_invalid() {
-        expect_tokens!(b"..0", &[Period, Period, Literal(Lit::Integer(0, None))]);
-        expect_tokens!(b"0.e", &[Literal(Lit::Integer(0, None)), Period, Ident]);
+        expect_tokens!(b"..0", &[t!(Period), t!(Period), int!(0)]);
+        expect_tokens!(b"0.e", &[int!(0), t!(Period), ident!("e")]);
         expect_error!(b"0.0e");
         expect_error!(b"0.0e+");
         expect_error!(b"0.0e-");
-        expect_tokens!(b".0foo", &[Period, Error]);
+        expect_tokens!(b".0foo", &[t!(Period), t!(Error)]);
         // Real number literals may not have a suffix
-        expect_tokens!(b"0.0int", &[Error]);
-        expect_tokens!(b"0.0real", &[Error]);
+        expect_error!(b"0.0int");
+        expect_error!(b"0.0real");
     }
 
     #[test]
     fn complex_literals() {
-        expect_token!(b"0j", Literal(Lit::Complex(0.0)));
-        expect_token!(b"0J", Literal(Lit::Complex(0.0)));
-        expect_token!(b"0i", Literal(Lit::Complex(0.0)));
-        expect_token!(b"0I", Literal(Lit::Complex(0.0)));
-        expect_token!(b"000j", Literal(Lit::Complex(0.0)));
-        expect_token!(b"013j", Literal(Lit::Complex(013.0)));
-        expect_token!(b"123j", Literal(Lit::Complex(123.0)));
-        expect_token!(b"9999j", Literal(Lit::Complex(9999.0)));
-        expect_token!(b"0.0j", Literal(Lit::Complex(0.0)));
-        expect_token!(b"0.00j", Literal(Lit::Complex(0.0)));
-        expect_token!(b"0.13j", Literal(Lit::Complex(0.13)));
-        expect_token!(b"123.0j", Literal(Lit::Complex(123.)));
-        expect_token!(b"999e9j", Literal(Lit::Complex(999e9)));
-        expect_token!(b"99.9e-9j", Literal(Lit::Complex(99.9e-9)));
-        expect_token!(b"99.9e+9j", Literal(Lit::Complex(99.9e+9)));
-        expect_token!(b"99.9E-10j", Literal(Lit::Complex(99.9e-10)));
-        expect_token!(b"99.9E+9j", Literal(Lit::Complex(99.9e+9)));
-        expect_token!(b"0.9E-10j", Literal(Lit::Complex(0.9e-10)));
-        expect_token!(b"0.9E+9j", Literal(Lit::Complex(0.9e+9)));
+        expect_token!(b"0j", complex!(0.0));
+        expect_token!(b"0J", complex!(0.0));
+        expect_token!(b"0i", complex!(0.0));
+        expect_token!(b"0I", complex!(0.0));
+        expect_token!(b"000j", complex!(0.0));
+        expect_token!(b"013j", complex!(013.0));
+        expect_token!(b"123j", complex!(123.0));
+        expect_token!(b"9999j", complex!(9999.0));
+        expect_token!(b"0.0j", complex!(0.0));
+        expect_token!(b"0.00j", complex!(0.0));
+        expect_token!(b"0.13j", complex!(0.13));
+        expect_token!(b"123.0j", complex!(123.));
+        expect_token!(b"999e9j", complex!(999e9));
+        expect_token!(b"99.9e-9j", complex!(99.9e-9));
+        expect_token!(b"99.9e+9j", complex!(99.9e+9));
+        expect_token!(b"99.9E-10j", complex!(99.9e-10));
+        expect_token!(b"99.9E+9j", complex!(99.9e+9));
+        expect_token!(b"0.9E-10j", complex!(0.9e-10));
+        expect_token!(b"0.9E+9j", complex!(0.9e+9));
     }
 
     #[test]
     fn complex_literals_invalid() {
-        expect_tokens!(b".0jfoo", &[Period, Error]);
+        expect_tokens!(b".0jfoo", &[t!(Period), t!(Error)]);
     }
 
     #[test]
     fn integer_field_access() {
-        expect_tokens!(b"123.foo", &[Literal(Lit::Integer(123, None)), Period, Ident]);
+        expect_tokens!(b"123.foo", &[int!(123), t!(Period), ident!("foo")]);
     }
 
     #[test]
     fn unknown_token_start() {
-        expect_tokens!(b"123\0456", &[Literal(Lit::Integer(123, None)), Error, Literal(Lit::Integer(456, None))]);
+        expect_tokens!(b"123\0456", &[int!(123), t!(Error), int!(456)]);
     }
 
     #[test]
