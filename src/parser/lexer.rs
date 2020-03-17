@@ -1,144 +1,30 @@
-use std::str;
 use std::sync::Arc;
+use std::collections::HashMap;
 
-use crate::span::Span;
 use crate::diagnostics::Diagnostics;
 
 use super::scanner::Scanner;
+use super::token::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Delim {
-    /// A round parenthesis (i.e., `(` or `)`).
-    Paren,
-    /// A square bracket (i.e., `[` or `]`).
-    Bracket,
-    /// A curly brace (i.e., `{` or `}`).
-    Brace,
-}
-
-/// Some literals may end with a suffix that is meant as hint for type inference
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Suffix {
-    /// The suffix `int`
-    Int,
-    /// The suffix `real`
-    Real,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Lit {
-    /// An integer literal, e.g. `1`, `31`, `49928int`, `391real`
-    Integer(i64, Option<Suffix>),
-    /// A real number literal, e.g. `1.0`, `2.5`, `0.5`
-    Real(f64),
-    /// A complex number literal, e.g. `1i`, `2.5j`, `.5J`
-    Complex(f64),
-    /// A byte string literal (e.g. `b"abc"`)
-    ///
-    /// Any escaped characters will be unescaped
-    BStr {
-        unescaped_text: Arc<Vec<u8>>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TokenKind {
-    /// An identifier
-    Ident,
-    /// A keyword
-    Keyword(Keyword),
-    /// A literal of some kind
-    Literal(Lit),
-
-    /// An opening delimiter (e.g., `{`).
-    OpenDelim(Delim),
-    /// A closing delimiter (e.g., `}`).
-    CloseDelim(Delim),
-
-    /// The `.` symbol
-    Period,
-    /// The `,` symbol
-    Comma,
-    /// The `;` symbol
-    Semicolon,
-    /// The `->` symbol
-    RArrow,
-    /// The `::` symbol
-    DoubleColon,
-    /// The `:` symbol
-    Colon,
-
-    /// The `=` symbol
-    Equals,
-
-    /// The `<` symbol
-    LessThan,
-    /// The `<=` symbol
-    LessThanEquals,
-    /// The `==` symbol
-    DoubleEquals,
-    /// The `!=` symbol
-    NotEqual,
-    /// The `>=` symbol
-    GreaterThanEquals,
-    /// The `>` symbol
-    GreaterThan,
-
-    /// The `&&` symbol
-    DoubleAnd,
-    /// The `||` symbol
-    DoubleOr,
-    /// The `!` symbol
-    Not,
-
-    /// The `&` symbol
-    And,
-    /// The `|` symbol
-    Or,
-    /// The `+` symbol
-    Plus,
-    /// The `-` symbol
-    Minus,
-    /// The `*` symbol
-    Star,
-    /// The `/` symbol
-    Slash,
-    /// The `%` symbol
-    Percent,
-    /// The `^` symbol
-    Caret,
-    /// The `<<` symbol
-    Shl,
-    /// The `>>` symbol
-    Shr,
-
-    /// A placeholder for a def which could not be computed; this is
-    /// propagated to avoid useless error messages.
-    Error,
-
-    /// End of file/input
-    Eof,
-}
-
-#[derive(Debug, Clone)]
-pub struct Token {
-    pub kind: TokenKind,
-    pub span: Span,
-}
+use TokenKind::*;
 
 pub struct Lexer<'a> {
     scanner: Scanner<'a>,
     diag: &'a Diagnostics,
+    interned_strings: HashMap<String, Arc<str>>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(scanner: Scanner<'a>, diag: &'a Diagnostics) -> Self {
-        Self {scanner, diag}
+        Self {
+            scanner,
+            diag,
+            interned_strings: HashMap::new(),
+        }
     }
 
     /// Returns the next token in the input
     pub fn next(&mut self) -> Token {
-        use TokenKind::*;
         use Delim::*;
 
         self.ignore_whitespace_comments();
@@ -326,8 +212,8 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let unescaped_text = Arc::new(unescaped_text);
-        self.token_to_current(start, TokenKind::Literal(Lit::BStr {unescaped_text}))
+        let data = TokenData::BStr {unescaped_text: unescaped_text.into()};
+        self.token_to_current(start, TokenKind::Literal(LitKind::BStr), data)
     }
 
     /// Parses a numeric literal, given a starting digit
@@ -398,11 +284,12 @@ impl<'a> Lexer<'a> {
                     "j" | "J" | "i" | "I" => {
                         let value = self.scanner.slice(start, lit_end).parse()
                             .expect("bug: should have been a valid `f64` literal");
-                        return self.token_to_current(start, TokenKind::Literal(Lit::Complex(value)));
+                        let data = TokenData::Complex(value);
+                        return self.token_to_current(start, TokenKind::Literal(LitKind::Complex), data);
                     },
                     suffix => {
                         self.diag.emit_error(format!("invalid suffix `{}` for numeric literal", suffix));
-                        return self.token_to_current(suffix_start, TokenKind::Error);
+                        return self.token_to_current(suffix_start, TokenKind::Error, None);
                     },
                 }
             },
@@ -413,16 +300,17 @@ impl<'a> Lexer<'a> {
             if suffix.is_some() {
                 //TODO: Produce an error: "real number literals may not have a suffix"
                 self.diag.emit_error("real number literals may not have a suffix");
-                return self.token_to_current(start, TokenKind::Error);
+                return self.token_to_current(start, TokenKind::Error, None);
             }
 
             let value = self.scanner.slice(start, lit_end).parse()
                 .expect("bug: should have been a valid `f64` literal");
-            self.token_to_current(start, TokenKind::Literal(Lit::Real(value)))
+            self.token_to_current(start, TokenKind::Literal(LitKind::Real), TokenData::Real(value))
         } else {
             let value = self.scanner.slice(start, lit_end).parse()
                 .expect("bug: should have been a valid `i64` literal");
-            self.token_to_current(start, TokenKind::Literal(Lit::Integer(value, suffix)))
+            let data = TokenData::Integer(value, suffix);
+            self.token_to_current(start, TokenKind::Literal(LitKind::Integer), data)
         }
     }
 
@@ -453,105 +341,46 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let kind = match match_keyword(self.scanner.slice(start, self.scanner.current_pos())) {
-            Some(kw) => TokenKind::Keyword(kw),
-            None => TokenKind::Ident,
-        };
-
-        self.token_to_current(start, kind)
+        let value = self.scanner.slice(start, self.scanner.current_pos());
+        match match_keyword(value) {
+            Some(kw) => self.token_to_current(start, TokenKind::Keyword(kw), None),
+            None => {
+                let data = TokenData::Ident(self.intern_str(value));
+                self.token_to_current(start, TokenKind::Ident, data)
+            },
+        }
     }
 
     fn empty_token(&self, start: usize, kind: TokenKind) -> Token {
         let span = self.scanner.empty_span(start);
-        Token {kind, span}
+        Token {kind, span, data: None}
     }
 
     fn byte_token(&self, start: usize, kind: TokenKind) -> Token {
         let span = self.scanner.byte_span(start);
-        Token {kind, span}
+        Token {kind, span, data: None}
     }
 
     fn next_token(&mut self, start: usize, kind: TokenKind) -> Token {
         let span = self.scanner.next_span(start);
-        Token {kind, span}
+        Token {kind, span, data: None}
     }
 
-    fn token_to_current(&self, start: usize, kind: TokenKind) -> Token {
+    fn token_to_current(&self, start: usize, kind: TokenKind, data: impl Into<Option<TokenData>>) -> Token {
         let span = self.scanner.span(start, self.scanner.current_pos());
-        Token {kind, span}
+        Token {kind, span, data: data.into()}
     }
-}
 
-macro_rules! keywords {
-    ($($variant:ident : $kw:literal)*) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub enum Keyword {
-            $($variant),*
+    fn intern_str(&mut self, value: &str) -> Arc<str> {
+        match self.interned_strings.get(value) {
+            Some(interned) => interned.clone(),
+            None => {
+                let interned: Arc<str> = value.into();
+                self.interned_strings.insert(value.to_string(), interned.clone());
+                interned
+            },
         }
-
-        fn match_keyword(ident: &str) -> Option<Keyword> {
-            use Keyword::*;
-            match ident {
-                $($kw => Some($variant),)*
-                _ => None,
-            }
-        }
-    };
-}
-
-keywords! {
-    Abstract : "abstract"
-    As : "as"
-    Async : "async"
-    Await : "await"
-    Become : "become"
-    Box : "box"
-    Break : "break"
-    Const : "const"
-    Continue : "continue"
-    Do : "do"
-    Dyn : "dyn"
-    Else : "else"
-    Enum : "enum"
-    Extern : "extern"
-    False : "false"
-    Final : "final"
-    Fn : "fn"
-    For : "for"
-    If : "if"
-    Impl : "impl"
-    In : "in"
-    Let : "let"
-    Loop : "loop"
-    Macro : "macro"
-    Match : "match"
-    Mod : "mod"
-    Move : "move"
-    Mut : "mut"
-    Override : "override"
-    Package : "package"
-    Priv : "priv"
-    Pub : "pub"
-    Ref : "ref"
-    Return : "return"
-    SelfType : "Self"
-    SelfValue : "self"
-    Static : "static"
-    Struct : "struct"
-    Super : "super"
-    Trait : "trait"
-    True : "true"
-    Try : "try"
-    Type : "type"
-    Typeof : "typeof"
-    Union : "union"
-    Unsafe : "unsafe"
-    Unsized : "unsized"
-    Use : "use"
-    Virtual : "virtual"
-    Where : "where"
-    While : "while"
-    Yield : "yield"
+    }
 }
 
 #[cfg(test)]

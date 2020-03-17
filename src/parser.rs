@@ -1,8 +1,10 @@
 mod scanner;
+mod token;
 mod lexer;
 mod token_stream;
 
 pub use scanner::*;
+pub use token::*;
 pub use lexer::*;
 pub use token_stream::*;
 
@@ -42,7 +44,7 @@ impl<'a> ModuleParser<'a> {
     }
 
     fn decl(&mut self) -> Option<Decl<'a>> {
-        use lexer::Keyword::*;
+        use token::Keyword::*;
         Some(match self.tstream.peek().kind {
             Keyword(Use) => Decl::Import(self.use_decl()?),
             Keyword(Struct) => Decl::Struct(self.struct_decl()),
@@ -150,7 +152,7 @@ impl<'a> ModuleParser<'a> {
     }
 
     fn path_component(&mut self, token: Token) -> Option<PathComponent<'a>> {
-        use lexer::Keyword::*;
+        use token::Keyword::*;
 
         Some(match &token.kind {
             Ident => {

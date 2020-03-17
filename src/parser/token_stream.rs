@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::lexer::{Lexer, Token, TokenKind};
+use super::{Lexer, Token, TokenKind};
 
 /// Abstraction over Lexer to provide access to tokens in a way that is convenient for the parser
 pub struct TokenStream {
