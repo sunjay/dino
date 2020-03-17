@@ -1,5 +1,7 @@
 use std::str;
 
+use crate::span::Span;
+
 #[derive(Debug)]
 pub struct Scanner<'a> {
     source: &'a [u8],
@@ -46,19 +48,19 @@ impl<'a> Scanner<'a> {
     }
 
     /// Creates a new span that is empty (from `index` to `index`)
-    pub fn empty_span(&self, index: usize) -> &'a [u8] {
+    pub fn empty_span(&self, index: usize) -> Span {
         self.span(index, index)
     }
 
     /// Creates a new span for a single byte
-    pub fn byte_span(&self, index: usize) -> &'a [u8] {
+    pub fn byte_span(&self, index: usize) -> Span {
         self.span(index, index+1)
     }
 
     /// Advances the scanner, and creates a new span between `start` and its current position
     ///
     /// Usually used after `peek` to include that character in the span
-    pub fn next_span(&mut self, start: usize) -> &'a [u8] {
+    pub fn next_span(&mut self, start: usize) -> Span {
         self.next();
         self.span(start, self.current)
     }
@@ -66,8 +68,8 @@ impl<'a> Scanner<'a> {
     /// Creates a new span between the given byte indexes
     ///
     /// `start` is included in the range, `end` is not.
-    pub fn span(&self, start: usize, end: usize) -> &'a [u8] {
-        &self.source[start..end]
+    pub fn span(&self, start: usize, end: usize) -> Span {
+        Span {start, end}
     }
 
     /// Creates a new slice of the source between the given byte indexes and parse it as unicode

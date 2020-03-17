@@ -2,13 +2,13 @@ mod scanner;
 mod lexer;
 mod token_stream;
 
+pub use scanner::*;
+pub use lexer::*;
+pub use token_stream::*;
+
 use crate::ast;
 use crate::ast::*;
 use crate::diagnostics::Diagnostics;
-
-use scanner::Scanner;
-use lexer::{Lexer, Token, TokenKind, Lit, Delim, Keyword};
-use token_stream::TokenStream;
 
 use TokenKind::*;
 
@@ -25,7 +25,7 @@ pub fn parse_module<'a>(source: &'a str, diag: &'a Diagnostics) -> Module<'a> {
 }
 
 struct ModuleParser<'a> {
-    tstream: TokenStream<'a>,
+    tstream: TokenStream,
     diag: &'a Diagnostics,
 }
 
@@ -42,7 +42,7 @@ impl<'a> ModuleParser<'a> {
     }
 
     fn decl(&mut self) -> Option<Decl<'a>> {
-        use Keyword::*;
+        use lexer::Keyword::*;
         Some(match self.tstream.peek().kind {
             Keyword(Use) => Decl::Import(self.use_decl()?),
             Keyword(Struct) => Decl::Struct(self.struct_decl()),
@@ -121,8 +121,7 @@ impl<'a> ModuleParser<'a> {
 
         while self.tstream.peek().kind != CloseDelim(Delim::Brace) {
             let token = self.match_next(Ident)?;
-            let ident = token.to_str()
-                .expect("bug: idents should be valid utf-8 by definition");
+            let ident = "TODO";
             names.push(ident)
         }
 
@@ -150,13 +149,12 @@ impl<'a> ModuleParser<'a> {
         Some(IdentPath {components})
     }
 
-    fn path_component(&mut self, token: Token<'a>) -> Option<PathComponent<'a>> {
-        use Keyword::*;
+    fn path_component(&mut self, token: Token) -> Option<PathComponent<'a>> {
+        use lexer::Keyword::*;
 
         Some(match &token.kind {
             Ident => {
-                let ident = token.to_str()
-                    .expect("bug: idents should be valid utf-8 by definition");
+                let ident = "TODO";
                 PathComponent::Ident(ident)
             },
 
@@ -174,7 +172,7 @@ impl<'a> ModuleParser<'a> {
         })
     }
 
-    fn match_next(&mut self, kind: TokenKind) -> Option<Token<'a>> {
+    fn match_next(&mut self, kind: TokenKind) -> Option<Token> {
         let token = self.tstream.next();
         if token.kind != kind {
             self.unexpected_token(token, &[kind]);
@@ -184,7 +182,7 @@ impl<'a> ModuleParser<'a> {
         }
     }
 
-    fn unexpected_token(&self, token: Token<'a>, expected: &[TokenKind]) {
+    fn unexpected_token(&self, token: Token, expected: &[TokenKind]) {
         if token.kind == Error {
             // No need to produce further errors on an error token
             return;
