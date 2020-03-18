@@ -1,10 +1,10 @@
+mod input;
 mod alt;
 mod tuple;
 
+pub use input::*;
 pub use alt::*;
 pub use tuple::*;
-
-use std::fmt;
 
 use smallvec::SmallVec;
 
@@ -12,39 +12,6 @@ use smallvec::SmallVec;
 ///
 /// Should be set based on the expected max number of failed branches in an `alt`
 const MAX_EXPECTED: usize = 3;
-
-pub trait InputItem {
-    /// The type that represents an expected value of this item (for use in errors)
-    type Expected: fmt::Debug;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RelativePosition {
-    /// The left input is behind the right input (left has advanced less than right)
-    Behind,
-    /// The left input is at the same position as the right input
-    Same,
-    /// The left input is ahead of the right input (left has advanced more than right)
-    Ahead,
-}
-
-pub trait Input: Clone {
-    type Item: InputItem;
-
-    /// Advances the input and returns the next item
-    ///
-    /// If no remaining items are present, this method should panic, as that is considered a bug.
-    /// Inputs should have a natural end item (e.g. EOF) that signals the end of input.
-    fn advance(&self) -> (Self, Self::Item);
-
-    /// Compares the input position of this input with another input
-    ///
-    /// Note: for most inputs, it doesn't make sense to ask for the current position, since that
-    /// can be meaningless for inputs where each item has its own concept of position. However,
-    /// it can make sense to compare how far different inputs have advanced. That is the
-    /// information that this method provides.
-    fn relative_position_to(&self, other: &Self) -> RelativePosition;
-}
 
 #[derive(Debug)]
 pub struct ParseError<T: InputItem> {
