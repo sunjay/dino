@@ -97,9 +97,9 @@ pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<
 pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>, <I as ParserInput>::Item>
     where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
 {
-    move |input| match f(input) {
+    move |input| match f(input.clone()) {
         Ok((input, output)) => Ok((input, Some(output))),
-        Err((input, _)) => Ok((input, None)),
+        Err(_) => Ok((input, None)),
     }
 }
 
