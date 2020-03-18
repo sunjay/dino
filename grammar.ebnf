@@ -22,18 +22,40 @@ stmt ::= cond | while_loop | var_decl | expr ';'
 while_loop ::= 'while' expr block
 var_decl ::= 'let' ident (':' ty)? '=' expr ';'
 
-expr ::= '(' expr ')' | assign | field_access | method_call |
-         cond | func_call | return_expr | 'break' | 'continue' |
-         struct_lit | bstr_lit | int_lit | real_lit | complex_lit |
-         bool_lit | unit_lit | 'self' | path | ident
-assign ::= lvalue '=' expr
+(* precedence levels start at 0 and go up *)
+expr ::= prec0
+
+(* Associativity:
+   * left to right:
+     prec(N) = prec(N+1) ('op' prec(N+1))*
+   * right to left:
+     prec(N) = prec(N+1) 'op' expr | prec(N+1)
+   * none (requires parentheses):
+     prec(N) = prec(N+1) 'op' prec(N+1) | prec(N+1)
+*)
+prec0 ::= 'return' expr? | 'break' | 'continue' | prec1
+prec1 ::= lvalue '=' expr | prec2
 lvalue ::= field_access | ident
-field_access ::= expr '.' ident
-method_call ::= expr '.' func_call
+prec2 ::= prec3 ('||' prec3)*
+prec3 ::= prec4 ('&&' prec4)*
+prec4 ::= prec5 ('==' | '!=' | '<' | '>' | '<=' | '>=') prec5 | prec5
+prec5 ::= prec6 ('|' prec6)*
+prec6 ::= prec7 ('^' prec7)*
+prec7 ::= prec8 ('&' prec8)*
+prec8 ::= prec9 (('<<' | '>>') prec9)*
+prec9 ::= prec10 (('+' | '-') prec10)*
+prec10 ::= prec11 (('*' | '/' | '%') prec11)*
+prec11 ::= prec12 ('as' prec12)*
+prec12 ::= ('-' | '!')? prec13
+prec13 ::= prec14 ('(' func_args ')' | '[' expr ']')*
+prec14 ::= field_access
+field_access ::= prec15 ('.' ident)*
+prec15 ::= prec16 ('.' ident '(' func_args ')')*
+prec16 ::= '(' expr ')' | cond | struct_lit | bstr_lit | int_lit |
+           real_lit | complex_lit | bool_lit | unit_lit | 'self' | path
+
 cond ::= 'if' expr block ('else' 'if' expr block)* ('else' block)?
-func_call ::= (path | ident) '(' func_args ')'
 func_args ::= (expr ',')* expr?
-return_expr ::= 'return' expr?
 struct_lit ::= named_ty '{' struct_field_values '}'
 struct_field_values ::= (struct_field_value ',')* struct_field_value?
 struct_field_value ::= ident ':' expr
@@ -43,7 +65,5 @@ unit_lit ::= '(' ')'
 ty ::= '(' ')' | named_ty
 named_ty ::=  'Self' | path | ident
 
-(* Note that a path explicitly requires at least two components,
-   thus distinguishing it from an ident *)
-path ::= (path_component '::')+ path_component
+path ::= (path_component '::')* path_component
 path_component ::= 'package' | 'Self' | 'self' | 'super' | ident
