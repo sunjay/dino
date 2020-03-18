@@ -35,6 +35,11 @@ pub trait Input: Clone {
     /// it can make sense to compare how far different inputs have advanced. That is the
     /// information that this method provides.
     fn relative_position_to(&self, other: &Self) -> RelativePosition;
+
+    /// Returns true if this input has advanced past the given input
+    fn has_advanced_past(&self, other: &Self) -> bool {
+        self.relative_position_to(other) == RelativePosition::Ahead
+    }
 }
 
 impl<'a, T: InputItem> Input for &'a [T] {

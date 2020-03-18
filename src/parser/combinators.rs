@@ -32,12 +32,24 @@ pub fn many0<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
 {
     move |mut input| {
         let mut outputs = Vec::new();
-        while let Ok((inp, output)) = f(input.clone()) {
-            outputs.push(output);
-            if input.relative_position_to(&inp) == RelativePosition::Same {
-                panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many0");
+        loop {
+            match f(input.clone()) {
+                Ok((inp, output)) => {
+                    outputs.push(output);
+                    if input.relative_position_to(&inp) == RelativePosition::Same {
+                        panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many0");
+                    }
+                    input = inp;
+                },
+
+                Err((inp, err)) => {
+                    // propagate the error if the input advanced past the start
+                    if inp.has_advanced_past(&input) {
+                        return Err((inp, err));
+                    }
+                    break;
+                }
             }
-            input = inp;
         }
         Ok((input, outputs))
     }
@@ -49,12 +61,24 @@ pub fn many1<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
     move |input| {
         let (mut input, output) = f(input)?;
         let mut outputs = vec![output];
-        while let Ok((inp, output)) = f(input.clone()) {
-            outputs.push(output);
-            if input.relative_position_to(&inp) == RelativePosition::Same {
-                panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many1");
+        loop {
+            match f(input.clone()) {
+                Ok((inp, output)) => {
+                    outputs.push(output);
+                    if input.relative_position_to(&inp) == RelativePosition::Same {
+                        panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many1");
+                    }
+                    input = inp;
+                },
+
+                Err((inp, err)) => {
+                    // propagate the error if the input advanced past the start
+                    if inp.has_advanced_past(&input) {
+                        return Err((inp, err));
+                    }
+                    break;
+                }
             }
-            input = inp;
         }
         Ok((input, outputs))
     }
