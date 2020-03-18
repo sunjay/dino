@@ -31,8 +31,10 @@ pub type IResult<I, O, Item> = Result<(I, O), (I, ParseError<Item>)>;
 ///
 /// If the given parser produces an error after advancing past the start of its input, that error
 /// will be returned.
-pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
-    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
+pub fn many0<I: ParserInput, O, F>(
+    mut f: F,
+) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
 {
     move |mut input| {
         let mut outputs = Vec::new();
@@ -64,8 +66,10 @@ pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<
 ///
 /// If the given parser produces an error after advancing past the start of its input, that error
 /// will be returned.
-pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
-    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
+pub fn many1<I: ParserInput, O, F>(
+    mut f: F,
+) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
 {
     move |input| {
         let (mut input, output) = f(input)?;
@@ -94,8 +98,10 @@ pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<
 }
 
 /// Creates an optional parser. Returns `None` if the given parser produces an error.
-pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>, <I as ParserInput>::Item>
-    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
+pub fn opt<I: ParserInput, O, F>(
+    mut f: F,
+) -> impl FnMut(I) -> IResult<I, Option<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
 {
     move |input| match f(input.clone()) {
         Ok((input, output)) => Ok((input, Some(output))),
