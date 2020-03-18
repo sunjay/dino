@@ -1,12 +1,12 @@
 use smallvec::SmallVec;
 
-use super::{Input, IResult, ParseError};
+use super::{ParserInput, IResult, ParseError};
 
-pub trait Alt<I: Input, O> {
+pub trait Alt<I: ParserInput, O> {
     fn parse(&mut self, input: I) -> IResult<I, O>;
 }
 
-pub fn alt<I: Input, O, P: Alt<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
+pub fn alt<I: ParserInput, O, P: Alt<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
     move |input| parsers.parse(input)
 }
 
@@ -14,7 +14,7 @@ macro_rules! impl_alt {
     ($f_1:ident, $($f_n:ident,)*) => {
         impl_alt!($($f_n,)*);
 
-        impl<I: Input, O, $f_1, $($f_n),*> Alt<I, O> for ($f_1, $($f_n),*)
+        impl<I: ParserInput, O, $f_1, $($f_n),*> Alt<I, O> for ($f_1, $($f_n),*)
             where $f_1: FnMut(I) -> IResult<I, O>,
                   $($f_n: FnMut(I) -> IResult<I, O>),*
         {

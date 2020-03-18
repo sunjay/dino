@@ -25,9 +25,9 @@ pub struct ParseError<T: InputItem> {
 ///
 /// On error, this represents what was expected and the actual item found, as well
 /// as the input position of the actual item found
-pub type IResult<I, O> = Result<(I, O), (I, ParseError<<I as Input>::Item>)>;
+pub type IResult<I, O> = Result<(I, O), (I, ParseError<<I as ParserInput>::Item>)>;
 
-pub fn many0<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
+pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
     where F: FnMut(I) -> IResult<I, O>
 {
     move |mut input| {
@@ -55,7 +55,7 @@ pub fn many0<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
     }
 }
 
-pub fn many1<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
+pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
     where F: FnMut(I) -> IResult<I, O>
 {
     move |input| {
@@ -84,7 +84,7 @@ pub fn many1<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
     }
 }
 
-pub fn opt<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>>
+pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>>
     where F: FnMut(I) -> IResult<I, O>
 {
     move |input| match f(input) {
@@ -93,7 +93,7 @@ pub fn opt<I: Input, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>>
     }
 }
 
-pub fn map<I: Input, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(I) -> IResult<I, O2>
+pub fn map<I: ParserInput, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(I) -> IResult<I, O2>
     where F: FnMut(I) -> IResult<I, O1>,
           G: FnMut(O1) -> O2,
 {

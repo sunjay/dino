@@ -1,10 +1,10 @@
-use super::{Input, IResult};
+use super::{ParserInput, IResult};
 
-pub trait Tuple<I: Input, O> {
+pub trait Tuple<I: ParserInput, O> {
     fn parse(&mut self, input: I) -> IResult<I, O>;
 }
 
-pub fn tuple<I: Input, O, P: Tuple<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
+pub fn tuple<I: ParserInput, O, P: Tuple<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
     move |input| parsers.parse(input)
 }
 
@@ -12,7 +12,7 @@ macro_rules! impl_tuple {
     ($f_1:ident => $o_1:ident, $($f_n:ident => $o_n:ident,)*) => {
         impl_tuple!($($f_n => $o_n,)*);
 
-        impl<I: Input, $f_1, $o_1, $($f_n, $o_n),*> Tuple<I, ($o_1, $($o_n),*)> for ($f_1, $($f_n),*)
+        impl<I: ParserInput, $f_1, $o_1, $($f_n, $o_n),*> Tuple<I, ($o_1, $($o_n),*)> for ($f_1, $($f_n),*)
             where $f_1: FnMut(I) -> IResult<I, $o_1>,
                   $($f_n: FnMut(I) -> IResult<I, $o_n>),*
         {

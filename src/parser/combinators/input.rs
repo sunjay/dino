@@ -19,7 +19,7 @@ impl<'a, T: InputItem> InputItem for &'a T {
     type Expected = <T as InputItem>::Expected;
 }
 
-pub trait Input: Clone {
+pub trait ParserInput: Clone {
     type Item: InputItem;
 
     /// Advances the input and returns the next item
@@ -42,7 +42,7 @@ pub trait Input: Clone {
     }
 }
 
-impl<'a, T: InputItem> Input for &'a [T] {
+impl<'a, T: InputItem> ParserInput for &'a [T] {
     type Item = &'a T;
 
     fn advance(&self) -> (Self, Self::Item) {
