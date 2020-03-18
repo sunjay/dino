@@ -59,11 +59,6 @@ impl<'a> ModuleParser<'a> {
         })
     }
 
-    /// use_decl := "use" import_path ";"
-    /// import_path := (path_component "::")* import_path_selection
-    /// import_path_selection := path_component | "*" | "{" import_names_list "}"
-    /// import_names_list := (import_name ",")* import_name?
-    /// import_name := (ident | self_value) ("as" ident)?
     fn use_decl(&mut self) -> Option<ImportPath> {
         // The `use` token
         self.tstream.next();
