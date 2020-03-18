@@ -1,0 +1,49 @@
+decl ::= use_decl | struct_decl | impl_decl | func_decl
+
+use_decl ::= 'use' import_path ';'
+import_path ::= (path_component '::')* import_path_selection
+import_path_selection ::= path_component | '*' | '{' import_names_list '}'
+import_names_list ::= (import_name ',')* import_name?
+import_name ::= (ident | 'self') ('as' ident)?
+
+struct_decl ::= 'struct' ident '{' struct_fields '}'
+struct_fields ::= (struct_field ',')* struct_field?
+struct_field ::= ident ':' ty
+
+impl_decl ::= 'impl' ty '{' func_decl* '}'
+
+func_decl ::= 'fn' ident func_sig block
+func_sig ::= '(' func_params ')' ('->' ty)?
+func_params ::= (func_param ',')* func_param?
+func_param ::= ident ':' ty
+
+block ::= '{' (decl | stmt)* expr? '}'
+stmt ::= cond | while_loop | var_decl | expr ';'
+while_loop ::= 'while' expr block
+var_decl ::= 'let' ident (':' ty)? '=' expr ';'
+
+expr ::= '(' expr ')' | assign | field_access | method_call |
+         cond | func_call | return_expr | 'break' | 'continue' |
+         struct_lit | bstr_lit | int_lit | real_lit | complex_lit |
+         bool_lit | unit_lit | 'self' | path | ident
+assign ::= lvalue '=' expr
+lvalue ::= field_access | ident
+field_access ::= expr '.' ident
+method_call ::= expr '.' func_call
+cond ::= 'if' expr block ('else' 'if' expr block)* ('else' block)?
+func_call ::= (path | ident) '(' func_args ')'
+func_args ::= (expr ',')* expr?
+return_expr ::= 'return' expr?
+struct_lit ::= named_ty '{' struct_field_values '}'
+struct_field_values ::= (struct_field_value ',')* struct_field_value?
+struct_field_value ::= ident ':' expr
+bool_lit ::= 'true' | 'false'
+unit_lit ::= '(' ')'
+
+ty ::= '(' ')' | named_ty
+named_ty ::=  'Self' | path | ident
+
+(* Note that a path explicitly requires at least two components,
+   thus distinguishing it from an ident *)
+path ::= (path_component '::')+ path_component
+path_component ::= 'package' | 'Self' | 'self' | 'super' | ident
