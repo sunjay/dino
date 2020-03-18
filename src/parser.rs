@@ -55,8 +55,9 @@ fn collect_tokens(mut lexer: Lexer) -> Vec<Token> {
 
 fn module(input: Input) -> ParseResult<Module> {
     map(
-        many0(decl),
-        |decls| Module {decls}
+        // Make sure module ends with EOF
+        without_suffix(many0(decl), tk(Eof)),
+        |decls| Module {decls},
     )(input)
 }
 

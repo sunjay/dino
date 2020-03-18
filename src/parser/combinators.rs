@@ -116,3 +116,47 @@ pub fn map<I: ParserInput, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(
 {
     move |input| f(input).map(|(input, output)| (input, mapper(output)))
 }
+
+/// Alternates between two parsers to produce a list
+pub fn separated0<I: ParserInput, O, O2, F, S>(
+    mut sep: S,
+    mut f: F,
+) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+          S: FnMut(I) -> IResult<I, O2, <I as ParserInput>::Item>,
+{
+    move |input| {
+        let (input, mut items) = many0(without_suffix(&mut f, &mut sep))(input)?;
+        let (input, last_item) = opt(&mut f)(input)?;
+        items.extend(last_item);
+        Ok((input, items))
+    }
+}
+
+/// Executes both parsers and only returns the first
+pub fn without_suffix<I: ParserInput, O, O2, F, S>(
+    f: F,
+    suffix: S,
+) -> impl FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+          S: FnMut(I) -> IResult<I, O2, <I as ParserInput>::Item>,
+{
+    map(
+        tuple((f, suffix)),
+        |(out, _)| out,
+    )
+}
+
+/// Executes both parsers and only returns the second
+pub fn without_prefix<I: ParserInput, O, O2, F, P>(
+    prefix: P,
+    f: F,
+) -> impl FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+          P: FnMut(I) -> IResult<I, O2, <I as ParserInput>::Item>,
+{
+    map(
+        tuple((prefix, f)),
+        |(_, out)| out,
+    )
+}
