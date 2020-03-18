@@ -124,6 +124,8 @@ pub enum Expr {
     Cond(Box<Cond>),
     Call(FuncCall),
     Return(Option<Box<Expr>>),
+    Break,
+    Continue,
     StructLiteral(StructLiteral),
     BStrLiteral(Vec<u8>),
     IntegerLiteral(IntegerLiteral),
