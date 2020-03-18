@@ -3,10 +3,10 @@ use smallvec::SmallVec;
 use super::{ParserInput, IResult, ParseError};
 
 pub trait Alt<I: ParserInput, O> {
-    fn parse(&mut self, input: I) -> IResult<I, O>;
+    fn parse(&mut self, input: I) -> IResult<I, O, <I as ParserInput>::Item>;
 }
 
-pub fn alt<I: ParserInput, O, P: Alt<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
+pub fn alt<I: ParserInput, O, P: Alt<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O, <I as ParserInput>::Item> {
     move |input| parsers.parse(input)
 }
 
@@ -15,10 +15,10 @@ macro_rules! impl_alt {
         impl_alt!($($f_n,)*);
 
         impl<I: ParserInput, O, $f_1, $($f_n),*> Alt<I, O> for ($f_1, $($f_n),*)
-            where $f_1: FnMut(I) -> IResult<I, O>,
-                  $($f_n: FnMut(I) -> IResult<I, O>),*
+            where $f_1: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+                  $($f_n: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>),*
         {
-            fn parse(&mut self, input: I) -> IResult<I, O> {
+            fn parse(&mut self, input: I) -> IResult<I, O, <I as ParserInput>::Item> {
                 #![allow(non_snake_case)] // makes code generation easier
 
                 use super::RelativePosition::*;

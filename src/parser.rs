@@ -15,7 +15,7 @@ use combinators::*;
 use TokenKind::*;
 
 type Input<'a> = &'a [Token];
-type ParseResult<'a, O> = IResult<Input<'a>, O>;
+type ParseResult<'a, O> = IResult<Input<'a>, O, &'a Token>;
 
 impl InputItem for Token {
     type Expected = TokenKind;

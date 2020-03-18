@@ -25,10 +25,10 @@ pub struct ParseError<T: InputItem> {
 ///
 /// On error, this represents what was expected and the actual item found, as well
 /// as the input position of the actual item found
-pub type IResult<I, O> = Result<(I, O), (I, ParseError<<I as ParserInput>::Item>)>;
+pub type IResult<I, O, Item> = Result<(I, O), (I, ParseError<Item>)>;
 
-pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
-    where F: FnMut(I) -> IResult<I, O>
+pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
 {
     move |mut input| {
         let mut outputs = Vec::new();
@@ -55,8 +55,8 @@ pub fn many0<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<
     }
 }
 
-pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>>
-    where F: FnMut(I) -> IResult<I, O>
+pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
 {
     move |input| {
         let (mut input, output) = f(input)?;
@@ -84,8 +84,8 @@ pub fn many1<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<
     }
 }
 
-pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>>
-    where F: FnMut(I) -> IResult<I, O>
+pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>
 {
     move |input| match f(input) {
         Ok((input, output)) => Ok((input, Some(output))),
@@ -93,8 +93,8 @@ pub fn opt<I: ParserInput, O, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option
     }
 }
 
-pub fn map<I: ParserInput, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(I) -> IResult<I, O2>
-    where F: FnMut(I) -> IResult<I, O1>,
+pub fn map<I: ParserInput, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(I) -> IResult<I, O2, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O1, <I as ParserInput>::Item>,
           G: FnMut(O1) -> O2,
 {
     move |input| f(input).map(|(input, output)| (input, mapper(output)))

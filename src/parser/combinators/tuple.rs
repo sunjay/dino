@@ -1,10 +1,10 @@
 use super::{ParserInput, IResult};
 
 pub trait Tuple<I: ParserInput, O> {
-    fn parse(&mut self, input: I) -> IResult<I, O>;
+    fn parse(&mut self, input: I) -> IResult<I, O, <I as ParserInput>::Item>;
 }
 
-pub fn tuple<I: ParserInput, O, P: Tuple<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O> {
+pub fn tuple<I: ParserInput, O, P: Tuple<I, O>>(mut parsers: P) -> impl FnMut(I) -> IResult<I, O, <I as ParserInput>::Item> {
     move |input| parsers.parse(input)
 }
 
@@ -13,10 +13,10 @@ macro_rules! impl_tuple {
         impl_tuple!($($f_n => $o_n,)*);
 
         impl<I: ParserInput, $f_1, $o_1, $($f_n, $o_n),*> Tuple<I, ($o_1, $($o_n),*)> for ($f_1, $($f_n),*)
-            where $f_1: FnMut(I) -> IResult<I, $o_1>,
-                  $($f_n: FnMut(I) -> IResult<I, $o_n>),*
+            where $f_1: FnMut(I) -> IResult<I, $o_1, <I as ParserInput>::Item>,
+                  $($f_n: FnMut(I) -> IResult<I, $o_n, <I as ParserInput>::Item>),*
         {
-            fn parse(&mut self, input: I) -> IResult<I, ($o_1, $($o_n),*)> {
+            fn parse(&mut self, input: I) -> IResult<I, ($o_1, $($o_n),*), <I as ParserInput>::Item> {
                 #![allow(non_snake_case)] // makes code generation easier
 
                 let ($f_1, $($f_n),*) = self;
