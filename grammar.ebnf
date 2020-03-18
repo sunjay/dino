@@ -34,8 +34,7 @@ expr ::= prec0
      prec(N) = prec(N+1) 'op' prec(N+1) | prec(N+1)
 *)
 prec0 ::= 'return' expr? | 'break' | 'continue' | prec1
-prec1 ::= lvalue '=' expr | prec2
-lvalue ::= field_access | ident
+prec1 ::= prec2 '=' expr | prec2
 prec2 ::= prec3 ('||' prec3)*
 prec3 ::= prec4 ('&&' prec4)*
 prec4 ::= prec5 ('==' | '!=' | '<' | '>' | '<=' | '>=') prec5 | prec5
@@ -48,10 +47,8 @@ prec10 ::= prec11 (('*' | '/' | '%') prec11)*
 prec11 ::= prec12 ('as' prec12)*
 prec12 ::= ('-' | '!')? prec13
 prec13 ::= prec14 ('(' func_args ')' | '[' expr ']')*
-prec14 ::= field_access
-field_access ::= prec15 ('.' ident)*
-prec15 ::= prec16 ('.' ident '(' func_args ')')*
-prec16 ::= '(' expr ')' | cond | struct_lit | bstr_lit | int_lit |
+prec14 ::= prec15 ('.' ident ('(' func_args ')')?)*
+prec15 ::= '(' expr ')' | cond | struct_lit | bstr_lit | int_lit |
            real_lit | complex_lit | bool_lit | unit_lit | 'self' | path
 
 cond ::= 'if' expr block ('else' 'if' expr block)* ('else' block)?
