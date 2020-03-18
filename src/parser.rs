@@ -2,6 +2,7 @@ mod scanner;
 mod token;
 mod lexer;
 mod token_stream;
+mod combinators;
 
 pub use scanner::*;
 pub use token::*;
