@@ -7,6 +7,8 @@ pub use scanner::*;
 pub use token::*;
 pub use lexer::*;
 
+use smallvec::smallvec;
+
 use crate::ast::*;
 use crate::diagnostics::Diagnostics;
 
@@ -81,4 +83,18 @@ fn impl_decl(input: Input) -> ParseResult<Impl> {
 
 fn func_decl(input: Input) -> ParseResult<Function> {
     todo!()
+}
+
+fn tk(kind: TokenKind) -> impl FnMut(Input) -> ParseResult<&Token> {
+    move |input| {
+        let (input, token) = input.advance();
+        if token.kind == kind {
+            Ok((input, token))
+        } else {
+            Err((input, ParseError {
+                expected: smallvec![kind],
+                actual: token,
+            }))
+        }
+    }
 }
