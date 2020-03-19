@@ -9,12 +9,14 @@ pub use lexer::*;
 
 use smallvec::smallvec;
 
+use crate::ast;
 use crate::ast::*;
 use crate::diagnostics::Diagnostics;
 
 use combinators::*;
 
 use TokenKind::*;
+use Delim::*;
 use token::Keyword as Kw;
 
 type Input<'a> = &'a [Token];
@@ -72,11 +74,46 @@ fn decl(input: Input) -> ParseResult<Decl> {
 }
 
 fn use_decl(input: Input) -> ParseResult<ImportPath> {
-    surrounded(tk(Keyword(Kw::Use)), import_path, tk(Semicolon))(input)
+    surrounded(kw(Kw::Use), import_path, tk(Semicolon))(input)
 }
 
 fn import_path(input: Input) -> ParseResult<ImportPath> {
-    todo!()
+    map(
+        tuple((
+            many0(suffixed(path_component, tk(DoubleColon))),
+            import_path_selection,
+        )),
+        |(path, selection)| ImportPath {path, selection},
+    )(input)
+}
+
+fn import_path_selection(input: Input) -> ParseResult<ImportSelection> {
+    alt((
+        map(tk(Star), |_| ImportSelection::All),
+        map(import_names, ImportSelection::Names),
+        map(path_component, ImportSelection::Component),
+    ))(input)
+}
+
+fn import_names(input: Input) -> ParseResult<Vec<ImportName>> {
+    surrounded(
+        tk(OpenDelim(Brace)),
+        separated0(tk(Comma), import_name),
+        tk(CloseDelim(Brace)),
+    )(input)
+}
+
+fn import_name(input: Input) -> ParseResult<ImportName> {
+    alt((
+        map(
+            tuple((ident, opt(prefixed(kw(Kw::As), ident)))),
+            |(name, alias)| ImportName::Name {name, alias},
+        ),
+        map(
+            prefixed(kw(Kw::SelfValue), opt(prefixed(kw(Kw::As), ident))),
+            |alias| ImportName::SelfValue {alias},
+        ),
+    ))(input)
 }
 
 fn struct_decl(input: Input) -> ParseResult<Struct> {
@@ -89,6 +126,21 @@ fn impl_decl(input: Input) -> ParseResult<Impl> {
 
 fn func_decl(input: Input) -> ParseResult<Function> {
     todo!()
+}
+
+fn path_component(input: Input) -> ParseResult<PathComponent> {
+    todo!()
+}
+
+fn ident(input: Input) -> ParseResult<ast::Ident> {
+    map(
+        tk(Ident),
+        |token| token.unwrap_ident().clone(),
+    )(input)
+}
+
+fn kw(keyword: token::Keyword) -> impl FnMut(Input) -> ParseResult<&Token> {
+    tk(Keyword(keyword))
 }
 
 fn tk(kind: TokenKind) -> impl FnMut(Input) -> ParseResult<&Token> {

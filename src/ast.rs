@@ -21,17 +21,26 @@ pub enum Decl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportPath {
-    pub path: IdentPath,
-    /// If `None`, only the path itself is imported
-    pub selection: Option<ImportSelection>,
+    /// The path to import from (represents the root module if empty)
+    pub path: Vec<PathComponent>,
+    /// The items selected from the path
+    pub selection: ImportSelection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportSelection {
+    /// A single path component
+    Component(PathComponent),
     /// A specific list of names being imported
-    Names(Vec<Ident>),
+    Names(Vec<ImportName>),
     /// A wildcard import (all items)
     All,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportName {
+    Name {name: Ident, alias: Option<Ident>},
+    SelfValue {alias: Option<Ident>},
 }
 
 #[derive(Debug, Clone, PartialEq)]
