@@ -199,10 +199,33 @@ fn block(input: Input) -> ParseResult<Block> {
 }
 
 fn stmt(input: Input) -> ParseResult<Stmt> {
-    todo!()
+    alt((
+        map(cond, Stmt::Cond),
+        map(while_loop, Stmt::WhileLoop),
+        map(var_decl, Stmt::VarDecl),
+        map(suffixed(expr, tk(Semicolon)), Stmt::Expr),
+    ))(input)
+}
+
+fn while_loop(input: Input) -> ParseResult<WhileLoop> {
+    map(
+        tuple((kw(Kw::While), expr, block)),
+        |(_, cond, body)| WhileLoop {cond, body},
+    )(input)
+}
+
+fn var_decl(input: Input) -> ParseResult<VarDecl> {
+    map(
+        tuple((kw(Kw::Let), ident, opt(prefixed(tk(Colon), ty)), tk(Equals), expr, tk(Semicolon))),
+        |(_, name, ty, _, expr, _)| VarDecl {name, ty, expr},
+    )(input)
 }
 
 fn expr(input: Input) -> ParseResult<Expr> {
+    todo!()
+}
+
+fn cond(input: Input) -> ParseResult<Cond> {
     todo!()
 }
 
