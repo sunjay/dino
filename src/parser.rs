@@ -15,6 +15,7 @@ use crate::diagnostics::Diagnostics;
 use combinators::*;
 
 use TokenKind::*;
+use token::Keyword as Kw;
 
 type Input<'a> = &'a [Token];
 type ParseResult<'a, O> = IResult<Input<'a>, O, &'a Token>;
@@ -56,7 +57,7 @@ fn collect_tokens(mut lexer: Lexer) -> Vec<Token> {
 fn module(input: Input) -> ParseResult<Module> {
     map(
         // Make sure module ends with EOF
-        without_suffix(many0(decl), tk(Eof)),
+        suffixed(many0(decl), tk(Eof)),
         |decls| Module {decls},
     )(input)
 }
@@ -71,6 +72,10 @@ fn decl(input: Input) -> ParseResult<Decl> {
 }
 
 fn use_decl(input: Input) -> ParseResult<ImportPath> {
+    surrounded(tk(Keyword(Kw::Use)), import_path, tk(Semicolon))(input)
+}
+
+fn import_path(input: Input) -> ParseResult<ImportPath> {
     todo!()
 }
 
