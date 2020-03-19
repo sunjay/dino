@@ -159,6 +159,50 @@ fn func_param(input: Input) -> ParseResult<FuncParam> {
 }
 
 fn block(input: Input) -> ParseResult<Block> {
+    enum ParseState {
+        Continue,
+        FoundExpr,
+        FoundBrace,
+    }
+    use ParseState::*;
+
+    let (mut input, _) = tk(OpenDelim(Brace))(input)?;
+
+    let mut decls = Vec::new();
+    let mut stmts = Vec::new();
+    let mut ret = None;
+
+    // This loop is mostly equivalent to `tuple((many0(alt((decl, stmt))), opt(expr)))`
+    // However, that wouldn't work because `many0` returns an error if its parser goes past the
+    // start of its input. This would always happen with `stmt` because has `expr` + ';' as valid.
+    loop {
+        let (inp, state) = alt((
+            map(decl, |decl| { decls.push(decl); Continue }),
+            map(stmt, |stmt| { stmts.push(stmt); Continue }),
+            map(expr, |expr| { ret = Some(expr); FoundExpr }),
+            map(tk(CloseDelim(Brace)), |_| FoundBrace),
+        ))(input)?;
+        input = inp;
+
+        match state {
+            Continue => {},
+            FoundExpr => {
+                let (inp, _) = tk(CloseDelim(Brace))(input)?;
+                input = inp;
+                break;
+            },
+            FoundBrace => break,
+        }
+    }
+
+    Ok((input, Block {decls, stmts, ret}))
+}
+
+fn stmt(input: Input) -> ParseResult<Stmt> {
+    todo!()
+}
+
+fn expr(input: Input) -> ParseResult<Expr> {
     todo!()
 }
 
