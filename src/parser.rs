@@ -247,22 +247,37 @@ fn prec1(input: Input) -> ParseResult<Expr> {
 }
 
 fn prec2(input: Input) -> ParseResult<Expr> {
-    fold_many0(
+    let range_op = alt((
+        map(tk(DoublePeriod), |_| RangeOp::Exclusive),
+        map(tk(DoublePeriodEquals), |_| RangeOp::Inclusive),
+    ));
+
+    alt((
+        map(
+            tuple((opt(prec3), range_op, opt(prec3))),
+            |(lhs, op, rhs)| Expr::RangeOp(lhs.map(Box::new), op, rhs.map(Box::new)),
+        ),
         prec3,
-        prefixed(tk(DoubleOr), prec3),
-        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::Or, Box::new(rhs)),
-    )(input)
+    ))(input)
 }
 
 fn prec3(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec4,
-        prefixed(tk(DoubleAnd), prec4),
-        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::And, Box::new(rhs)),
+        prefixed(tk(DoubleOr), prec4),
+        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::Or, Box::new(rhs)),
     )(input)
 }
 
 fn prec4(input: Input) -> ParseResult<Expr> {
+    fold_many0(
+        prec5,
+        prefixed(tk(DoubleAnd), prec5),
+        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::And, Box::new(rhs)),
+    )(input)
+}
+
+fn prec5(input: Input) -> ParseResult<Expr> {
     let compare_op = alt((
         map(tk(DoubleEquals), |_| CompareOp::Eq),
         map(tk(NotEquals), |_| CompareOp::Ne),
@@ -274,68 +289,54 @@ fn prec4(input: Input) -> ParseResult<Expr> {
 
     alt((
         map(
-            tuple((prec5, compare_op, prec5)),
+            tuple((prec6, compare_op, prec6)),
             |(lhs, op, rhs)| Expr::CompareOp(Box::new(lhs), op, Box::new(rhs)),
         ),
-        prec5,
-    ))(input)
-}
-
-fn prec5(input: Input) -> ParseResult<Expr> {
-    fold_many0(
         prec6,
-        prefixed(tk(Or), prec6),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Or, Box::new(rhs)),
-    )(input)
+    ))(input)
 }
 
 fn prec6(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec7,
-        prefixed(tk(Tilde), prec7),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Xor, Box::new(rhs)),
+        prefixed(tk(Or), prec7),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Or, Box::new(rhs)),
     )(input)
 }
 
 fn prec7(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec8,
-        prefixed(tk(And), prec8),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::And, Box::new(rhs)),
+        prefixed(tk(Tilde), prec8),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Xor, Box::new(rhs)),
     )(input)
 }
 
 fn prec8(input: Input) -> ParseResult<Expr> {
+    fold_many0(
+        prec9,
+        prefixed(tk(And), prec9),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::And, Box::new(rhs)),
+    )(input)
+}
+
+fn prec9(input: Input) -> ParseResult<Expr> {
     let shift_op = alt((
         map(tk(Shl), |_| BitwiseOp::Shl),
         map(tk(Shr), |_| BitwiseOp::Shr),
     ));
 
     fold_many0(
-        prec9,
-        tuple((shift_op, prec9)),
-        |lhs, (op, rhs)| Expr::BitwiseOp(Box::new(lhs), op, Box::new(rhs)),
-    )(input)
-}
-
-fn prec9(input: Input) -> ParseResult<Expr> {
-    let numeric_op = alt((
-        map(tk(Plus), |_| NumericOp::Add),
-        map(tk(Minus), |_| NumericOp::Sub),
-    ));
-
-    fold_many0(
         prec10,
-        tuple((numeric_op, prec10)),
-        |lhs, (op, rhs)| Expr::NumericOp(Box::new(lhs), op, Box::new(rhs)),
+        tuple((shift_op, prec10)),
+        |lhs, (op, rhs)| Expr::BitwiseOp(Box::new(lhs), op, Box::new(rhs)),
     )(input)
 }
 
 fn prec10(input: Input) -> ParseResult<Expr> {
     let numeric_op = alt((
-        map(tk(Star), |_| NumericOp::Mul),
-        map(tk(Slash), |_| NumericOp::Div),
-        map(tk(Percent), |_| NumericOp::Rem),
+        map(tk(Plus), |_| NumericOp::Add),
+        map(tk(Minus), |_| NumericOp::Sub),
     ));
 
     fold_many0(
@@ -346,22 +347,36 @@ fn prec10(input: Input) -> ParseResult<Expr> {
 }
 
 fn prec11(input: Input) -> ParseResult<Expr> {
+    let numeric_op = alt((
+        map(tk(Star), |_| NumericOp::Mul),
+        map(tk(Slash), |_| NumericOp::Div),
+        map(tk(Percent), |_| NumericOp::Rem),
+    ));
+
     fold_many0(
         prec12,
-        prefixed(kw(Kw::As), ty),
-        |lhs, ty| Expr::CastAs(Box::new(lhs), ty),
+        tuple((numeric_op, prec12)),
+        |lhs, (op, rhs)| Expr::NumericOp(Box::new(lhs), op, Box::new(rhs)),
     )(input)
 }
 
 fn prec12(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec13,
-        prefixed(tk(Caret), prec13),
-        |lhs, rhs| Expr::NumericOp(Box::new(lhs), NumericOp::Pow, Box::new(rhs)),
+        prefixed(kw(Kw::As), ty),
+        |lhs, ty| Expr::CastAs(Box::new(lhs), ty),
     )(input)
 }
 
 fn prec13(input: Input) -> ParseResult<Expr> {
+    fold_many0(
+        prec14,
+        prefixed(tk(Caret), prec14),
+        |lhs, rhs| Expr::NumericOp(Box::new(lhs), NumericOp::Pow, Box::new(rhs)),
+    )(input)
+}
+
+fn prec14(input: Input) -> ParseResult<Expr> {
     let unary_op = alt((
         map(tk(Plus), |_| UnaryOp::Pos),
         map(tk(Minus), |_| UnaryOp::Neg),
@@ -369,7 +384,7 @@ fn prec13(input: Input) -> ParseResult<Expr> {
     ));
 
     map(
-        tuple((opt(unary_op), prec14)),
+        tuple((opt(unary_op), prec15)),
         |(op, expr)| match op {
             Some(op) => Expr::UnaryOp(op, Box::new(expr)),
             None => expr,
@@ -377,7 +392,7 @@ fn prec13(input: Input) -> ParseResult<Expr> {
     )(input)
 }
 
-fn prec14(input: Input) -> ParseResult<Expr> {
+fn prec15(input: Input) -> ParseResult<Expr> {
     enum Postfix {
         FuncCall(Vec<Expr>),
         Index(Expr),
@@ -389,7 +404,7 @@ fn prec14(input: Input) -> ParseResult<Expr> {
     ));
 
     fold_many0(
-        prec15,
+        prec16,
         postfix_op,
         |value, op| match op {
             Postfix::FuncCall(args) => Expr::Call(Box::new(FuncCall {value, args})),
@@ -398,11 +413,11 @@ fn prec14(input: Input) -> ParseResult<Expr> {
     )(input)
 }
 
-fn prec15(input: Input) -> ParseResult<Expr> {
+fn prec16(input: Input) -> ParseResult<Expr> {
     let postfix_op = tuple((tk(Period), ident, opt(parens(comma_separated(expr)))));
 
     fold_many0(
-        prec16,
+        prec17,
         postfix_op,
         |lhs, op| match op {
             (_, method_name, Some(args)) => {
@@ -415,7 +430,7 @@ fn prec15(input: Input) -> ParseResult<Expr> {
     )(input)
 }
 
-fn prec16(input: Input) -> ParseResult<Expr> {
+fn prec17(input: Input) -> ParseResult<Expr> {
     alt((
         parens(expr),
         map(block, |block| Expr::Block(Box::new(block))),

@@ -131,6 +131,7 @@ pub struct VarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Assign(Box<Assign>),
+    RangeOp(Option<Box<Expr>>, RangeOp, Option<Box<Expr>>),
     BoolOp(Box<Expr>, BoolOp, Box<Expr>),
     CompareOp(Box<Expr>, CompareOp, Box<Expr>),
     BitwiseOp(Box<Expr>, BitwiseOp, Box<Expr>),
@@ -155,6 +156,14 @@ pub enum Expr {
     UnitLiteral,
     SelfValue,
     Path(Path),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RangeOp {
+    /// The `..` operator
+    Exclusive,
+    /// The `..=` operator
+    Inclusive,
 }
 
 /// All boolean binary operators
