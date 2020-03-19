@@ -118,6 +118,8 @@ pub fn map<I: ParserInput, O1, O2, F, G>(mut f: F, mut mapper: G) -> impl FnMut(
 }
 
 /// Alternates between two parsers to produce a list
+///
+/// Allows a trailing separator
 pub fn separated0<I: ParserInput, O, O2, F, S>(
     mut sep: S,
     mut f: F,

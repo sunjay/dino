@@ -117,7 +117,25 @@ fn import_name(input: Input) -> ParseResult<ImportName> {
 }
 
 fn struct_decl(input: Input) -> ParseResult<Struct> {
-    todo!()
+    map(
+        tuple((
+            kw(Kw::Struct),
+            ident,
+            surrounded(
+                tk(OpenDelim(Brace)),
+                separated0(tk(Comma), struct_field),
+                tk(CloseDelim(Brace)),
+            ),
+        )),
+        |(_, name, fields)| Struct {name, fields},
+    )(input)
+}
+
+fn struct_field(input: Input) -> ParseResult<StructField> {
+    map(
+        tuple((ident, tk(Colon), ty)),
+        |(name, _, ty)| StructField {name, ty},
+    )(input)
 }
 
 fn impl_decl(input: Input) -> ParseResult<Impl> {
@@ -129,6 +147,10 @@ fn func_decl(input: Input) -> ParseResult<Function> {
 }
 
 fn path_component(input: Input) -> ParseResult<PathComponent> {
+    todo!()
+}
+
+fn ty(input: Input) -> ParseResult<Ty> {
     todo!()
 }
 
