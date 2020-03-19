@@ -75,13 +75,16 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSig {
     pub params: Vec<FuncParam>,
-    pub return_type: Ty,
+    pub return_type: Option<Ty>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FuncParam {
-    pub name: Ident,
-    pub ty: Ty,
+pub enum FuncParam {
+    SelfValue,
+    Named {
+        name: Ident,
+        ty: Ty,
+    },
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]

@@ -138,6 +138,27 @@ fn impl_decl(input: Input) -> ParseResult<Impl> {
 }
 
 fn func_decl(input: Input) -> ParseResult<Function> {
+    map(
+        tuple((kw(Kw::Fn), ident, func_sig, block)),
+        |(_, name, sig, body)| Function {name, sig, body},
+    )(input)
+}
+
+fn func_sig(input: Input) -> ParseResult<FuncSig> {
+    map(
+        tuple((parens(comma_separated(func_param)), opt(prefixed(tk(RArrow), ty)))),
+        |(params, return_type)| FuncSig {params, return_type},
+    )(input)
+}
+
+fn func_param(input: Input) -> ParseResult<FuncParam> {
+    alt((
+        map(kw(Kw::SelfValue), |_| FuncParam::SelfValue),
+        map(tuple((ident, tk(Colon), ty)), |(name, _, ty)| FuncParam::Named {name, ty}),
+    ))(input)
+}
+
+fn block(input: Input) -> ParseResult<Block> {
     todo!()
 }
 
@@ -160,6 +181,12 @@ fn comma_separated<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, V
     where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
 {
     separated0(tk(Comma), f)
+}
+
+fn parens<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, O>
+    where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
+{
+    surrounded(tk(OpenDelim(Paren)), f, tk(CloseDelim(Paren)))
 }
 
 fn braces<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, O>

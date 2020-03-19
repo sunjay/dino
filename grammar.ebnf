@@ -15,7 +15,7 @@ impl_decl ::= 'impl' ty '{' func_decl* '}'
 func_decl ::= 'fn' ident func_sig block
 func_sig ::= '(' func_params ')' ('->' ty)?
 func_params ::= (func_param ',')* func_param?
-func_param ::= ident ':' ty
+func_param ::= 'self' | ident ':' ty
 
 block ::= '{' (decl | stmt)* expr? '}'
 stmt ::= cond | while_loop | var_decl | expr ';'
