@@ -96,11 +96,7 @@ fn import_path_selection(input: Input) -> ParseResult<ImportSelection> {
 }
 
 fn import_names(input: Input) -> ParseResult<Vec<ImportName>> {
-    surrounded(
-        tk(OpenDelim(Brace)),
-        separated0(tk(Comma), import_name),
-        tk(CloseDelim(Brace)),
-    )(input)
+    braces(comma_separated(import_name))(input)
 }
 
 fn import_name(input: Input) -> ParseResult<ImportName> {
@@ -121,11 +117,7 @@ fn struct_decl(input: Input) -> ParseResult<Struct> {
         tuple((
             kw(Kw::Struct),
             ident,
-            surrounded(
-                tk(OpenDelim(Brace)),
-                separated0(tk(Comma), struct_field),
-                tk(CloseDelim(Brace)),
-            ),
+            braces(comma_separated(struct_field)),
         )),
         |(_, name, fields)| Struct {name, fields},
     )(input)
@@ -139,7 +131,10 @@ fn struct_field(input: Input) -> ParseResult<StructField> {
 }
 
 fn impl_decl(input: Input) -> ParseResult<Impl> {
-    todo!()
+    map(
+        tuple((kw(Kw::Impl), ty, braces(many0(func_decl)))),
+        |(_, self_ty, methods)| Impl {self_ty, methods},
+    )(input)
 }
 
 fn func_decl(input: Input) -> ParseResult<Function> {
@@ -159,6 +154,18 @@ fn ident(input: Input) -> ParseResult<ast::Ident> {
         tk(Ident),
         |token| token.unwrap_ident().clone(),
     )(input)
+}
+
+fn comma_separated<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, Vec<O>>
+    where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
+{
+    separated0(tk(Comma), f)
+}
+
+fn braces<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, O>
+    where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
+{
+    surrounded(tk(OpenDelim(Brace)), f, tk(CloseDelim(Brace)))
 }
 
 fn kw(keyword: token::Keyword) -> impl FnMut(Input) -> ParseResult<&Token> {
