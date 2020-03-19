@@ -265,7 +265,7 @@ fn prec3(input: Input) -> ParseResult<Expr> {
 fn prec4(input: Input) -> ParseResult<Expr> {
     let compare_op = alt((
         map(tk(DoubleEquals), |_| CompareOp::Eq),
-        map(tk(NotEqual), |_| CompareOp::Ne),
+        map(tk(NotEquals), |_| CompareOp::Ne),
         map(tk(LessThan), |_| CompareOp::Lt),
         map(tk(LessThanEquals), |_| CompareOp::Le),
         map(tk(GreaterThan), |_| CompareOp::Gt),

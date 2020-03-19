@@ -45,7 +45,12 @@ impl<'a> Lexer<'a> {
             (b'{', _) => self.byte_token(start, OpenDelim(Brace)),
             (b'}', _) => self.byte_token(start, CloseDelim(Brace)),
 
+            (b'.', Some(b'.')) if self.scanner.peek2() == Some(b'=') => {
+                self.next2_token(start, DoublePeriodEquals)
+            },
+            (b'.', Some(b'.')) => self.next_token(start, DoublePeriod),
             (b'.', _) => self.byte_token(start, Period),
+
             (b',', _) => self.byte_token(start, Comma),
             (b';', _) => self.byte_token(start, Semicolon),
 
@@ -56,7 +61,7 @@ impl<'a> Lexer<'a> {
 
             (b'=', Some(b'=')) => self.next_token(start, DoubleEquals),
             (b'=', _) => self.byte_token(start, Equals),
-            (b'!', Some(b'=')) => self.next_token(start, NotEqual),
+            (b'!', Some(b'=')) => self.next_token(start, NotEquals),
             (b'!', _) => self.byte_token(start, Not),
 
             (b'<', Some(b'=')) => self.next_token(start, LessThanEquals),
@@ -364,6 +369,11 @@ impl<'a> Lexer<'a> {
 
     fn next_token(&mut self, start: usize, kind: TokenKind) -> Token {
         let span = self.scanner.next_span(start);
+        Token {kind, span, data: None}
+    }
+
+    fn next2_token(&mut self, start: usize, kind: TokenKind) -> Token {
+        let span = self.scanner.next2_span(start);
         Token {kind, span, data: None}
     }
 

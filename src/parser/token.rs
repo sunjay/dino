@@ -51,6 +51,11 @@ pub enum TokenKind {
     /// The `:` symbol
     Colon,
 
+    /// The `..`
+    DoublePeriod,
+    /// The `..=`
+    DoublePeriodEquals,
+
     /// The `=` symbol
     Equals,
 
@@ -61,7 +66,7 @@ pub enum TokenKind {
     /// The `==` symbol
     DoubleEquals,
     /// The `!=` symbol
-    NotEqual,
+    NotEquals,
     /// The `>=` symbol
     GreaterThanEquals,
     /// The `>` symbol
