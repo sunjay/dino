@@ -39,16 +39,17 @@ prec2 ::= prec3 ('||' prec3)*
 prec3 ::= prec4 ('&&' prec4)*
 prec4 ::= prec5 ('==' | '!=' | '<' | '>' | '<=' | '>=') prec5 | prec5
 prec5 ::= prec6 ('|' prec6)*
-prec6 ::= prec7 ('^' prec7)*
+prec6 ::= prec7 ('~' prec7)*
 prec7 ::= prec8 ('&' prec8)*
 prec8 ::= prec9 (('<<' | '>>') prec9)*
 prec9 ::= prec10 (('+' | '-') prec10)*
 prec10 ::= prec11 (('*' | '/' | '%') prec11)*
-prec11 ::= prec12 ('as' prec12)*
-prec12 ::= ('-' | '!')? prec13
-prec13 ::= prec14 ('(' func_args ')' | '[' expr ']')*
-prec14 ::= prec15 ('.' ident ('(' func_args ')')?)*
-prec15 ::= '(' expr ')' | cond | struct_lit | bstr_lit | int_lit |
+prec11 ::= prec12 ('as' ty)*
+prec12 ::= prec13 ('^' prec13)*
+prec13 ::= ('+' | '-' | '!')? prec14
+prec14 ::= prec15 ('(' func_args ')' | '[' expr ']')*
+prec15 ::= prec16 ('.' ident ('(' func_args ')')?)*
+prec16 ::= '(' expr ')' | block | cond | struct_lit | bstr_lit | int_lit |
            real_lit | complex_lit | bool_lit | unit_lit | 'self' | path
 
 cond ::= 'if' expr block ('else' 'if' expr block)* ('else' block)?

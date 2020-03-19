@@ -97,6 +97,42 @@ pub fn many1<I: ParserInput, O, F>(
     }
 }
 
+/// Applies the initial parser, then another parser until it fails. The results are accumulated
+/// using the given function which takes the result so far, and each result produced.
+pub fn fold_many0<I: ParserInput, O, R, F, G, H>(
+    mut init: G,
+    mut f: F,
+    mut folder: H,
+) -> impl FnMut(I) -> IResult<I, R, <I as ParserInput>::Item>
+where G: FnMut(I) -> IResult<I, R, <I as ParserInput>::Item>,
+      F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+      H: FnMut(R, O) -> R,
+{
+    move |input| {
+        let (mut input, mut final_output) = init(input)?;
+        loop {
+            match f(input.clone()) {
+                Ok((inp, output)) => {
+                    final_output = folder(final_output, output);
+                    if input.relative_position_to(&inp) == RelativePosition::Same {
+                        panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many0");
+                    }
+                    input = inp;
+                },
+
+                Err((inp, err)) => {
+                    // propagate the error if the input advanced past the start
+                    if inp.has_advanced_past(&input) {
+                        return Err((inp, err));
+                    }
+                    break;
+                }
+            }
+        }
+        Ok((input, final_output))
+    }
+}
+
 /// Creates an optional parser. Returns `None` if the given parser produces an error.
 pub fn opt<I: ParserInput, O, F>(
     mut f: F,

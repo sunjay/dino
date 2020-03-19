@@ -76,8 +76,16 @@ pub enum TokenKind {
 
     /// The `&` symbol
     And,
+    /// The `~` symbol
+    Tilde,
     /// The `|` symbol
     Or,
+    /// The `^` symbol
+    Caret,
+    /// The `<<` symbol
+    Shl,
+    /// The `>>` symbol
+    Shr,
     /// The `+` symbol
     Plus,
     /// The `-` symbol
@@ -88,12 +96,6 @@ pub enum TokenKind {
     Slash,
     /// The `%` symbol
     Percent,
-    /// The `^` symbol
-    Caret,
-    /// The `<<` symbol
-    Shl,
-    /// The `>>` symbol
-    Shr,
 
     /// A placeholder for a def which could not be computed; this is
     /// propagated to avoid useless error messages.

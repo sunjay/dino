@@ -71,6 +71,9 @@ impl<'a> Lexer<'a> {
             (b'|', Some(b'|')) => self.next_token(start, DoubleOr),
             (b'|', _) => self.byte_token(start, Or),
 
+            (b'~', _) => self.byte_token(start, Tilde),
+            (b'^', _) => self.byte_token(start, Caret),
+
             (b'+', _) => self.byte_token(start, Plus),
             (b'-', _) => self.byte_token(start, Minus),
             (b'*', _) => self.byte_token(start, Star),
@@ -78,7 +81,6 @@ impl<'a> Lexer<'a> {
             // ignored
             (b'/', _) => self.byte_token(start, Slash),
             (b'%', _) => self.byte_token(start, Percent),
-            (b'^', _) => self.byte_token(start, Caret),
 
             (b'b', Some(b'"')) => {
                 // Skip the quote

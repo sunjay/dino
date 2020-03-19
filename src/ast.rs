@@ -131,40 +131,108 @@ pub struct VarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Assign(Box<Assign>),
+    BoolOp(Box<Expr>, BoolOp, Box<Expr>),
+    CompareOp(Box<Expr>, CompareOp, Box<Expr>),
+    BitwiseOp(Box<Expr>, BitwiseOp, Box<Expr>),
+    NumericOp(Box<Expr>, NumericOp, Box<Expr>),
+    UnaryOp(UnaryOp, Box<Expr>),
+    CastAs(Box<Expr>, Ty),
     MethodCall(Box<MethodCall>),
     FieldAccess(Box<FieldAccess>),
     Cond(Box<Cond>),
-    Call(FuncCall),
+    Call(Box<FuncCall>),
+    Index(Box<Index>),
     Return(Option<Box<Expr>>),
     Break,
     Continue,
+    Block(Box<Block>),
     StructLiteral(StructLiteral),
-    BStrLiteral(Vec<u8>),
+    BStrLiteral(Arc<[u8]>),
     IntegerLiteral(IntegerLiteral),
     RealLiteral(f64),
     ComplexLiteral(f64),
     BoolLiteral(bool),
     UnitLiteral,
-    SelfLiteral,
-    Path(IdentPath),
-    /// Either a variable or function in the module scope
-    Var(Ident),
+    SelfValue,
+    Path(Path),
+}
+
+/// All boolean binary operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BoolOp {
+    /// The `||` operator
+    Or,
+    /// The `&&` operator
+    And,
+}
+
+/// All comparison operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompareOp {
+    /// The `==` operator
+    Eq,
+    /// The `!=` operator
+    Ne,
+    /// The `<` operator
+    Lt,
+    /// The `<=` operator
+    Le,
+    /// The `>` operator
+    Gt,
+    /// The `>=` operator
+    Ge,
+}
+
+/// All bitwise operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BitwiseOp {
+    /// The `|` operator (bitwise OR)
+    Or,
+    /// The `~` operator (bitwise XOR)
+    Xor,
+    /// The `&` operator (bitwise AND)
+    And,
+    /// The `<<` operator (shift left)
+    Shl,
+    /// The `>>` operator (shift right)
+    Shr,
+}
+
+/// All numeric operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NumericOp {
+    /// The `+` operator
+    Add,
+    /// The `-` operator
+    Sub,
+    /// The `*` operator
+    Mul,
+    /// The `/` operator
+    Div,
+    /// The `%` operator
+    Rem,
+    /// The `^` operator
+    Pow,
+}
+
+/// All unary operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnaryOp {
+    /// The `+` operator
+    Pos,
+    /// The `-` operator
+    Neg,
+    /// The `!` operator
+    Not,
 }
 
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
     /// The left-hand expression to assign a value to
-    pub lhs: LValue,
+    pub lhs: Expr,
     /// The expression for the value to assign to the left-hand side
-    pub expr: Expr,
-}
-
-/// Expressions that can be on the left-hand side of assignment
-#[derive(Debug, Clone, PartialEq)]
-pub enum LValue {
-    FieldAccess(FieldAccess),
-    Var(Ident),
+    pub rhs: Expr,
 }
 
 /// A method call in the form `<expr> . <call-expr>`
@@ -200,8 +268,18 @@ pub struct Cond {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncCall {
-    pub func_name: IdentPath,
+    /// The value being called
+    pub value: Expr,
+    /// The arguments passed to the value
     pub args: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Index {
+    /// The value being indexed
+    pub value: Expr,
+    /// The index expression
+    pub expr: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,23 +316,23 @@ pub enum LiteralSuffix {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy {
     SelfType,
-    Named(IdentPath),
+    Named(Path),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
     Unit,
     SelfType,
-    Named(IdentPath),
+    Named(Path),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IdentPath {
+pub struct Path {
     /// The components of the path (guaranteed to be non-empty)
     pub components: Vec<PathComponent>,
 }
 
-impl fmt::Display for IdentPath {
+impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Self {components} = self;
 
