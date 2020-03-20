@@ -31,7 +31,7 @@ impl fmt::Display for LitKind {
         match self {
             Integer => write!(f, "an integer literal"),
             Real => write!(f, "a real number literal"),
-            Complex => write!(f, "a a complex number literal"),
+            Complex => write!(f, "a complex number literal"),
             BStr => write!(f, "a byte string literal"),
         }
     }
@@ -276,7 +276,7 @@ macro_rules! keywords {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 use Keyword::*;
                 write!(f, "{}", match self {
-                    $($variant => $kw,)*
+                    $($variant => concat!("`", $kw, "`"),)*
                 })
             }
         }
