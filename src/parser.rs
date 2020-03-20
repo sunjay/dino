@@ -531,11 +531,14 @@ fn complex_lit(input: Input) -> ParseResult<f64> {
 }
 
 fn bool_lit(input: Input) -> ParseResult<bool> {
-    todo!()
+    alt((
+        map(kw(Kw::True), |_| true),
+        map(kw(Kw::False), |_| false),
+    ))(input)
 }
 
 fn unit_lit(input: Input) -> ParseResult<()> {
-    todo!()
+    map(tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))), |_| ())(input)
 }
 
 fn path(input: Input) -> ParseResult<Path> {
