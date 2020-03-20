@@ -16,6 +16,7 @@ use crate::ast;
 use crate::ast::*;
 use crate::span::Span;
 use crate::diagnostics::Diagnostics;
+use crate::source_files::FileSource;
 
 use combinators::*;
 
@@ -31,8 +32,8 @@ impl InputItem for Token {
     type Expected = TokenKind;
 }
 
-pub fn parse_module(source: &str, diag: &Diagnostics) -> Module {
-    let scanner = Scanner::new(source.as_bytes());
+pub fn parse_module(source: FileSource, diag: &Diagnostics) -> Module {
+    let scanner = Scanner::new(source);
     let lexer = Lexer::new(scanner, diag);
     let tokens = collect_tokens(lexer);
     let module = module(&tokens);

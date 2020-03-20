@@ -1,14 +1,18 @@
 mod writer;
 
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use termcolor::ColorChoice;
+
+use crate::source_files::SourceFiles;
 
 use writer::DiagnosticsWriter;
 
 pub struct Diagnostics {
+    source_files: Arc<RwLock<SourceFiles>>,
     #[cfg(not(test))]
     out: Mutex<termcolor::StandardStream>,
     #[cfg(test)]
@@ -20,8 +24,9 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
-    pub fn new(color_choice: ColorChoice) -> Self {
+    pub fn new(source_files: Arc<RwLock<SourceFiles>>, color_choice: ColorChoice) -> Self {
         Self {
+            source_files,
             #[cfg(not(test))]
             out: Mutex::new(termcolor::StandardStream::stderr(color_choice)),
             #[cfg(test)]

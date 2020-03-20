@@ -398,7 +398,10 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
 
+    use parking_lot::RwLock;
+
     use crate::span::Span;
+    use crate::source_files::SourceFiles;
 
     macro_rules! t {
         ($kind:expr) => (
@@ -446,8 +449,11 @@ mod tests {
 
     macro_rules! expect_token {
         ($source:literal, $expected:expr) => {
-            let diag = Diagnostics::new(termcolor::ColorChoice::Always);
-            let scanner = Scanner::new($source);
+            let source_files = Arc::new(RwLock::new(SourceFiles::default()));
+            let root_file = source_files.write().add_source("test.rs", $source);
+            let diag = Diagnostics::new(source_files.clone(), termcolor::ColorChoice::Auto);
+            let files = source_files.read();
+            let scanner = Scanner::new(files.file(root_file));
             let mut lexer = Lexer::new(scanner, &diag);
             let token = lexer.next();
             let expected = $expected;
@@ -460,8 +466,11 @@ mod tests {
 
     macro_rules! expect_tokens {
         ($source:literal, $expected:expr) => {
-            let diag = Diagnostics::new(termcolor::ColorChoice::Always);
-            let scanner = Scanner::new($source);
+            let source_files = Arc::new(RwLock::new(SourceFiles::default()));
+            let root_file = source_files.write().add_source("test.rs", $source);
+            let diag = Diagnostics::new(source_files.clone(), termcolor::ColorChoice::Auto);
+            let files = source_files.read();
+            let scanner = Scanner::new(files.file(root_file));
             let mut lexer = Lexer::new(scanner, &diag);
             let expected_tokens: &[Token] = $expected;
             for expected_token in expected_tokens {

@@ -1,15 +1,16 @@
 use std::str;
 
 use crate::span::Span;
+use crate::source_files::FileSource;
 
 #[derive(Debug)]
 pub struct Scanner<'a> {
-    source: &'a [u8],
+    source: FileSource<'a>,
     current: usize,
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a [u8]) -> Self {
+    pub fn new(source: FileSource<'a>) -> Self {
         Self {
             source,
             current: 0,
@@ -38,13 +39,13 @@ impl<'a> Scanner<'a> {
 
     /// Returns the next character in the source text, but does not advance the scanner
     pub fn peek(&self) -> Option<u8> {
-        self.source.get(self.current).copied()
+        self.source.get(self.current)
     }
 
     /// Returns the next character after the next character in the source text, but does not
     /// advance the scanner
     pub fn peek2(&self) -> Option<u8> {
-        self.source.get(self.current+1).copied()
+        self.source.get(self.current+1)
     }
 
     /// Creates a new span that is empty (from `index` to `index`)
@@ -88,7 +89,7 @@ impl<'a> Scanner<'a> {
     ///
     /// Panics if the sliced source bytes are not valid unicode.
     pub fn slice(&self, start: usize, end: usize) -> &'a str {
-        str::from_utf8(&self.source[start..end])
+        str::from_utf8(self.source.slice(start..end))
             .expect("bug: not valid unicode")
     }
 }

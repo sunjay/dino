@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::ops::{Index, Range};
+use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FileHandle {
@@ -11,16 +11,16 @@ pub struct FileHandle {
     len: usize,
 }
 
-/// The slice of bytes for a file, indexed from `start_index()` onwards
+/// The source for a file, represented as a slice of bytes and indexed from `start_index()` onwards
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FileSlice<'a> {
+pub struct FileSource<'a> {
     /// A slice of `SourceFiles::source`
     bytes: &'a [u8],
     /// The offset at which the slice of bytes was extracted from `SourceFiles::source`
     offset: usize,
 }
 
-impl<'a> FileSlice<'a> {
+impl<'a> FileSource<'a> {
     /// Returns the first index into this slice
     pub fn start_index(&self) -> usize {
         self.offset
@@ -39,12 +39,9 @@ impl<'a> FileSlice<'a> {
         let index = index - self.offset;
         self.bytes.get(index).copied()
     }
-}
 
-impl<'a> Index<Range<usize>> for FileSlice<'a> {
-    type Output = [u8];
-
-    fn index(&self, range: Range<usize>) -> &Self::Output {
+    /// Slices from the bytes of this file's source
+    pub fn slice(&self, range: Range<usize>) -> &'a [u8] {
         let Self {bytes, offset} = self;
         let Range {start, end} = range;
 
@@ -82,9 +79,8 @@ impl SourceFiles {
 
     /// Adds the given source to the set of source files. Returns a handle to that file's
     /// contents.
-    pub fn add_source<P: AsRef<Path>, S: AsRef<[u8]>>(&mut self, path: P, source: S) -> FileHandle {
+    pub fn add_source<P: AsRef<Path>>(&mut self, path: P, source: &[u8]) -> FileHandle {
         let path = path.as_ref();
-        let source = source.as_ref();
 
         let start = self.source.len();
         self.paths.push((path.to_path_buf(), start));
@@ -103,10 +99,10 @@ impl SourceFiles {
         path
     }
 
-    /// Returns a file slice for the given file handle
-    pub fn file(&self, handle: FileHandle) -> FileSlice {
+    /// Returns the source for the given file handle
+    pub fn file(&self, handle: FileHandle) -> FileSource {
         let FileHandle {start, len} = handle;
-        FileSlice {
+        FileSource {
             bytes: &self.source[start..start+len],
             offset: start,
         }
