@@ -266,7 +266,7 @@ macro_rules! keywords {
         }
 
         impl PartialOrd for Keyword {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
                 // No inherent ordering between keywords
                 Some(Ordering::Equal)
             }
