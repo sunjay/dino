@@ -6,11 +6,11 @@ mod constraints;
 mod solve;
 mod tyir;
 
-use std::sync::RwLock;
 use std::collections::HashMap;
 
 use snafu::Snafu;
 use rayon::prelude::*;
+use parking_lot::RwLock;
 
 use crate::{ast2, ir};
 use crate::resolve2::{ModuleDecls, ProgramDecls, DeclMap, TyId};
@@ -126,7 +126,7 @@ impl<'a> ModuleTycheck<'a> {
             methods.into_par_iter().map(move |(sig, method)| {
                 let method = self.infer_and_check_method(self_ty, sig, method)?;
                 //TODO: Is method.name right here??
-                let mut type_data = types[&self_ty].write().expect("bug: lock was poisoned");
+                let mut type_data = types[&self_ty].write();
                 type_data.methods.insert(method.name, method);
                 Ok(())
             })
@@ -139,7 +139,7 @@ impl<'a> ModuleTycheck<'a> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let types = types.into_par_iter()
-            .map(|(_, struct_decl)| struct_decl.into_inner().expect("bug: lock was poisoned"))
+            .map(|(_, struct_decl)| struct_decl.into_inner())
             .collect();
 
         Ok(ir::Module {types, functions})

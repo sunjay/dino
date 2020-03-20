@@ -189,7 +189,7 @@ impl<'a> ModuleWalker<'a> {
 
     fn insert_struct_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) {
         // If the struct fields are not currently empty, we must be walking a duplicate decl
-        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+        let mut store = self.def_store.lock();
         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
         if !ty_info.fields.is_empty() {
             // Ignore this decl
@@ -200,7 +200,7 @@ impl<'a> ModuleWalker<'a> {
             let hir::StructField {name: name_ident, ty} = field;
             let ty = self.resolve_ty(ty, Some(self_ty));
 
-            let mut store = self.def_store.lock().expect("bug: lock poisoned");
+            let mut store = self.def_store.lock();
             let ty_info = store.data_mut(self_ty).unwrap_type_mut();
             let struct_fields = ty_info.fields.struct_fields_mut();
             // Need to check that field names are unique
@@ -265,7 +265,7 @@ impl<'a> ModuleWalker<'a> {
                         };
 
                         // Insert into type info so the methods can be looked up by name later
-                        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+                        let mut store = self.def_store.lock();
                         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
                         if ty_info.methods.contains_key(method.name) {
                             self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
@@ -309,7 +309,7 @@ impl<'a> ModuleWalker<'a> {
 
         self.pop_scope();
 
-        let mut store = self.def_store.lock().expect("bug: lock poisoned");
+        let mut store = self.def_store.lock();
         match store.data_mut(name) {
             nir::DefData::Function(dsig@None) => {
                 *dsig = Some(sig.clone());
@@ -505,7 +505,7 @@ impl<'a> ModuleWalker<'a> {
 
         // All the fields in `fields` should be valid and unique, so make sure we have the right
         // amount of fields for this type
-        let store = self.def_store.lock().expect("bug: lock poisoned");
+        let store = self.def_store.lock();
         if let nir::DefData::Type(ty_info) = store.data(struct_name) {
             let expected_fields = ty_info.fields.struct_fields().len();
             if fields.len() != expected_fields {
@@ -533,7 +533,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_field_name(&mut self, self_ty: DefId, field_name: hir::Ident) -> Option<DefId> {
-        let store = self.def_store.lock().expect("bug: lock poisoned");
+        let store = self.def_store.lock();
         let ty_info = match store.data(self_ty) {
             nir::DefData::Type(ty_info) => ty_info,
             nir::DefData::Error => return None,

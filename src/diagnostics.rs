@@ -1,9 +1,9 @@
 mod writer;
 
 use std::borrow::Cow;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use parking_lot::Mutex;
 use termcolor::ColorChoice;
 
 use writer::DiagnosticsWriter;
@@ -45,14 +45,14 @@ impl Diagnostics {
 //TODO: Create the real diagnostics API
 impl Diagnostics {
     pub fn emit_error<'a>(&self, message: impl Into<Cow<'a, str>>) {
-        let mut out = self.out.lock().expect("lock poisoned");
+        let mut out = self.out.lock();
         out.write_error(message.into().as_ref()).expect("IO Error");
 
         self.errors.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn emit_warning<'a>(&self, message: impl Into<Cow<'a, str>>) {
-        let mut out = self.out.lock().expect("lock poisoned");
+        let mut out = self.out.lock();
         out.write_warning(message.into().as_ref()).expect("IO Error");
 
         self.warnings.fetch_add(1, Ordering::SeqCst);

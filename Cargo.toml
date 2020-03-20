@@ -12,6 +12,7 @@ nom = "5.0"
 snafu = "0.5"
 structopt = "0.3"
 terminator = "0.1"
+parking_lot = "0.10"
 maplit = "1.0"
 rayon = "1.2"
 rand = { version = "0.7", features = ["small_rng"] }

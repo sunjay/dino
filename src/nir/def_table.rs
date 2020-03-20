@@ -1,7 +1,8 @@
-use std::sync::MutexGuard;
 use std::hash::Hash;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+
+use parking_lot::MutexGuard;
 
 use super::{DefStoreSync, DefStore, DefId, DefData};
 
@@ -64,6 +65,6 @@ impl DefTable {
     }
 
     fn store(&self) -> MutexGuard<DefStore> {
-        self.store.lock().expect("bug: lock poisoned")
+        self.store.lock()
     }
 }
