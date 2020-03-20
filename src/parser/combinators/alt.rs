@@ -42,7 +42,7 @@ macro_rules! impl_alt {
                     Ok(value) => return Ok(value),
                     Err((input, err)) => match input.relative_position_to(&error_input) {
                         Behind => {},
-                        Same => total_error.expected.extend(err.expected),
+                        Same => total_error = total_error.merge(err),
                         Ahead => {
                             error_input = input;
                             total_error = err
@@ -53,7 +53,7 @@ macro_rules! impl_alt {
                     Ok(value) => return Ok(value),
                     Err((input, err)) => match input.relative_position_to(&error_input) {
                         Behind => {},
-                        Same => total_error.expected.extend(err.expected),
+                        Same => total_error = total_error.merge(err),
                         Ahead => {
                             error_input = input;
                             total_error = err

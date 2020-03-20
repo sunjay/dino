@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 /// An approximation of the max number of expected values in an error
 ///
 /// Should be set based on the expected max number of failed branches in an `alt`
-const MAX_EXPECTED: usize = 3;
+const MAX_EXPECTED: usize = 5;
 
 #[derive(Debug)]
 pub struct ParseError<T: InputItem> {
@@ -19,6 +19,27 @@ pub struct ParseError<T: InputItem> {
     pub expected: SmallVec<[<T as InputItem>::Expected; MAX_EXPECTED]>,
     /// The value that was actually found
     pub actual: T,
+}
+
+impl<T: InputItem> ParseError<T> {
+    pub fn merge(self, other: Self) -> Self {
+        let Self {mut expected, actual} = self;
+        let Self {expected: other_expected, actual: other_actual} = other;
+
+        assert!(actual == other_actual,
+            "bug: cannot merge errors where `actual` item is different");
+
+        for item in other_expected {
+            if !expected.contains(&item) {
+                expected.push(item);
+            }
+        }
+
+        Self {
+            expected,
+            actual,
+        }
+    }
 }
 
 /// On success, this represents the output and next input position after the output

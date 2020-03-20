@@ -10,9 +10,9 @@ pub enum RelativePosition {
     Ahead,
 }
 
-pub trait InputItem {
+pub trait InputItem: PartialEq {
     /// The type that represents an expected value of this item (for use in errors)
-    type Expected: fmt::Debug;
+    type Expected: fmt::Debug + PartialEq;
 }
 
 impl<'a, T: InputItem> InputItem for &'a T {
