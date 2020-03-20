@@ -62,7 +62,7 @@ bool_lit ::= 'true' | 'false'
 unit_lit ::= '(' ')'
 
 ty ::= '(' ')' | named_ty
-named_ty ::=  'Self' | path | ident
+named_ty ::=  'Self' | path
 
 path ::= (path_component '::')* path_component
 path_component ::= 'package' | 'Self' | 'self' | 'super' | ident

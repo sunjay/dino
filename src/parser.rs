@@ -541,6 +541,20 @@ fn unit_lit(input: Input) -> ParseResult<()> {
     map(tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))), |_| ())(input)
 }
 
+fn ty(input: Input) -> ParseResult<Ty> {
+    alt((
+        map(tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))), |_| Ty::Unit),
+        map(named_ty, |ty| ty.into()),
+    ))(input)
+}
+
+fn named_ty(input: Input) -> ParseResult<NamedTy> {
+    alt((
+        map(path, NamedTy::Named),
+        map(kw(Kw::SelfType), |_| NamedTy::SelfType),
+    ))(input)
+}
+
 fn path(input: Input) -> ParseResult<Path> {
     map(
         separated1(tk(DoubleColon), path_component),
@@ -556,14 +570,6 @@ fn path_component(input: Input) -> ParseResult<PathComponent> {
         map(kw(Kw::SelfValue), |_| PathComponent::SelfValue),
         map(kw(Kw::Super), |_| PathComponent::Super),
     ))(input)
-}
-
-fn ty(input: Input) -> ParseResult<Ty> {
-    todo!()
-}
-
-fn named_ty(input: Input) -> ParseResult<NamedTy> {
-    todo!()
 }
 
 fn ident(input: Input) -> ParseResult<ast::Ident> {

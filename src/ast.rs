@@ -321,6 +321,13 @@ pub enum LiteralSuffix {
     Real,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Ty {
+    Unit,
+    SelfType,
+    Named(Path),
+}
+
 /// A type explicitly named with an identifier or path (as opposited to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy {
@@ -328,11 +335,13 @@ pub enum NamedTy {
     Named(Path),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Ty {
-    Unit,
-    SelfType,
-    Named(Path),
+impl From<NamedTy> for Ty {
+    fn from(ty: NamedTy) -> Self {
+        match ty {
+            NamedTy::SelfType => Ty::SelfType,
+            NamedTy::Named(path) => Ty::Named(path),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
