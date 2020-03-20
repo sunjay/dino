@@ -22,7 +22,7 @@ struct CompilerOptions {
 fn main() -> Result<(), Terminator> {
     let CompilerOptions {program_path, output_path} = CompilerOptions::from_args();
 
-    let code = dino::compile_executable(&program_path)?;
+    let code = dino::compile_executable2(&program_path)?;
 
     // Check that the path and stem are valid
     let program_stem = match (program_path.file_stem(), program_path.extension()) {

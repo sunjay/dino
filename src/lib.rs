@@ -63,7 +63,7 @@ pub enum Error {
 }
 
 /// Compiles the given file into executable code
-pub fn compile_executable<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram, Error> {
+pub fn compile_executable2<P: AsRef<Path>>(path: P) -> Result<CExecutableProgram, Error> {
     let path = path.as_ref();
     let input_program = fs::read_to_string(path)
         .with_context(|| IOError {path: path.to_path_buf()})?;
