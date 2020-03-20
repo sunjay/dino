@@ -74,6 +74,7 @@ fn collect_tokens(mut lexer: Lexer) -> Vec<Token> {
     loop {
         let token = lexer.next();
         if token.kind == TokenKind::Eof {
+            tokens.push(token);
             break;
         }
         tokens.push(token);
