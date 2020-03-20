@@ -5,6 +5,8 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::span::Span;
+
 /// Represents a single module within the current package
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
@@ -389,4 +391,14 @@ impl fmt::Display for PathComponent {
     }
 }
 
-pub type Ident = Arc<str>;
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ident {
+    pub value: Arc<str>,
+    pub span: Span,
+}
+
+impl fmt::Display for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}

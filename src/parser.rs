@@ -575,7 +575,10 @@ fn path_component(input: Input) -> ParseResult<PathComponent> {
 fn ident(input: Input) -> ParseResult<ast::Ident> {
     map(
         tk(Ident),
-        |token| token.unwrap_ident().clone(),
+        |token| ast::Ident {
+            value: token.unwrap_ident().clone(),
+            span: token.span,
+        },
     )(input)
 }
 
