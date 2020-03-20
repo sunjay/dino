@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn real_literals_invalid() {
-        expect_tokens!(b"..0", &[t!(Period), t!(Period), int!(0)]);
+        expect_tokens!(b"..0", &[t!(DoublePeriod), int!(0)]);
         expect_tokens!(b"0.e", &[int!(0), t!(Period), ident!("e")]);
         expect_error!(b"0.0e");
         expect_error!(b"0.0e+");
