@@ -1,9 +1,10 @@
 use std::fmt;
 use std::sync::Arc;
+use std::cmp::Ordering;
 
 use crate::span::Span;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Delim {
     /// A round parenthesis (i.e., `(` or `)`).
     Paren,
@@ -13,7 +14,7 @@ pub enum Delim {
     Brace,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LitKind {
     /// An integer literal, e.g. `1`, `31`, `49928int`, `391real`
     Integer,
@@ -37,14 +38,14 @@ impl fmt::Display for LitKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TokenKind {
     /// An identifier
     Ident,
-    /// A keyword
-    Keyword(Keyword),
     /// A literal of some kind
     Literal(LitKind),
+    /// A keyword
+    Keyword(Keyword),
 
     /// An opening delimiter (e.g., `{`).
     OpenDelim(Delim),
@@ -259,9 +260,16 @@ impl Token {
 
 macro_rules! keywords {
     ($($variant:ident : $kw:literal)*) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, Hash)]
         pub enum Keyword {
             $($variant),*
+        }
+
+        impl PartialOrd for Keyword {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                // No inherent ordering between keywords
+                Some(Ordering::Equal)
+            }
         }
 
         pub(super) fn match_keyword(ident: &str) -> Option<Keyword> {

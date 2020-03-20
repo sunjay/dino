@@ -42,7 +42,9 @@ pub fn parse_module(source: &str, diag: &Diagnostics) -> Module {
             module
         },
         Err((input, err)) => {
-            let ParseError {expected, actual} = err;
+            let ParseError {mut expected, actual} = err;
+            expected.sort_unstable();
+
             let mut message = String::new();
             match &expected[..] {
                 [] => unreachable!("bug: no parser should produce zero expected tokens"),
