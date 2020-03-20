@@ -41,7 +41,7 @@ pub fn parse_module(source: &str, diag: &Diagnostics) -> Module {
             assert!(input.is_empty(), "bug: parser did not consume all input");
             module
         },
-        Err((input, err)) => {
+        Err((_, err)) => {
             let ParseError {mut expected, actual} = err;
             expected.sort_unstable();
 
