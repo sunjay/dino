@@ -531,8 +531,8 @@ fn struct_lit(input: Input) -> ParseResult<StructLiteral> {
 
 fn struct_field_value(input: Input) -> ParseResult<StructFieldValue> {
     map(
-        tuple((ident, tk(Colon), expr)),
-        |(name, _, value)| StructFieldValue {name, value},
+        tuple((ident, opt(prefixed(tk(Colon), expr)))),
+        |(name, value)| StructFieldValue {name, value},
     )(input)
 }
 

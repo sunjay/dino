@@ -312,7 +312,9 @@ pub struct StructFieldValue {
     /// The name of the field
     pub name: Ident,
     /// The expression being assigned to the field
-    pub value: Expr,
+    ///
+    /// If `None`, the expression is a variable with the same name as the field
+    pub value: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

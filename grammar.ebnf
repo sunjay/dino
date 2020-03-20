@@ -57,7 +57,7 @@ cond ::= 'if' expr block ('else' 'if' expr block)* ('else' block)?
 func_args ::= (expr ',')* expr?
 struct_lit ::= named_ty '{' struct_field_values '}'
 struct_field_values ::= (struct_field_value ',')* struct_field_value?
-struct_field_value ::= ident ':' expr
+struct_field_value ::= ident (':' expr)?
 bool_lit ::= 'true' | 'false'
 unit_lit ::= '(' ')'
 
