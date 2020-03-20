@@ -11,6 +11,7 @@ pub mod runtime;
 pub mod dino_std;
 pub mod gc_lib;
 
+pub mod source_files;
 pub mod span;
 pub mod diagnostics;
 pub mod fmt_ctx;
