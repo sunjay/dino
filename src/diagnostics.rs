@@ -1,64 +1,18 @@
-use std::io::{self, Write};
+mod writer;
+
 use std::borrow::Cow;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use termcolor::{StandardStream, ColorChoice, ColorSpec, Color, WriteColor};
+use termcolor::ColorChoice;
 
-trait DiagnosticsWriter {
-    fn write_error(&mut self, message: &str) -> io::Result<()>;
-    fn write_warning(&mut self, message: &str) -> io::Result<()>;
-}
-
-impl DiagnosticsWriter for StandardStream {
-    fn write_error(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
-
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(true))?;
-        write!(out, "error: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
-    }
-
-    fn write_warning(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
-
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(true))?;
-        write!(out, "warning: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
-    }
-}
-
-#[cfg(test)]
-struct NullWriter;
-
-#[cfg(test)]
-impl NullWriter {
-    pub fn new(_color_choice: ColorChoice) -> Self {
-        // This impl exists to silence an unused parameter warning
-        NullWriter
-    }
-}
-
-#[cfg(test)]
-impl DiagnosticsWriter for NullWriter {
-    fn write_error(&mut self, _message: &str) -> io::Result<()> {
-        Ok(())
-    }
-
-    fn write_warning(&mut self, _message: &str) -> io::Result<()> {
-        Ok(())
-    }
-}
+use writer::DiagnosticsWriter;
 
 pub struct Diagnostics {
     #[cfg(not(test))]
-    out: Mutex<StandardStream>,
+    out: Mutex<termcolor::StandardStream>,
     #[cfg(test)]
-    out: Mutex<NullWriter>,
+    out: Mutex<writer::NullWriter>,
     /// The number of errors that have been emitted
     errors: AtomicUsize,
     /// The number of warnings that have been emitted
@@ -69,9 +23,9 @@ impl Diagnostics {
     pub fn new(color_choice: ColorChoice) -> Self {
         Self {
             #[cfg(not(test))]
-            out: Mutex::new(StandardStream::stderr(color_choice)),
+            out: Mutex::new(termcolor::StandardStream::stderr(color_choice)),
             #[cfg(test)]
-            out: Mutex::new(NullWriter::new(color_choice)),
+            out: Mutex::new(writer::NullWriter::new(color_choice)),
             errors: AtomicUsize::default(),
             warnings: AtomicUsize::default(),
         }
