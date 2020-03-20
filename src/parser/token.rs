@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use crate::span::Span;
@@ -22,6 +23,18 @@ pub enum LitKind {
     Complex,
     /// A byte string literal (e.g. `b"abc"`)
     BStr,
+}
+
+impl fmt::Display for LitKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use LitKind::*;
+        match self {
+            Integer => write!(f, "an integer literal"),
+            Real => write!(f, "a real number literal"),
+            Complex => write!(f, "a a complex number literal"),
+            BStr => write!(f, "a byte string literal"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -108,6 +121,65 @@ pub enum TokenKind {
 
     /// End of file/input
     Eof,
+}
+
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TokenKind::*;
+        match self {
+            Ident => write!(f, "an identifer"),
+            Keyword(keyword) => write!(f, "{}", keyword),
+            Literal(lit) => write!(f, "{}", lit),
+
+            OpenDelim(Delim::Paren) => write!(f, "`(`"),
+            CloseDelim(Delim::Paren) => write!(f, "`)`"),
+
+            OpenDelim(Delim::Bracket) => write!(f, "`[`"),
+            CloseDelim(Delim::Bracket) => write!(f, "`]`"),
+
+            OpenDelim(Delim::Brace) => write!(f, "`{{`"),
+            CloseDelim(Delim::Brace) => write!(f, "`}}`"),
+
+            Period => write!(f, "`.`"),
+            Comma => write!(f, "`,`"),
+            Semicolon => write!(f, "`;`"),
+            RArrow => write!(f, "`->`"),
+            DoubleColon => write!(f, "`::`"),
+            Colon => write!(f, "`:`"),
+
+            DoublePeriod => write!(f, "`..`"),
+            DoublePeriodEquals => write!(f, "`..=`"),
+
+            Equals => write!(f, "`=`"),
+
+            LessThan => write!(f, "`<`"),
+            LessThanEquals => write!(f, "`<=`"),
+            DoubleEquals => write!(f, "`==`"),
+            NotEquals => write!(f, "`!=`"),
+            GreaterThanEquals => write!(f, "`>=`"),
+            GreaterThan => write!(f, "`>`"),
+
+            DoubleAnd => write!(f, "`&&`"),
+            DoubleOr => write!(f, "`||`"),
+            Not => write!(f, "`!`"),
+
+            And => write!(f, "`&`"),
+            Tilde => write!(f, "`~`"),
+            Or => write!(f, "`|`"),
+            Caret => write!(f, "`^`"),
+            Shl => write!(f, "`<<`"),
+            Shr => write!(f, "`>>`"),
+            Plus => write!(f, "`+`"),
+            Minus => write!(f, "`-`"),
+            Star => write!(f, "`*`"),
+            Slash => write!(f, "`/`"),
+            Percent => write!(f, "`%`"),
+
+            Error => panic!("The Error token kind should not be formatted"),
+
+            Eof => write!(f, "end of file"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -197,6 +269,15 @@ macro_rules! keywords {
             match ident {
                 $($kw => Some($variant),)*
                 _ => None,
+            }
+        }
+
+        impl fmt::Display for Keyword {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                use Keyword::*;
+                write!(f, "{}", match self {
+                    $($variant => $kw,)*
+                })
             }
         }
     };

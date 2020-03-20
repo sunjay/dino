@@ -10,6 +10,7 @@ use dino::cgenir::*;
 fn main() {
     let diag = Diagnostics::new(ColorChoice::Always);
     parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag);
+
     let mut syms = CSymbols::default();
 
     let type_dint = syms.insert_overwrite("DInt".to_string());
