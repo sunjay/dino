@@ -2,11 +2,59 @@ use std::env;
 use std::io::Write;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::sync::Arc;
+use std::process::{self, Command};
+use std::str::FromStr;
 
 use tempfile::TempDir;
 use structopt::StructOpt;
-use terminator::Terminator;
+use termcolor::ColorChoice;
+use parking_lot::RwLock;
+
+use dino::{
+    cprintln,
+    cwriteln,
+    source_files::SourceFiles,
+    diagnostics::Diagnostics,
+    parser,
+    cgenir::{self, GenerateC},
+    cir::CSymbols,
+};
+
+/// A command line argument that configures the coloring of the output
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ColorArg(pub ColorChoice);
+
+impl Default for ColorArg {
+    fn default() -> Self {
+        ColorArg(ColorChoice::Auto)
+    }
+}
+
+impl ColorArg {
+    /// Allowed values the argument
+    pub const VARIANTS: &'static [&'static str] = &["auto", "always", "ansi", "never"];
+}
+
+impl FromStr for ColorArg {
+    type Err = &'static str;
+
+    fn from_str(src: &str) -> Result<ColorArg, &'static str> {
+        match src {
+            _ if src.eq_ignore_ascii_case("auto") => Ok(ColorArg(ColorChoice::Auto)),
+            _ if src.eq_ignore_ascii_case("always") => Ok(ColorArg(ColorChoice::Always)),
+            _ if src.eq_ignore_ascii_case("ansi") => Ok(ColorArg(ColorChoice::AlwaysAnsi)),
+            _ if src.eq_ignore_ascii_case("never") => Ok(ColorArg(ColorChoice::Never)),
+            _ => Err("valid values: auto, always, ansi, never"),
+        }
+    }
+}
+
+impl Into<ColorChoice> for ColorArg {
+    fn into(self) -> ColorChoice {
+        self.0
+    }
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "dino", about)]
@@ -17,17 +65,41 @@ struct CompilerOptions {
     /// Write output to <file>
     #[structopt(short = "o", name = "file")]
     output_path: Option<PathBuf>,
+    /// Configure coloring of output
+    #[structopt(long = "color", parse(try_from_str), default_value = "auto",
+        possible_values = ColorArg::VARIANTS, case_insensitive = true)]
+    pub color: ColorArg,
 }
 
-fn main() -> Result<(), Terminator> {
-    let CompilerOptions {program_path, output_path} = CompilerOptions::from_args();
+macro_rules! quit {
+    ($diag:expr, $($args:tt)*) => {
+        {
+            $diag.emit_error(format!($($args)*));
+            process::exit(1);
+        }
+    };
+}
 
-    let code = dino::compile_executable2(&program_path)?;
+macro_rules! check_errors {
+    ($diag:expr) => {
+        let diag = $diag;
+        let errors = diag.emitted_errors();
+        if errors > 0 {
+            quit!(diag, "aborting due to {} previous errors", errors);
+        }
+    };
+}
+
+fn main() {
+    let CompilerOptions {program_path, output_path, color} = CompilerOptions::from_args();
+
+    let source_files = Arc::new(RwLock::new(SourceFiles::default()));
+    let diag = Diagnostics::new(source_files.clone(), color.into());
 
     // Check that the path and stem are valid
     let program_stem = match (program_path.file_stem(), program_path.extension()) {
         (Some(stem), Some(ext)) if !stem.is_empty() && ext == "dino" => stem,
-        _ => Err("Invalid input path. Must use extension `dino`".to_string())?,
+        _ => quit!(&diag, "Invalid input path. Must use extension `dino`"),
     };
 
     // Default output path is the input path without its stem
@@ -37,28 +109,54 @@ fn main() -> Result<(), Terminator> {
     let output_path = if output_path.is_absolute() {
         output_path.to_path_buf()
     } else {
-        let current_dir = env::current_dir().map_err(|_| "Could not access current directory")?;
+        let current_dir = env::current_dir()
+            .unwrap_or_else(|err| quit!(&diag, "Could not access current directory: {}", err));
         current_dir.join(output_path)
     };
 
+    let root_file = source_files.write().add_file(&program_path)
+        .unwrap_or_else(|err| quit!(&diag, "Could not read source file `{}`: {}", program_path.display(), err));
+    let program = {
+        // New scope because we want to drop this lock guard as soon as possible
+        let files = source_files.read();
+        parser::parse_module(files.file(root_file), &diag)
+    };
+    check_errors!(&diag);
+
+    let csyms = CSymbols::default();
+
+    //TODO: Replace this with actual code generation once the compiler stages are implemented
+    let cgen_program = cgenir::Program {
+        structs: Vec::new(),
+        functions: Vec::new(),
+        entry_point: Some(Vec::new()),
+    };
+    let cprogram = cgen_program.to_c();
+
     //TODO: Add proper logging
     //TODO: Add support for outputing the generated C code (CLI flag)
-    println!("{}", code);
+    cprintln!(&csyms, "{}", cprogram);
 
     // Write the generated code to a temporary file so we can run it through a C compiler
-    let tmp_dir = TempDir::new()?;
+    let tmp_dir = TempDir::new()
+        .unwrap_or_else(|err| quit!(&diag, "Unable to create temporary directory: {}", err));
 
     // Write out the runtime and std libraries and associated header files
-    dino::gc_lib::write_gc_lib_files(tmp_dir.path())?;
-    dino::runtime::write_runtime_files(tmp_dir.path())?;
-    dino::dino_std::write_std_files(tmp_dir.path())?;
+    dino::gc_lib::write_gc_lib_files(tmp_dir.path())
+        .unwrap_or_else(|err| quit!(&diag, "Unable to write GC runtime: {}", err));
+    dino::runtime::write_runtime_files(tmp_dir.path())
+        .unwrap_or_else(|err| quit!(&diag, "Unable to write dino runtime: {}", err));
+    dino::dino_std::write_std_files(tmp_dir.path())
+        .unwrap_or_else(|err| quit!(&diag, "Unable to write std library: {}", err));
 
     let code_file_path = tmp_dir.path().join("main.c");
     // Drop the file as soon as possible so it finishes being written to
     // and so it is closed when we close the temporary directory
     {
-        let mut code_file = File::create(&code_file_path)?;
-        writeln!(code_file, "{}", code)?;
+        let mut code_file = File::create(&code_file_path)
+            .unwrap_or_else(|err| quit!(&diag, "Unable to create file `{}` for generated code: {}", code_file_path.display(), err));
+        cwriteln!(code_file, &csyms, "{}", cprogram)
+            .unwrap_or_else(|err| quit!(&diag, "Unable to write generated code: {}", err));
     }
 
     // Enabling all the warnings and making them an error because this compiler should never get to
@@ -87,7 +185,8 @@ fn main() -> Result<(), Terminator> {
         .arg("-L.")
         .arg("-o")
         .arg(output_path)
-        .status()?;
+        .status()
+        .unwrap_or_else(|err| quit!(&diag, "Failed to run clang: {}", err));
 
     if !status.success() {
         panic!("bug: code generation failed");
@@ -97,7 +196,6 @@ fn main() -> Result<(), Terminator> {
     // we don't close it explicitly, the directory will still be deleted when `tmp_dir` goes out of
     // scope, but we won't know whether deleting the directory succeeded.
     // IMPORTANT: All handles to files in this directory must be closed at this point.
-    tmp_dir.close()?;
-
-    Ok(())
+    tmp_dir.close()
+        .unwrap_or_else(|err| quit!(&diag, "Failed remove temporary directory: {}", err));
 }
