@@ -9,7 +9,42 @@ use dino::cgenir::*;
 
 fn main() {
     let diag = Diagnostics::new(ColorChoice::Always);
-    dbg!(parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag));
+    //dbg!(parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag));
+
+    println!("tests/run-pass/assignment.dino");
+    parse_module(include_str!("../../tests/run-pass/assignment.dino"), &diag);
+    println!("tests/run-pass/complex-literal.dino");
+    parse_module(include_str!("../../tests/run-pass/complex-literal.dino"), &diag);
+    println!("tests/run-pass/conditionals.dino");
+    parse_module(include_str!("../../tests/run-pass/conditionals.dino"), &diag);
+    println!("tests/run-pass/empty-main.dino");
+    parse_module(include_str!("../../tests/run-pass/empty-main.dino"), &diag);
+    println!("tests/run-pass/function2.dino");
+    parse_module(include_str!("../../tests/run-pass/function2.dino"), &diag);
+    println!("tests/run-pass/function.dino");
+    parse_module(include_str!("../../tests/run-pass/function.dino"), &diag);
+    println!("tests/run-pass/infer-complex.dino");
+    parse_module(include_str!("../../tests/run-pass/infer-complex.dino"), &diag);
+    println!("tests/run-pass/infer-int.dino");
+    parse_module(include_str!("../../tests/run-pass/infer-int.dino"), &diag);
+    println!("tests/run-pass/infer-real.dino");
+    parse_module(include_str!("../../tests/run-pass/infer-real.dino"), &diag);
+    println!("tests/run-pass/math.dino");
+    parse_module(include_str!("../../tests/run-pass/math.dino"), &diag);
+    println!("tests/run-pass/merge-sort.dino");
+    parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag);
+    println!("tests/run-pass/parse-assignment.dino");
+    parse_module(include_str!("../../tests/run-pass/parse-assignment.dino"), &diag);
+    println!("tests/run-pass/real-literal.dino");
+    parse_module(include_str!("../../tests/run-pass/real-literal.dino"), &diag);
+    println!("tests/run-pass/remove-unit.dino");
+    parse_module(include_str!("../../tests/run-pass/remove-unit.dino"), &diag);
+    println!("tests/run-pass/structs.dino");
+    parse_module(include_str!("../../tests/run-pass/structs.dino"), &diag);
+    println!("tests/run-pass/variable.dino");
+    parse_module(include_str!("../../tests/run-pass/variable.dino"), &diag);
+    println!("tests/run-pass/while-loop.dino");
+    parse_module(include_str!("../../tests/run-pass/while-loop.dino"), &diag);
 
     let mut syms = CSymbols::default();
 
