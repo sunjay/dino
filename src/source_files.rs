@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ops::{Index, Range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -31,7 +31,10 @@ impl<'a> FileSlice<'a> {
         self.bytes.len()
     }
 
-    /// Returns the byte at the given index, if any
+    /// Returns the byte in this file at the given index, if any
+    ///
+    /// Note that the index MUST be greater than or equal to `start_index()` for this method to
+    /// return anything.
     pub fn get(&self, index: usize) -> Option<u8> {
         let index = index - self.offset;
         self.bytes.get(index).copied()
@@ -55,19 +58,49 @@ pub struct SourceFiles {
     ///
     /// This allows spans across files to be uniquely identifiable
     source: Vec<u8>,
+    /// The path and offset of each source file in `source`
+    ///
+    /// Sorted by the offset
+    paths: Vec<(PathBuf, usize)>,
 }
 
 impl SourceFiles {
     /// Reads a file and adds it to the set of source files. Returns a handle to that file's
     /// contents.
     pub fn add_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<FileHandle> {
+        let path = path.as_ref();
+
         let start = self.source.len();
+        self.paths.push((path.to_path_buf(), start));
 
         let mut file = fs::File::open(path)?;
         file.read_to_end(&mut self.source)?;
 
         let len = self.source.len() - start;
         Ok(FileHandle {start, len})
+    }
+
+    /// Adds the given source to the set of source files. Returns a handle to that file's
+    /// contents.
+    pub fn add_source<P: AsRef<Path>, S: AsRef<[u8]>>(&mut self, path: P, source: S) -> FileHandle {
+        let path = path.as_ref();
+        let source = source.as_ref();
+
+        let start = self.source.len();
+        self.paths.push((path.to_path_buf(), start));
+
+        self.source.extend(source);
+
+        let len = source.len();
+        FileHandle {start, len}
+    }
+
+    /// Returns the path of the file whose source contains the given index
+    pub fn path(&self, index: usize) -> &Path {
+        let path_index = self.paths.binary_search_by_key(&index, |&(_, offset)| offset)
+            .unwrap_or_else(|index| index - 1);
+        let (path, _) = &self.paths[path_index];
+        path
     }
 
     /// Returns a file slice for the given file handle

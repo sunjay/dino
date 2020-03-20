@@ -1,3 +1,7 @@
+/// A span of a source file
+///
+/// The only invariant is that a span `start` and `end` indexes MUST remain within the boundaries
+/// of a single file. That is, you can never span two files at the same time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     /// The start index of the span (inclusive)
