@@ -13,6 +13,7 @@ use smallvec::smallvec;
 
 use crate::ast;
 use crate::ast::*;
+use crate::span::Span;
 use crate::diagnostics::Diagnostics;
 
 use combinators::*;
@@ -92,7 +93,7 @@ fn import_path(input: Input) -> ParseResult<ImportPath> {
 
 fn import_path_selection(input: Input) -> ParseResult<ImportSelection> {
     alt((
-        map(tk(Star), |_| ImportSelection::All),
+        map(tk(Star), |token| ImportSelection::All(token.span)),
         map(import_names, ImportSelection::Names),
         map(path_component, ImportSelection::Component),
     ))(input)
@@ -156,7 +157,7 @@ fn func_sig(input: Input) -> ParseResult<FuncSig> {
 
 fn func_param(input: Input) -> ParseResult<FuncParam> {
     alt((
-        map(kw(Kw::SelfValue), |_| FuncParam::SelfValue),
+        map(kw(Kw::SelfValue), |token| FuncParam::SelfValue(token.span)),
         map(tuple((ident, tk(Colon), ty)), |(name, _, ty)| FuncParam::Named {name, ty}),
     ))(input)
 }
@@ -230,9 +231,14 @@ fn expr(input: Input) -> ParseResult<Expr> {
 
 fn prec0(input: Input) -> ParseResult<Expr> {
     alt((
-        map(kw(Kw::Break), |_| Expr::Break),
-        map(kw(Kw::Continue), |_| Expr::Continue),
-        map(prefixed(kw(Kw::Return), opt(expr)), |expr| Expr::Return(expr.map(Box::new))),
+        map(kw(Kw::Break), |token| Expr::Break(token.span)),
+        map(kw(Kw::Continue), |token| Expr::Continue(token.span)),
+        map(tuple((kw(Kw::Return), opt(expr))), |(ret_token, expr)| {
+            Expr::Return(Box::new(Return {
+                return_span: ret_token.span,
+                expr,
+            }))
+        }),
         prec1,
     ))(input)
 }
@@ -442,8 +448,8 @@ fn prec17(input: Input) -> ParseResult<Expr> {
         map(real_lit, Expr::RealLiteral),
         map(complex_lit, Expr::ComplexLiteral),
         map(bool_lit, Expr::BoolLiteral),
-        map(unit_lit, |_| Expr::UnitLiteral),
-        map(kw(Kw::SelfValue), |_| Expr::SelfValue),
+        map(unit_lit, Expr::UnitLiteral),
+        map(kw(Kw::SelfValue), |token| Expr::SelfValue(token.span)),
         map(path, Expr::Path),
     ))(input)
 }
@@ -507,8 +513,11 @@ fn struct_field_value(input: Input) -> ParseResult<StructFieldValue> {
     )(input)
 }
 
-fn bstr_lit(input: Input) -> ParseResult<Arc<[u8]>> {
-    map(lit(BStr), |token| token.unwrap_bstr().clone())(input)
+fn bstr_lit(input: Input) -> ParseResult<ast::Literal<Arc<[u8]>>> {
+    map(lit(BStr), |token| ast::Literal {
+        value: token.unwrap_bstr().clone(),
+        span: token.span,
+    })(input)
 }
 
 fn int_lit(input: Input) -> ParseResult<IntegerLiteral> {
@@ -518,32 +527,45 @@ fn int_lit(input: Input) -> ParseResult<IntegerLiteral> {
             Suffix::Int => LiteralSuffix::Int,
             Suffix::Real => LiteralSuffix::Real,
         });
-        IntegerLiteral {value, suffix}
+        let span = token.span;
+        IntegerLiteral {value, suffix, span}
     })(input)
 }
 
-fn real_lit(input: Input) -> ParseResult<f64> {
-    map(lit(Real), |token| token.unwrap_real())(input)
+fn real_lit(input: Input) -> ParseResult<ast::Literal<f64>> {
+    map(lit(Real), |token| ast::Literal {
+        value: token.unwrap_real(),
+        span: token.span,
+    })(input)
 }
 
-fn complex_lit(input: Input) -> ParseResult<f64> {
-    map(lit(Complex), |token| token.unwrap_complex())(input)
+fn complex_lit(input: Input) -> ParseResult<ast::Literal<f64>> {
+    map(lit(Complex), |token| ast::Literal {
+        value: token.unwrap_complex(),
+        span: token.span,
+    })(input)
 }
 
-fn bool_lit(input: Input) -> ParseResult<bool> {
+fn bool_lit(input: Input) -> ParseResult<ast::Literal<bool>> {
     alt((
-        map(kw(Kw::True), |_| true),
-        map(kw(Kw::False), |_| false),
+        map(kw(Kw::True), |token| ast::Literal {value: true, span: token.span}),
+        map(kw(Kw::False), |token| ast::Literal {value: false, span: token.span}),
     ))(input)
 }
 
-fn unit_lit(input: Input) -> ParseResult<()> {
-    map(tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))), |_| ())(input)
+fn unit_lit(input: Input) -> ParseResult<Span> {
+    map(
+        tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))),
+        |(open_token, close_token)| open_token.span.to(close_token.span),
+    )(input)
 }
 
 fn ty(input: Input) -> ParseResult<Ty> {
     alt((
-        map(tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))), |_| Ty::Unit),
+        map(
+            tuple((tk(OpenDelim(Paren)), tk(CloseDelim(Paren)))),
+            |(open_token, close_token)| Ty::Unit(open_token.span.to(close_token.span)),
+        ),
         map(named_ty, |ty| ty.into()),
     ))(input)
 }
@@ -551,7 +573,7 @@ fn ty(input: Input) -> ParseResult<Ty> {
 fn named_ty(input: Input) -> ParseResult<NamedTy> {
     alt((
         map(path, NamedTy::Named),
-        map(kw(Kw::SelfType), |_| NamedTy::SelfType),
+        map(kw(Kw::SelfType), |token| NamedTy::SelfType(token.span)),
     ))(input)
 }
 
@@ -565,10 +587,10 @@ fn path(input: Input) -> ParseResult<Path> {
 fn path_component(input: Input) -> ParseResult<PathComponent> {
     alt((
         map(ident, PathComponent::Ident),
-        map(kw(Kw::Package), |_| PathComponent::Package),
-        map(kw(Kw::SelfType), |_| PathComponent::SelfType),
-        map(kw(Kw::SelfValue), |_| PathComponent::SelfValue),
-        map(kw(Kw::Super), |_| PathComponent::Super),
+        map(kw(Kw::Package), |token| PathComponent::Package(token.span)),
+        map(kw(Kw::SelfType), |token| PathComponent::SelfType(token.span)),
+        map(kw(Kw::SelfValue), |token| PathComponent::SelfValue(token.span)),
+        map(kw(Kw::Super), |token| PathComponent::Super(token.span)),
     ))(input)
 }
 

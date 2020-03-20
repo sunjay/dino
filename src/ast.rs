@@ -36,7 +36,7 @@ pub enum ImportSelection {
     /// A specific list of names being imported
     Names(Vec<ImportName>),
     /// A wildcard import (all items)
-    All,
+    All(Span),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,7 +82,7 @@ pub struct FuncSig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FuncParam {
-    SelfValue,
+    SelfValue(Span),
     Named {
         name: Ident,
         ty: Ty,
@@ -145,18 +145,18 @@ pub enum Expr {
     Cond(Box<Cond>),
     Call(Box<FuncCall>),
     Index(Box<Index>),
-    Return(Option<Box<Expr>>),
-    Break,
-    Continue,
+    Return(Box<Return>),
+    Break(Span),
+    Continue(Span),
     Block(Box<Block>),
     StructLiteral(StructLiteral),
-    BStrLiteral(Arc<[u8]>),
+    BStrLiteral(Literal<Arc<[u8]>>),
     IntegerLiteral(IntegerLiteral),
-    RealLiteral(f64),
-    ComplexLiteral(f64),
-    BoolLiteral(bool),
-    UnitLiteral,
-    SelfValue,
+    RealLiteral(Literal<f64>),
+    ComplexLiteral(Literal<f64>),
+    BoolLiteral(Literal<bool>),
+    UnitLiteral(Span),
+    SelfValue(Span),
     Path(Path),
 }
 
@@ -237,6 +237,14 @@ pub enum UnaryOp {
     Not,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Return {
+    /// The span of the `return` keyword
+    pub return_span: Span,
+    /// The expression being returned (optional)
+    pub expr: Option<Expr>
+}
+
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
@@ -313,6 +321,8 @@ pub struct IntegerLiteral {
     /// You can append "int" or "real" to help disambiguate the literal
     /// e.g. 132int or 32real
     pub suffix: Option<LiteralSuffix>,
+    /// The span for the entire integer literal, including its suffix
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -325,22 +335,22 @@ pub enum LiteralSuffix {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
-    Unit,
-    SelfType,
+    Unit(Span),
+    SelfType(Span),
     Named(Path),
 }
 
 /// A type explicitly named with an identifier or path (as opposited to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy {
-    SelfType,
+    SelfType(Span),
     Named(Path),
 }
 
 impl From<NamedTy> for Ty {
     fn from(ty: NamedTy) -> Self {
         match ty {
-            NamedTy::SelfType => Ty::SelfType,
+            NamedTy::SelfType(span) => Ty::SelfType(span),
             NamedTy::Named(path) => Ty::Named(path),
         }
     }
@@ -369,13 +379,13 @@ impl fmt::Display for Path {
 pub enum PathComponent {
     Ident(Ident),
     /// The `package` keyword
-    Package,
+    Package(Span),
     /// The `Self` keyword
-    SelfType,
+    SelfType(Span),
     /// The `self` keyword
-    SelfValue,
+    SelfValue(Span),
     /// The `super` keyword
-    Super,
+    Super(Span),
 }
 
 impl fmt::Display for PathComponent {
@@ -383,11 +393,23 @@ impl fmt::Display for PathComponent {
         use PathComponent::*;
         match self {
             Ident(ident) => write!(f, "{}", ident),
-            Package => write!(f, "package"),
-            SelfType => write!(f, "Self"),
-            SelfValue => write!(f, "self"),
-            Super => write!(f, "super"),
+            Package(_) => write!(f, "package"),
+            SelfType(_) => write!(f, "Self"),
+            SelfValue(_) => write!(f, "self"),
+            Super(_) => write!(f, "super"),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Literal<T> {
+    pub value: T,
+    pub span: Span,
+}
+
+impl<T: fmt::Display> fmt::Display for Literal<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 
