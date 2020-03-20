@@ -9,7 +9,7 @@ use dino::cgenir::*;
 
 fn main() {
     let diag = Diagnostics::new(ColorChoice::Always);
-    parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag);
+    dbg!(parse_module(include_str!("../../tests/run-pass/merge-sort.dino"), &diag));
 
     let mut syms = CSymbols::default();
 
