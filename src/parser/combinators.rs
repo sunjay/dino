@@ -82,42 +82,6 @@ pub fn many0<I: ParserInput, O, F>(
     }
 }
 
-/// Repeats the given parser until it fails and returns the results in a Vec. The parser must
-/// succeed at least once. If it fails the first time, the error from that failure will be returned.
-///
-/// If the given parser produces an error after advancing past the start of its input, that error
-/// will be returned.
-pub fn many1<I: ParserInput, O, F>(
-    mut f: F,
-) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
-    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
-{
-    move |input| {
-        let (mut input, output) = f(input)?;
-        let mut outputs = vec![output];
-        loop {
-            match f(input.clone()) {
-                Ok((inp, output)) => {
-                    outputs.push(output);
-                    if input.relative_position_to(&inp) == RelativePosition::Same {
-                        panic!("bug: infinite loop detected. Do not pass a parser that accepts empty input to many1");
-                    }
-                    input = inp;
-                },
-
-                Err((inp, err)) => {
-                    // propagate the error if the input advanced past the start
-                    if inp.has_advanced_past(&input) {
-                        return Err((inp, err));
-                    }
-                    break;
-                }
-            }
-        }
-        Ok((input, outputs))
-    }
-}
-
 /// Applies the initial parser, then another parser until it fails. The results are accumulated
 /// using the given function which takes the result so far, and each result produced.
 pub fn fold_many0<I: ParserInput, O, R, F, G, H>(
