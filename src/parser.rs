@@ -448,7 +448,48 @@ fn prec17(input: Input) -> ParseResult<Expr> {
 }
 
 fn cond(input: Input) -> ParseResult<Cond> {
-    todo!()
+    // Start with a single `if`, since if that isn't found we can quit right away
+    let (mut input, (_, cond, body)) = tuple((kw(Kw::If), expr, block))(input)?;
+
+    // This is essentially equivalent to:
+    // tuple((
+    //      many0(tuple((kw(Kw::Else), kw(Kw::If), expr, block))),
+    //      opt(tuple((kw(Kw::Else), block))),
+    // ))
+    // Need to hand-roll this loop because we need 2 tokens to detect `else if` and `many0` will
+    // fail if we advance further than 1 token.
+    let mut conds = vec![(cond, body)];
+    let mut else_body = None;
+    loop {
+        match opt(kw(Kw::Else))(input)? {
+            // Advance in the input past the else
+            (inp, Some(_)) => input = inp,
+            // If something other than else is found, stop, but do NOT advance the input
+            // This ensures that the next token is available for the next parser after this
+            _ => break,
+        }
+
+        // One of these must succeed or we produce an error
+        let (inp, stop) = alt((
+            // an `else if` block
+            map(tuple((kw(Kw::If), expr, block)), |(_, cond, body)| {
+                conds.push((cond, body));
+                false // keep looping
+            }),
+            // just an `else` block
+            map(block, |body| {
+                else_body = Some(body);
+                true // stop
+            }),
+        ))(input)?;
+        input = inp;
+
+        if stop {
+            break;
+        }
+    }
+
+    Ok((input, Cond {conds, else_body}))
 }
 
 fn struct_lit(input: Input) -> ParseResult<StructLiteral> {
