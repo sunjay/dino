@@ -660,9 +660,10 @@ fn lit(kind: LitKind) -> impl FnMut(Input) -> ParseResult<&Token> {
 
 fn tk(kind: TokenKind) -> impl FnMut(Input) -> ParseResult<&Token> {
     move |input| {
-        let (input, token) = input.advance();
+        let (next_input, token) = input.advance();
         if token.kind == kind {
-            Ok((input, token))
+            // Only proceed with the next input if this succeeds
+            Ok((next_input, token))
         } else {
             Err((input, ParseError {
                 expected: smallvec![kind],
