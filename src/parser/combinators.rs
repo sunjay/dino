@@ -171,6 +171,24 @@ pub fn separated0<I: ParserInput, O, O2, F, S>(
     }
 }
 
+/// Alternates between two parsers to produce a non-empty list
+///
+/// This does NOT allow a trailing separator
+pub fn separated1<I: ParserInput, O, O2, F, S>(
+    mut sep: S,
+    mut f: F,
+) -> impl FnMut(I) -> IResult<I, Vec<O>, <I as ParserInput>::Item>
+    where F: FnMut(I) -> IResult<I, O, <I as ParserInput>::Item>,
+          S: FnMut(I) -> IResult<I, O2, <I as ParserInput>::Item>,
+{
+    move |input| {
+        let (input, mut items) = many0(suffixed(&mut f, &mut sep))(input)?;
+        let (input, last_item) = f(input)?;
+        items.push(last_item);
+        Ok((input, items))
+    }
+}
+
 /// Executes both parsers and only returns the first
 pub fn suffixed<I: ParserInput, O, O2, F, S>(
     f: F,

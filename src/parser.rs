@@ -542,11 +542,20 @@ fn unit_lit(input: Input) -> ParseResult<()> {
 }
 
 fn path(input: Input) -> ParseResult<Path> {
-    todo!()
+    map(
+        separated1(tk(DoubleColon), path_component),
+        |components| Path {components},
+    )(input)
 }
 
 fn path_component(input: Input) -> ParseResult<PathComponent> {
-    todo!()
+    alt((
+        map(ident, PathComponent::Ident),
+        map(kw(Kw::Package), |_| PathComponent::Package),
+        map(kw(Kw::SelfType), |_| PathComponent::SelfType),
+        map(kw(Kw::SelfValue), |_| PathComponent::SelfValue),
+        map(kw(Kw::Super), |_| PathComponent::Super),
+    ))(input)
 }
 
 fn ty(input: Input) -> ParseResult<Ty> {
