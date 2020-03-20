@@ -310,7 +310,7 @@ pub struct IntegerLiteral {
     pub value: i64,
     /// You can append "int" or "real" to help disambiguate the literal
     /// e.g. 132int or 32real
-    pub type_hint: Option<LiteralSuffix>,
+    pub suffix: Option<LiteralSuffix>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

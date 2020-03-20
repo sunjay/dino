@@ -19,6 +19,7 @@ use combinators::*;
 
 use TokenKind::*;
 use Delim::*;
+use LitKind::*;
 use token::Keyword as Kw;
 
 type Input<'a> = &'a [Token];
@@ -493,23 +494,40 @@ fn cond(input: Input) -> ParseResult<Cond> {
 }
 
 fn struct_lit(input: Input) -> ParseResult<StructLiteral> {
-    todo!()
+    map(
+        tuple((named_ty, braces(comma_separated(struct_field_value)))),
+        |(name, field_values)| StructLiteral {name, field_values},
+    )(input)
+}
+
+fn struct_field_value(input: Input) -> ParseResult<StructFieldValue> {
+    map(
+        tuple((ident, tk(Colon), expr)),
+        |(name, _, value)| StructFieldValue {name, value},
+    )(input)
 }
 
 fn bstr_lit(input: Input) -> ParseResult<Arc<[u8]>> {
-    todo!()
+    map(lit(BStr), |token| token.unwrap_bstr().clone())(input)
 }
 
 fn int_lit(input: Input) -> ParseResult<IntegerLiteral> {
-    todo!()
+    map(lit(Integer), |token| {
+        let (value, suffix) = token.unwrap_integer();
+        let suffix = suffix.map(|suffix| match suffix {
+            Suffix::Int => LiteralSuffix::Int,
+            Suffix::Real => LiteralSuffix::Real,
+        });
+        IntegerLiteral {value, suffix}
+    })(input)
 }
 
 fn real_lit(input: Input) -> ParseResult<f64> {
-    todo!()
+    map(lit(Real), |token| token.unwrap_real())(input)
 }
 
 fn complex_lit(input: Input) -> ParseResult<f64> {
-    todo!()
+    map(lit(Complex), |token| token.unwrap_complex())(input)
 }
 
 fn bool_lit(input: Input) -> ParseResult<bool> {
@@ -529,6 +547,10 @@ fn path_component(input: Input) -> ParseResult<PathComponent> {
 }
 
 fn ty(input: Input) -> ParseResult<Ty> {
+    todo!()
+}
+
+fn named_ty(input: Input) -> ParseResult<NamedTy> {
     todo!()
 }
 
@@ -565,6 +587,10 @@ fn braces<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, O>
 
 fn kw(keyword: token::Keyword) -> impl FnMut(Input) -> ParseResult<&Token> {
     tk(Keyword(keyword))
+}
+
+fn lit(kind: LitKind) -> impl FnMut(Input) -> ParseResult<&Token> {
+    tk(Literal(kind))
 }
 
 fn tk(kind: TokenKind) -> impl FnMut(Input) -> ParseResult<&Token> {
