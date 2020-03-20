@@ -29,10 +29,10 @@ impl fmt::Display for LitKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use LitKind::*;
         match self {
-            Integer => write!(f, "an integer literal"),
-            Real => write!(f, "a real number literal"),
-            Complex => write!(f, "a complex number literal"),
-            BStr => write!(f, "a byte string literal"),
+            Integer => write!(f, "an integer"),
+            Real => write!(f, "a real number"),
+            Complex => write!(f, "a complex number"),
+            BStr => write!(f, "a byte string"),
         }
     }
 }
