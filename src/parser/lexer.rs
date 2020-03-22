@@ -453,7 +453,7 @@ mod tests {
             let root_file = source_files.write().add_source("test.rs", $source);
             let diag = Diagnostics::new(source_files.clone(), termcolor::ColorChoice::Auto);
             let files = source_files.read();
-            let scanner = Scanner::new(files.file(root_file));
+            let scanner = Scanner::new(files.source(root_file));
             let mut lexer = Lexer::new(scanner, &diag);
             let token = lexer.next();
             let expected = $expected;
@@ -470,7 +470,7 @@ mod tests {
             let root_file = source_files.write().add_source("test.rs", $source);
             let diag = Diagnostics::new(source_files.clone(), termcolor::ColorChoice::Auto);
             let files = source_files.read();
-            let scanner = Scanner::new(files.file(root_file));
+            let scanner = Scanner::new(files.source(root_file));
             let mut lexer = Lexer::new(scanner, &diag);
             let expected_tokens: &[Token] = $expected;
             for expected_token in expected_tokens {
