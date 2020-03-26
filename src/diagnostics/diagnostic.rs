@@ -88,15 +88,14 @@ impl<'a> DiagnosticWriter<'a> {
             errors.fetch_add(1, Ordering::SeqCst);
         }
 
-        let frags = &fragments[..];
-        let frags = match frags {
-            // Skip the first fragment if it is the same as the title
-            [frag] if frag.message == *title => &frags[1..],
-            frags => frags,
-        };
+        if let Some(frag) = fragments.get(0) {
+            // Skip the title if it is the same as the first fragment
+            if frag.message != *title {
+                emit_message(&source_files, &mut out, None, title);
+            }
+        }
 
-        emit_message(&source_files, &mut out, None, title);
-        for frag in frags {
+        for frag in fragments {
             let &Fragment {span, ref message} = frag;
             emit_message(&source_files, &mut out, Some(span), message);
         }
@@ -112,12 +111,13 @@ fn emit_message(
     let Message {level, label} = message;
     let label = match span {
         Some(span) => {
+            let path = source_files.path(span.start);
             let start_line = source_files.line(span.start);
             let end_line = source_files.line(span.end);
             if start_line == end_line {
-                Cow::Owned(format!("L{}: {}", start_line, label))
+                Cow::Owned(format!("[{}:{}] {}", path.display(), start_line, label))
             } else {
-                Cow::Owned(format!("L{}-L{}: {}", start_line, end_line, label))
+                Cow::Owned(format!("[{}:{}-{}] {}", path.display(), start_line, end_line, label))
             }
         },
 
