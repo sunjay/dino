@@ -74,7 +74,7 @@ struct CompilerOptions {
 macro_rules! quit {
     ($diag:expr, $($args:tt)*) => {
         {
-            $diag.emit_error(format!($($args)*));
+            $diag.error(format!($($args)*)).emit();
             process::exit(1);
         }
     };

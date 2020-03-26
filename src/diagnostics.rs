@@ -86,7 +86,7 @@ impl Diagnostics {
     }
 }
 
-//TODO: Create the real diagnostics API
+//TODO: Remove this deprecated API
 impl Diagnostics {
     pub fn emit_error<'a>(&'a self, message: impl Into<Cow<'a, str>>) {
         self.error(message).emit();

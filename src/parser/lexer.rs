@@ -100,8 +100,9 @@ impl<'a> Lexer<'a> {
             (b'_', _) => self.ident(start),
 
             (ch, _) => {
-                self.diag.emit_error(format!("unknown start of token `{}`", ch as char));
-                self.byte_token(start, TokenKind::Error)
+                let token = self.byte_token(start, TokenKind::Error);
+                self.diag.span_error(token.span, format!("unknown start of token `{}`", ch as char)).emit();
+                token
             },
         }
     }
@@ -132,10 +133,11 @@ impl<'a> Lexer<'a> {
         let mut ignored = false;
 
         while let Some(ch) = self.scanner.peek() {
+            let start = self.scanner.current_pos();
             match (ch, self.scanner.peek2()) {
                 (b'/', Some(b'*')) => {
                     self.scanner.next2();
-                    self.ignore_block_comment();
+                    self.ignore_block_comment(start);
                 },
                 (b'/', Some(b'/')) => {
                     self.scanner.next2();
@@ -153,7 +155,7 @@ impl<'a> Lexer<'a> {
     /// Assuming the start of a block comment has been seen, ignores until the end is found
     ///
     /// Block comments may be nested, e.g. /* /* foo */ bar */
-    fn ignore_block_comment(&mut self) {
+    fn ignore_block_comment(&mut self, start: usize) {
         // The count of unmatched `/*` seen
         let mut count = 1;
         while count > 0 {
@@ -168,8 +170,8 @@ impl<'a> Lexer<'a> {
         }
 
         if count > 0 {
-            //TODO: Emit the span of the block comment (from current pos at the start of this function)
-            self.diag.emit_error("unterminated block comment");
+            let span = self.scanner.span(start, self.scanner.current_pos());
+            self.diag.span_error(span, "unterminated block comment").emit();
         }
     }
 
@@ -203,13 +205,14 @@ impl<'a> Lexer<'a> {
                     // Unicode strings: https://doc.rust-lang.org/reference/tokens.html#unicode-escapes
 
                     Some(ch) => {
-                        self.diag.emit_error(format!("unknown character escape: `\\{}`", ch as char));
-                        return self.byte_token(start, TokenKind::Error);
+                        let token = self.byte_token(start, TokenKind::Error);
+                        self.diag.span_error(token.span, format!("unknown character escape: `\\{}`", ch as char)).emit();
+                        return token;
                     },
                     None => {
-                        //TODO: Emit span for the start of the byte string literal
-                        self.diag.emit_error("unterminated double quote byte string");
-                        return self.byte_token(start, TokenKind::Error);
+                        let token = self.token_to_current(start, TokenKind::Error, None);
+                        self.diag.span_error(token.span, "unterminated double quote byte string").emit();
+                        return token;
                     },
                 };
                 unescaped_text.push(unescaped_char);
@@ -262,8 +265,9 @@ impl<'a> Lexer<'a> {
                 // Find remaining digits
                 let found_digits = self.digits();
                 if found_digits == 0 {
-                    self.diag.emit_error("expected at least one digit in exponent");
-                    return self.byte_token(start, TokenKind::Error);
+                    let token = self.token_to_current(start, TokenKind::Error, None);
+                    self.diag.span_error(token.span, "expected at least one digit in exponent").emit();
+                    return token;
                 }
 
                 real = true;
@@ -295,8 +299,9 @@ impl<'a> Lexer<'a> {
                         return self.token_to_current(start, TokenKind::Literal(LitKind::Complex), data);
                     },
                     suffix => {
-                        self.diag.emit_error(format!("invalid suffix `{}` for numeric literal", suffix));
-                        return self.token_to_current(suffix_start, TokenKind::Error, None);
+                        let token = self.token_to_current(suffix_start, TokenKind::Error, None);
+                        self.diag.span_error(token.span, format!("invalid suffix `{}` for numeric literal", suffix)).emit();
+                        return token;
                     },
                 }
             },
@@ -305,8 +310,9 @@ impl<'a> Lexer<'a> {
 
         if real {
             if suffix.is_some() {
-                self.diag.emit_error("real number literals may not have a suffix");
-                return self.token_to_current(start, TokenKind::Error, None);
+                let token = self.token_to_current(start, TokenKind::Error, None);
+                self.diag.span_error(token.span, "real number literals may not have a suffix").emit();
+                return token;
             }
 
             let value = self.scanner.slice(start, lit_end).parse()

@@ -60,7 +60,7 @@ pub fn parse_module(source: FileSource, diag: &Diagnostics) -> Module {
                 },
             }
             write!(message, ", found: {}", actual.kind).unwrap();
-            diag.emit_error(message);
+            diag.span_error(actual.span, message).emit();
 
             // Error recovery: return an empty module
             //TODO: Do a better job at error recovery!
