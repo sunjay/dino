@@ -1,31 +1,33 @@
+use std::fmt;
 use std::io::{self, Write};
 
-use termcolor::{StandardStream, ColorSpec, Color, WriteColor};
+use termcolor::{StandardStreamLock, ColorSpec, WriteColor};
 
-pub trait DiagnosticsWriter {
-    fn write_error(&mut self, message: &str) -> io::Result<()>;
-    fn write_warning(&mut self, message: &str) -> io::Result<()>;
+pub use termcolor::Color;
+
+pub trait DisplayStyled<W: io::Write> {
+    fn fmt_styled(&self, out: &mut W) -> io::Result<()>;
 }
 
-impl DiagnosticsWriter for StandardStream {
-    fn write_error(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
-
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(true))?;
-        write!(out, "error: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
+impl<'a, W: io::Write> DisplayStyled<W> for &'a str {
+    fn fmt_styled(&self, out: &mut W) -> io::Result<()> {
+        write!(out, "{}", self)
     }
+}
 
-    fn write_warning(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
+#[derive(Debug)]
+pub struct WithStyle<T: fmt::Display> {
+    pub color: Color,
+    pub bold: bool,
+    pub value: T,
+}
 
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(true))?;
-        write!(out, "warning: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
+impl<'a, T: fmt::Display> DisplayStyled<StandardStreamLock<'a>> for WithStyle<T> {
+    fn fmt_styled(&self, out: &mut StandardStreamLock<'a>) -> io::Result<()> {
+        let &Self {color, bold, ref value} = self;
+        out.set_color(ColorSpec::new().set_fg(Some(color)).set_bold(bold))?;
+        write!(out, "{}", value)?;
+        out.reset()
     }
 }
 
