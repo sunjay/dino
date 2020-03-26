@@ -1,4 +1,7 @@
 mod writer;
+mod diagnostic;
+
+pub use diagnostic::*;
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -7,20 +10,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use parking_lot::{Mutex, RwLock};
 use termcolor::ColorChoice;
 
+use crate::span::Span;
 use crate::source_files::SourceFiles;
 
-use writer::DiagnosticsWriter;
+#[cfg(not(test))]
+type OutputStream = termcolor::StandardStream;
+#[cfg(test)]
+type OutputStream = writer::NullWriter;
 
 pub struct Diagnostics {
     source_files: Arc<RwLock<SourceFiles>>,
-    #[cfg(not(test))]
-    out: Mutex<termcolor::StandardStream>,
-    #[cfg(test)]
-    out: Mutex<writer::NullWriter>,
+    /// The stream where diagnostics will be written to
+    out: Mutex<OutputStream>,
     /// The number of errors that have been emitted
     errors: AtomicUsize,
-    /// The number of warnings that have been emitted
-    warnings: AtomicUsize,
 }
 
 impl Diagnostics {
@@ -32,7 +35,6 @@ impl Diagnostics {
             #[cfg(test)]
             out: Mutex::new(writer::NullWriter::new(color_choice)),
             errors: AtomicUsize::default(),
-            warnings: AtomicUsize::default(),
         }
     }
 
@@ -41,25 +43,56 @@ impl Diagnostics {
         self.errors.load(Ordering::SeqCst)
     }
 
-    /// Returns the number of warnings that have been emitted
-    pub fn emitted_warnings(&self) -> usize {
-        self.warnings.load(Ordering::SeqCst)
+    pub fn error<'a>(&'a self, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        self.level(Level::Error, message)
+    }
+
+    pub fn warning<'a>(&'a self, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        self.level(Level::Warning, message)
+    }
+
+    pub fn level<'a>(&'a self, level: Level, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        self.diagnostic_writer(Diagnostic {
+            title: Message {
+                level,
+                label: message.into(),
+            },
+            fragments: Vec::new(),
+        })
+    }
+
+    pub fn span_error<'a>(&'a self, span: Span, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        self.span_level(Level::Error, span, message)
+    }
+
+    pub fn span_warning<'a>(&'a self, span: Span, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        self.span_level(Level::Warning, span, message)
+    }
+
+    pub fn span_level<'a>(&'a self, level: Level, span: Span, message: impl Into<Cow<'a, str>>) -> DiagnosticWriter<'a> {
+        let message = message.into();
+
+        self.level(level, message.clone())
+            .span_level(level, span, message)
+    }
+
+    fn diagnostic_writer<'a>(&'a self, data: Diagnostic<'a>) -> DiagnosticWriter<'a> {
+        DiagnosticWriter {
+            source_files: self.source_files.read(),
+            out: self.out.lock(),
+            errors: &self.errors,
+            data,
+        }
     }
 }
 
 //TODO: Create the real diagnostics API
 impl Diagnostics {
-    pub fn emit_error<'a>(&self, message: impl Into<Cow<'a, str>>) {
-        let mut out = self.out.lock();
-        out.write_error(message.into().as_ref()).expect("IO Error");
-
-        self.errors.fetch_add(1, Ordering::SeqCst);
+    pub fn emit_error<'a>(&'a self, message: impl Into<Cow<'a, str>>) {
+        self.error(message).emit();
     }
 
-    pub fn emit_warning<'a>(&self, message: impl Into<Cow<'a, str>>) {
-        let mut out = self.out.lock();
-        out.write_warning(message.into().as_ref()).expect("IO Error");
-
-        self.warnings.fetch_add(1, Ordering::SeqCst);
+    pub fn emit_warning<'a>(&'a self, message: impl Into<Cow<'a, str>>) {
+        self.warning(message).emit();
     }
 }

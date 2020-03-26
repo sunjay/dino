@@ -1,32 +1,48 @@
 use std::io::{self, Write};
 
-use termcolor::{StandardStream, ColorSpec, Color, WriteColor};
+use termcolor::{StandardStream, StandardStreamLock, ColorSpec, Color, WriteColor};
 
 pub trait DiagnosticsWriter {
     fn write_error(&mut self, message: &str) -> io::Result<()>;
     fn write_warning(&mut self, message: &str) -> io::Result<()>;
+    fn write_info(&mut self, message: &str) -> io::Result<()>;
+    fn write_note(&mut self, message: &str) -> io::Result<()>;
+    fn write_help(&mut self, message: &str) -> io::Result<()>;
 }
 
 impl DiagnosticsWriter for StandardStream {
     fn write_error(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
-
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(true))?;
-        write!(out, "error: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
+        write_message(self.lock(), "error:", Color::Red, message)
     }
 
     fn write_warning(&mut self, message: &str) -> io::Result<()> {
-        let mut out = self.lock();
-
-        out.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(true))?;
-        write!(out, "warning: ")?;
-        out.reset()?;
-
-        writeln!(out, "{}", message)
+        write_message(self.lock(), "warning:", Color::Yellow, message)
     }
+
+    fn write_info(&mut self, message: &str) -> io::Result<()> {
+        write_message(self.lock(), "info:", Color::Cyan, message)
+    }
+
+    fn write_note(&mut self, message: &str) -> io::Result<()> {
+        write_message(self.lock(), "note:", Color::Green, message)
+    }
+
+    fn write_help(&mut self, message: &str) -> io::Result<()> {
+        write_message(self.lock(), "help:", Color::Blue, message)
+    }
+}
+
+fn write_message(
+    mut out: StandardStreamLock,
+    prefix: &str,
+    prefix_color: Color,
+    message: &str,
+) -> io::Result<()> {
+    out.set_color(ColorSpec::new().set_fg(Some(prefix_color)).set_bold(true))?;
+    write!(out, "{} ", prefix)?;
+    out.reset()?;
+
+    writeln!(out, "{}\n", message)
 }
 
 #[cfg(test)]
@@ -47,6 +63,18 @@ impl DiagnosticsWriter for NullWriter {
     }
 
     fn write_warning(&mut self, _message: &str) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_info(&mut self, _message: &str) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_note(&mut self, _message: &str) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_help(&mut self, _message: &str) -> io::Result<()> {
         Ok(())
     }
 }
