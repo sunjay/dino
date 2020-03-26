@@ -23,16 +23,16 @@ pub enum Decl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportPath {
-    /// The path to import from (represents the root module if empty)
-    pub path: Vec<PathComponent>,
+    /// The prefix of the path (if any)
+    pub prefix: Option<PathPrefix>,
+    /// The path (within the prefix) to import from
+    pub path: Vec<Ident>,
     /// The items selected from the path
     pub selection: ImportSelection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportSelection {
-    /// A single path component
-    Component(PathComponent),
     /// A specific list of names being imported
     Names(Vec<ImportName>),
     /// A wildcard import (all items)
@@ -360,16 +360,27 @@ impl From<NamedTy> for Ty {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
-    /// The components of the path (guaranteed to be non-empty)
-    pub components: Vec<PathComponent>,
+    /// The prefix of the path (if any)
+    pub prefix: Option<PathPrefix>,
+    /// The components of the path (allowed to be empty if `prefix` is not `None`)
+    pub components: Vec<Ident>,
 }
 
 impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Self {components} = self;
+        let Self {prefix, components} = self;
 
-        write!(f, "{}", components[0])?;
-        for comp in &components[1..] {
+        let remaining_components = match prefix {
+            Some(prefix) => {
+                write!(f, "{}", prefix)?;
+                components
+            },
+            None => {
+                write!(f, "{}", components[0])?;
+                &components[1..]
+            },
+        };
+        for comp in remaining_components {
             write!(f, "::{}", comp)?;
         }
 
@@ -378,8 +389,7 @@ impl fmt::Display for Path {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PathComponent {
-    Ident(Ident),
+pub enum PathPrefix {
     /// The `package` keyword
     Package(Span),
     /// The `Self` keyword
@@ -390,11 +400,10 @@ pub enum PathComponent {
     Super(Span),
 }
 
-impl fmt::Display for PathComponent {
+impl fmt::Display for PathPrefix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use PathComponent::*;
+        use PathPrefix::*;
         match self {
-            Ident(ident) => write!(f, "{}", ident),
             Package(_) => write!(f, "package"),
             SelfType(_) => write!(f, "Self"),
             SelfValue(_) => write!(f, "self"),

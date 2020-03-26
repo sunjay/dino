@@ -110,10 +110,11 @@ fn use_decl(input: Input) -> ParseResult<ImportPath> {
 fn import_path(input: Input) -> ParseResult<ImportPath> {
     map(
         tuple((
-            many0(suffixed(path_component, tk(DoubleColon))),
+            opt(suffixed(path_prefix, tk(DoubleColon))),
+            many0(suffixed(ident, tk(DoubleColon))),
             import_path_selection,
         )),
-        |(path, selection)| ImportPath {path, selection},
+        |(prefix, path, selection)| ImportPath {prefix, path, selection},
     )(input)
 }
 
@@ -121,7 +122,7 @@ fn import_path_selection(input: Input) -> ParseResult<ImportSelection> {
     alt((
         map(tk(Star), |token| ImportSelection::All(token.span)),
         map(import_names, ImportSelection::Names),
-        map(path_component, ImportSelection::Component),
+        map(import_name, |name| ImportSelection::Names(vec![name])),
     ))(input)
 }
 
@@ -604,19 +605,35 @@ fn named_ty(input: Input) -> ParseResult<NamedTy> {
 }
 
 fn path(input: Input) -> ParseResult<Path> {
-    map(
-        separated1(tk(DoubleColon), path_component),
-        |components| Path {components},
-    )(input)
+    alt((
+        map(
+            tuple((
+                path_prefix,
+                opt(prefixed(
+                    tk(DoubleColon),
+                    separated0(tk(DoubleColon), ident),
+                )),
+            )),
+            |(prefix, components)| Path {
+                prefix: Some(prefix),
+                components: components.unwrap_or_default(),
+            },
+        ),
+
+        map(
+            separated1(tk(DoubleColon), ident),
+            |components| Path {prefix: None, components},
+        ),
+    ))(input)
 }
 
-fn path_component(input: Input) -> ParseResult<PathComponent> {
+fn path_prefix(input: Input) -> ParseResult<PathPrefix> {
     alt((
-        map(ident, PathComponent::Ident),
-        map(kw(Kw::Package), |token| PathComponent::Package(token.span)),
-        map(kw(Kw::SelfType), |token| PathComponent::SelfType(token.span)),
-        map(kw(Kw::SelfValue), |token| PathComponent::SelfValue(token.span)),
-        map(kw(Kw::Super), |token| PathComponent::Super(token.span)),
+        map(kw(Kw::Package), |token| PathPrefix::Package(token.span)),
+        map(kw(Kw::SelfType), |token| PathPrefix::SelfType(token.span)),
+        map(kw(Kw::SelfValue), |token| PathPrefix::SelfValue(token.span)),
+        //TODO: Support super::super::super::...
+        map(kw(Kw::Super), |token| PathPrefix::Super(token.span)),
     ))(input)
 }
 

@@ -1,8 +1,8 @@
 decl ::= use_decl | struct_decl | impl_decl | func_decl
 
 use_decl ::= 'use' import_path ';'
-import_path ::= (path_component '::')* import_path_selection
-import_path_selection ::= path_component | '*' | '{' import_names '}'
+import_path ::= (path_prefix '::')? (ident '::')* import_path_selection
+import_path_selection ::= '*' | import_name | '{' import_names '}'
 import_names ::= (import_name ',')* import_name?
 import_name ::= (ident | 'self') ('as' ident)?
 
@@ -64,5 +64,6 @@ unit_lit ::= '(' ')'
 ty ::= '(' ')' | named_ty
 named_ty ::=  'Self' | path
 
-path ::= (path_component '::')* path_component
-path_component ::= 'package' | 'Self' | 'self' | 'super' | ident
+path ::= path_prefix ('::' (ident '::')* ident)? |
+         (ident '::')* ident
+path_prefix ::= 'package' | 'Self' | 'self' | 'super'
