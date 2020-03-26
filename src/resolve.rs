@@ -140,7 +140,7 @@ impl<'a> ModuleWalker<'a> {
                 },
 
                 hir::Decl::Struct(struct_decl) => {
-                    let &hir::Struct {name, fields: _} = struct_decl;
+                    let hir::Struct {name, fields: _} = struct_decl;
 
                     // Create an empty table for fields for now since we can't insert them until
                     // we've walked all the types
@@ -148,7 +148,7 @@ impl<'a> ModuleWalker<'a> {
                     let struct_data = nir::DefData::new_struct(field_names);
                     // You're allowed to redefine structs that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().types.insert_with(name.to_string(), struct_data);
+                    let insert_res = self.top_scope().types.insert_with(name.value.clone(), struct_data);
                     if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
@@ -171,7 +171,7 @@ impl<'a> ModuleWalker<'a> {
                     let hir::Struct {name, fields} = struct_decl;
                     // Looking in the top scope because that's exactly where we expect the decl to
                     // be given that we just inserted it
-                    let struct_id = self.top_scope().types.id(*name)
+                    let struct_id = self.top_scope().types.id(&name.value)
                         .expect("bug: all structs should be inserted in the scope at this point");
 
                     // Insert into type info so the fields are available by ID
@@ -204,7 +204,7 @@ impl<'a> ModuleWalker<'a> {
             let ty_info = store.data_mut(self_ty).unwrap_type_mut();
             let struct_fields = ty_info.fields.struct_fields_mut();
             // Need to check that field names are unique
-            match struct_fields.insert_with(name_ident.to_string(), nir::DefData::Field {ty}) {
+            match struct_fields.insert_with(name_ident.value.clone(), nir::DefData::Field {ty}) {
                 Ok(_) => {},
                 Err(_) => {
                     self.diag.emit_error(format!("field `{}` is already declared", name_ident));
@@ -221,14 +221,14 @@ impl<'a> ModuleWalker<'a> {
                 hir::Decl::Struct(_) => {},
 
                 hir::Decl::Function(func) => {
-                    let &hir::Function {name, sig: _, body: _} = func;
+                    let hir::Function {name, sig: _, body: _} = func;
 
                     // Note that we can't actually insert the resolved signature here because then
                     // the parameters of the function wouldn't be in scope when resolving the body.
                     let func_data = nir::DefData::new_func();
                     // You're allowed to redefine functions that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().functions.insert_with(name.to_string(), func_data);
+                    let insert_res = self.top_scope().functions.insert_with(name.value.clone(), func_data);
                     if let Err(_) = insert_res {
                         self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
                     }
@@ -267,7 +267,7 @@ impl<'a> ModuleWalker<'a> {
                         // Insert into type info so the methods can be looked up by name later
                         let mut store = self.def_store.lock();
                         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
-                        if ty_info.methods.contains_key(method.name) {
+                        if ty_info.methods.contains_key(&method.name.value) {
                             self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
                             continue;
 
@@ -275,7 +275,7 @@ impl<'a> ModuleWalker<'a> {
                             // Only insert the method if a method with that name hasn't been
                             // inserted yet. This means that the first decl of every method name
                             // will be kept in the type info.
-                            ty_info.methods.insert(method.name.to_string(), func.name);
+                            ty_info.methods.insert(method.name.value.clone(), func.name);
                         }
 
                         self.functions.push(func);
@@ -296,7 +296,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::Function {name, sig, body} = func;
 
         // Name should be in the top scope at this point
-        let name = self.top_scope().functions.id(*name)
+        let name = self.top_scope().functions.id(&name.value)
             .expect("bug: all functions should be inserted in the scope at this point");
 
         // Push a new scope for this function so that after we're done with it the parameters are
@@ -334,14 +334,14 @@ impl<'a> ModuleWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name = match self.top_scope().variables.insert_with(name.to_string(), nir::DefData::FuncParam) {
+            let name = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::FuncParam) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.emit_error(format!("identifier `{}` is bound more than once in this parameter list", name));
 
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
-                    let fresh_name = format!("{}$p{}", name, duplicate_count);
+                    let fresh_name = format!("{}$p{}", name, duplicate_count).into();
                     self.top_scope().variables.insert_with(fresh_name, nir::DefData::Error)
                         .expect("bug: fresh variables should not collide")
                 },
@@ -395,7 +395,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name = self.top_scope().variables.insert_overwrite_with(name.to_string(), nir::DefData::Variable);
+        let name = self.top_scope().variables.insert_overwrite_with(name.value.clone(), nir::DefData::Variable);
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
         let expr = self.resolve_expr(expr, self_ty);
 
@@ -518,28 +518,21 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
-        let &hir::IntegerLiteral {value, type_hint} = int_lit;
+        let &hir::IntegerLiteral {value, suffix} = int_lit;
 
-        let type_hint = type_hint.as_ref().and_then(|hint| match self.lookup_name(hint) {
-            Some(ty) => Some(ty),
-            None => {
-                self.diag.emit_error(format!("invalid suffix `{}` for integer literal", hint));
-                // Just default to there being no type hint if an error occurs
-                None
-            },
-        });
+        let type_hint = suffix.map(|suffix| todo!());
 
         nir::IntegerLiteral {value, type_hint}
     }
 
-    fn resolve_field_name(&mut self, self_ty: DefId, field_name: hir::Ident) -> Option<DefId> {
+    fn resolve_field_name(&mut self, self_ty: DefId, field_name: &hir::Ident) -> Option<DefId> {
         let store = self.def_store.lock();
         let ty_info = match store.data(self_ty) {
             nir::DefData::Type(ty_info) => ty_info,
             nir::DefData::Error => return None,
             _ => unreachable!("bug: expected def to be either type or error"),
         };
-        let field = ty_info.fields.struct_fields().id(field_name);
+        let field = ty_info.fields.struct_fields().id(&field_name.value);
 
         field
     }
@@ -551,19 +544,19 @@ impl<'a> ModuleWalker<'a> {
             Some(func) => func,
             None => {
                 // Insert a fake function so name resolution may continue
-                self.top_scope().functions.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
+                self.top_scope().functions.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
         }
     }
 
     /// Resolves a variable. Returns something even if the variable wasn't found so that name
     /// resolution may continue.
-    fn resolve_var(&mut self, name: hir::Ident) -> DefId {
+    fn resolve_var(&mut self, name: &hir::Ident) -> DefId {
         match self.lookup_name(name) {
             Some(var) => var,
             None => {
                 // Insert a fake variable so name resolution may continue
-                self.top_scope().variables.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
+                self.top_scope().variables.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
         }
     }
@@ -592,7 +585,7 @@ impl<'a> ModuleWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
+                self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
         }
     }
@@ -622,7 +615,7 @@ impl<'a> ModuleWalker<'a> {
             Some(ty) => ty,
             None => {
                 // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".to_string(), nir::DefData::Error)
+                self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
         }
     }
@@ -644,19 +637,19 @@ impl<'a> ModuleWalker<'a> {
     }
 
     /// Attempts to lookup a name by walking up the scope stack
-    fn lookup_name(&self, name: hir::Ident) -> Option<DefId> {
+    fn lookup_name(&self, name: &hir::Ident) -> Option<DefId> {
         // Search variables
         for scope in self.scope_stack.iter().rev() {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
                 Impl => break,
-                Function => match scope.variables.id(name) {
+                Function => match scope.variables.id(&name.value) {
                     Some(id) => return Some(id),
                     // Stop searching for variables once we reach a function boundary
                     None => break,
                 },
-                Block => if let Some(id) = scope.variables.id(name) {
+                Block => if let Some(id) = scope.variables.id(&name.value) {
                     return Some(id);
                 },
             }
@@ -667,13 +660,13 @@ impl<'a> ModuleWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
-                Impl => if let Some(id) = scope.functions.id(name) {
+                Impl => if let Some(id) = scope.functions.id(&name.value) {
                     return Some(id);
                 },
-                Function => if let Some(id) = scope.functions.id(name) {
+                Function => if let Some(id) = scope.functions.id(&name.value) {
                     return Some(id);
                 },
-                Block => if let Some(id) = scope.functions.id(name) {
+                Block => if let Some(id) = scope.functions.id(&name.value) {
                     return Some(id);
                 },
             }
@@ -684,13 +677,13 @@ impl<'a> ModuleWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
-                Impl => if let Some(id) = scope.types.id(name) {
+                Impl => if let Some(id) = scope.types.id(&name.value) {
                     return Some(id);
                 },
-                Function => if let Some(id) = scope.types.id(name) {
+                Function => if let Some(id) = scope.types.id(&name.value) {
                     return Some(id);
                 },
-                Block => if let Some(id) = scope.types.id(name) {
+                Block => if let Some(id) = scope.types.id(&name.value) {
                     return Some(id);
                 },
             }

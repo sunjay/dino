@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::hash::Hash;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use super::{DefStoreSync, DefStore, DefId, DefData};
 /// source of data for looking up `DefId`s
 #[derive(Debug)]
 pub struct DefTable {
-    ids: HashMap<String, DefId>,
+    ids: HashMap<Arc<str>, DefId>,
     store: DefStoreSync,
 }
 
@@ -38,7 +39,7 @@ impl DefTable {
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
     /// If the symbol was already present in the table, it will be returned in an `Err`
-    pub fn insert_with(&mut self, sym: String, data: DefData) -> Result<DefId, (String, DefData)> {
+    pub fn insert_with(&mut self, sym: Arc<str>, data: DefData) -> Result<DefId, (Arc<str>, DefData)> {
         if self.ids.contains_key(&sym) {
             return Err((sym, data));
         }
@@ -49,7 +50,7 @@ impl DefTable {
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
     /// If the symbol was previously present in the table, it will be overwritten with a new ID.
-    pub fn insert_overwrite_with(&mut self, sym: String, data: DefData) -> DefId {
+    pub fn insert_overwrite_with(&mut self, sym: Arc<str>, data: DefData) -> DefId {
         let id = self.store().push(sym.clone(), data);
         self.ids.insert(sym, id);
 
@@ -58,7 +59,7 @@ impl DefTable {
 
     /// Returns the ID associated with the given symbol
     pub fn id<Q: ?Sized>(&self, sym: &Q) -> Option<DefId>
-        where String: Borrow<Q>,
+        where Arc<str>: Borrow<Q>,
               Q: Hash + Eq,
     {
         self.ids.get(sym).copied()

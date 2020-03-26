@@ -25,7 +25,7 @@ pub type DefStoreSync = Arc<Mutex<DefStore>>;
 pub struct DefStore {
     pkg: PkgId,
     /// `def_index` indexes into this field
-    defs: Vec<(String, DefData)>,
+    defs: Vec<(Arc<str>, DefData)>,
 }
 
 impl DefStore {
@@ -37,7 +37,7 @@ impl DefStore {
     }
 
     /// Pushes a new item into the store, returning a new ID for that item
-    pub fn push(&mut self, sym: String, data: DefData) -> DefId {
+    pub fn push(&mut self, sym: Arc<str>, data: DefData) -> DefId {
         self.defs.push((sym, data));
         DefId {
             pkg: self.pkg,
@@ -60,7 +60,7 @@ impl DefStore {
     }
 
     /// Retrieves the symbol corresponding to the give ID
-    pub fn symbol(&self, id: DefId) -> &String {
+    pub fn symbol(&self, id: DefId) -> &Arc<str> {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (sym, _) = &self.defs[id.def_index];
         sym

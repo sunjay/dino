@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::collections::HashMap;
 
 use super::{DefId, DefTable};
@@ -42,7 +43,7 @@ impl TypeFields {
 pub struct TypeInfo {
     pub fields: TypeFields,
     /// Mapping of method name to its function `DefId`
-    pub methods: HashMap<String, DefId>,
+    pub methods: HashMap<Arc<str>, DefId>,
 }
 
 impl TypeInfo {
