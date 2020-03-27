@@ -17,6 +17,7 @@ use dino::{
     source_files::SourceFiles,
     diagnostics::Diagnostics,
     parser,
+    desugar::Desugar,
     cgenir::{self, GenerateC},
     cir::CSymbols,
 };
@@ -121,6 +122,8 @@ fn main() {
         let files = source_files.read();
         parser::parse_module(files.source(root_file), &diag)
     };
+    check_errors!(&diag);
+    let desugared_program = program.desugar(&diag);
     check_errors!(&diag);
 
     let csyms = CSymbols::default();
