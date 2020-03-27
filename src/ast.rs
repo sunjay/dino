@@ -133,13 +133,13 @@ pub struct VarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Assign(Box<Assign>),
-    RangeOp(Option<Box<Expr>>, RangeOp, Option<Box<Expr>>),
-    BoolOp(Box<Expr>, BoolOp, Box<Expr>),
-    CompareOp(Box<Expr>, CompareOp, Box<Expr>),
-    BitwiseOp(Box<Expr>, BitwiseOp, Box<Expr>),
-    NumericOp(Box<Expr>, NumericOp, Box<Expr>),
-    UnaryOp(UnaryOp, Box<Expr>),
-    CastAs(Box<Expr>, Ty),
+    Range(Box<Range>),
+    BoolOp(Box<Binary<BoolOp>>),
+    CompareOp(Box<Binary<CompareOp>>),
+    BitwiseOp(Box<Binary<BitwiseOp>>),
+    NumericOp(Box<Binary<NumericOp>>),
+    UnaryOp(Box<Unary>),
+    CastAs(Box<CastAs>),
     MethodCall(Box<MethodCall>),
     FieldAccess(Box<FieldAccess>),
     Cond(Box<Cond>),
@@ -158,6 +158,32 @@ pub enum Expr {
     UnitLiteral(Span),
     SelfValue(Span),
     Path(Path),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Range {
+    pub lhs: Option<Expr>,
+    pub op: RangeOp,
+    pub rhs: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CastAs {
+    pub expr: Expr,
+    pub ty: Ty,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Binary<Op> {
+    pub lhs: Expr,
+    pub op: Op,
+    pub rhs: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unary {
+    pub op: UnaryOp,
+    pub expr: Expr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -289,7 +289,7 @@ fn prec2(input: Input) -> ParseResult<Expr> {
     alt((
         map(
             tuple((opt(prec3), range_op, opt(prec3))),
-            |(lhs, op, rhs)| Expr::RangeOp(lhs.map(Box::new), op, rhs.map(Box::new)),
+            |(lhs, op, rhs)| Expr::Range(Box::new(Range {lhs, op, rhs})),
         ),
         prec3,
     ))(input)
@@ -299,7 +299,7 @@ fn prec3(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec4,
         prefixed(tk(DoubleOr), prec4),
-        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::Or, Box::new(rhs)),
+        |lhs, rhs| Expr::BoolOp(Box::new(Binary {lhs, op: BoolOp::Or, rhs})),
     )(input)
 }
 
@@ -307,7 +307,7 @@ fn prec4(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec5,
         prefixed(tk(DoubleAnd), prec5),
-        |lhs, rhs| Expr::BoolOp(Box::new(lhs), BoolOp::And, Box::new(rhs)),
+        |lhs, rhs| Expr::BoolOp(Box::new(Binary {lhs, op: BoolOp::And, rhs})),
     )(input)
 }
 
@@ -324,7 +324,7 @@ fn prec5(input: Input) -> ParseResult<Expr> {
     alt((
         map(
             tuple((prec6, compare_op, prec6)),
-            |(lhs, op, rhs)| Expr::CompareOp(Box::new(lhs), op, Box::new(rhs)),
+            |(lhs, op, rhs)| Expr::CompareOp(Box::new(Binary {lhs, op, rhs})),
         ),
         prec6,
     ))(input)
@@ -334,7 +334,7 @@ fn prec6(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec7,
         prefixed(tk(Or), prec7),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Or, Box::new(rhs)),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(Binary {lhs, op: BitwiseOp::Or, rhs})),
     )(input)
 }
 
@@ -342,7 +342,7 @@ fn prec7(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec8,
         prefixed(tk(Tilde), prec8),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::Xor, Box::new(rhs)),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(Binary {lhs, op: BitwiseOp::Xor, rhs})),
     )(input)
 }
 
@@ -350,7 +350,7 @@ fn prec8(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec9,
         prefixed(tk(And), prec9),
-        |lhs, rhs| Expr::BitwiseOp(Box::new(lhs), BitwiseOp::And, Box::new(rhs)),
+        |lhs, rhs| Expr::BitwiseOp(Box::new(Binary {lhs, op: BitwiseOp::And, rhs})),
     )(input)
 }
 
@@ -363,7 +363,7 @@ fn prec9(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec10,
         tuple((shift_op, prec10)),
-        |lhs, (op, rhs)| Expr::BitwiseOp(Box::new(lhs), op, Box::new(rhs)),
+        |lhs, (op, rhs)| Expr::BitwiseOp(Box::new(Binary {lhs, op, rhs})),
     )(input)
 }
 
@@ -376,7 +376,7 @@ fn prec10(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec11,
         tuple((numeric_op, prec11)),
-        |lhs, (op, rhs)| Expr::NumericOp(Box::new(lhs), op, Box::new(rhs)),
+        |lhs, (op, rhs)| Expr::NumericOp(Box::new(Binary {lhs, op, rhs})),
     )(input)
 }
 
@@ -390,7 +390,7 @@ fn prec11(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec12,
         tuple((numeric_op, prec12)),
-        |lhs, (op, rhs)| Expr::NumericOp(Box::new(lhs), op, Box::new(rhs)),
+        |lhs, (op, rhs)| Expr::NumericOp(Box::new(Binary {lhs, op, rhs})),
     )(input)
 }
 
@@ -398,7 +398,7 @@ fn prec12(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec13,
         prefixed(kw(Kw::As), ty),
-        |lhs, ty| Expr::CastAs(Box::new(lhs), ty),
+        |expr, ty| Expr::CastAs(Box::new(CastAs {expr, ty})),
     )(input)
 }
 
@@ -406,7 +406,7 @@ fn prec13(input: Input) -> ParseResult<Expr> {
     fold_many0(
         prec14,
         prefixed(tk(Caret), prec14),
-        |lhs, rhs| Expr::NumericOp(Box::new(lhs), NumericOp::Pow, Box::new(rhs)),
+        |lhs, rhs| Expr::NumericOp(Box::new(Binary {lhs, op: NumericOp::Pow, rhs})),
     )(input)
 }
 
@@ -420,7 +420,7 @@ fn prec14(input: Input) -> ParseResult<Expr> {
     map(
         tuple((opt(unary_op), prec15)),
         |(op, expr)| match op {
-            Some(op) => Expr::UnaryOp(op, Box::new(expr)),
+            Some(op) => Expr::UnaryOp(Box::new(Unary {op, expr})),
             None => expr,
         },
     )(input)
