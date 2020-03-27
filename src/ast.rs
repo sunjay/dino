@@ -160,6 +160,13 @@ pub enum Expr {
     Path(Path),
 }
 
+impl Expr {
+    /// Returns the span encompassing the entire expression
+    pub fn span(&self) -> Span {
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
     pub lhs: Option<Expr>,
@@ -192,6 +199,15 @@ pub enum RangeOp {
     Exclusive(Span),
     /// The `..=` operator
     Inclusive(Span),
+}
+
+impl RangeOp {
+    pub fn span(self) -> Span {
+        use RangeOp::*;
+        match self {
+            Exclusive(span) | Inclusive(span) => span,
+        }
+    }
 }
 
 /// All boolean binary operators
@@ -263,14 +279,6 @@ pub enum UnaryOp {
     Not(Span),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Return {
-    /// The span of the `return` keyword
-    pub return_span: Span,
-    /// The expression being returned (optional)
-    pub expr: Option<Expr>
-}
-
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
@@ -328,6 +336,14 @@ pub struct Index {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Return {
+    /// The span of the `return` keyword
+    pub return_span: Span,
+    /// The expression being returned (optional)
+    pub expr: Option<Expr>
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructLiteral {
     pub name: NamedTy,
     pub field_values: Vec<StructFieldValue>,
@@ -368,7 +384,7 @@ pub enum Ty {
     Named(Path),
 }
 
-/// A type explicitly named with an identifier or path (as opposited to (), [T], etc.)
+/// A type explicitly named with an identifier or path (as opposed to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy {
     SelfType(Span),
@@ -390,6 +406,27 @@ pub struct Path {
     pub prefix: Option<PathPrefix>,
     /// The components of the path (allowed to be empty if `prefix` is not `None`)
     pub components: Vec<Ident>,
+}
+
+impl Path {
+    pub fn hardcoded(components: Vec<&str>, span: Span) -> Self {
+        Self {
+            prefix: None,
+            components: components.into_iter().map(|name| Ident {
+                value: name.into(),
+                span,
+            }).collect(),
+        }
+    }
+}
+
+impl From<Ident> for Path {
+    fn from(component: Ident) -> Self {
+        Self {
+            prefix: None,
+            components: vec![component],
+        }
+    }
 }
 
 impl fmt::Display for Path {
@@ -414,7 +451,7 @@ impl fmt::Display for Path {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathPrefix {
     /// The `package` keyword
     Package(Span),

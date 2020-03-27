@@ -126,7 +126,7 @@ impl<'a> ModuleWalker<'a> {
         for decl in decls {
             match decl {
                 hir::Decl::Import(import) => {
-                    let hir::ImportPath {path, selection} = import;
+                    let hir::ImportPath {prefix, path, selection} = import;
 
                     //TODO: Lookup the module at `path`
                     //TODO: Allow imports from `Self`
@@ -135,7 +135,7 @@ impl<'a> ModuleWalker<'a> {
                         //TODO: Lookup each name in the `path` module
                         Names(names) => todo!(),
                         //TODO: Add `path` module DefId to `wildcard_imports`
-                        All => todo!(),
+                        All(span) => todo!(),
                     }
                 },
 
@@ -327,7 +327,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_sig(&mut self, sig: &hir::FuncSig, self_ty: Option<DefId>) -> nir::FuncSig {
-        let hir::FuncSig {params, return_type} = sig;
+        let hir::FuncSig {self_param, params, return_type} = sig;
 
         // Make sure there are no duplicate parameters
         let mut duplicate_count = 0;
@@ -352,7 +352,9 @@ impl<'a> ModuleWalker<'a> {
             nir::FuncParam {name, ty}
         }).collect();
 
-        let return_type = self.resolve_ty(return_type, self_ty);
+        let return_type = return_type.as_ref()
+            .map(|return_type| self.resolve_ty(return_type, self_ty))
+            .unwrap_or_else(|| self.prims.unit());
 
         nir::FuncSig {params, return_type}
     }
@@ -409,34 +411,35 @@ impl<'a> ModuleWalker<'a> {
             MethodCall(call) => nir::Expr::MethodCall(Box::new(self.resolve_method_call(call, self_ty))),
             FieldAccess(access) => nir::Expr::FieldAccess(Box::new(self.resolve_field_access(access, self_ty))),
             Cond(cond) => nir::Expr::Cond(Box::new(self.resolve_cond(cond, self_ty))),
-            Call(call) => nir::Expr::Call(self.resolve_func_call(call, self_ty)),
-            Return(ret) => nir::Expr::Return(ret.as_ref().map(|ret| Box::new(self.resolve_expr(ret, self_ty)))),
+            Call(call) => nir::Expr::Call(Box::new(self.resolve_func_call(call, self_ty))),
+            Return(ret) => nir::Expr::Return(Box::new(self.resolve_return(ret, self_ty))),
+            Break(span) => nir::Expr::Break,
+            Continue(span) => nir::Expr::Continue,
             StructLiteral(struct_lit) => nir::Expr::StructLiteral(self.resolve_struct_lit(struct_lit, self_ty)),
-            BStrLiteral(lit) => nir::Expr::BStrLiteral(lit.clone()),
+            BStrLiteral(lit, span) => nir::Expr::BStrLiteral(lit.clone()),
             IntegerLiteral(int_lit) => nir::Expr::IntegerLiteral(self.resolve_int_lit(int_lit)),
-            &RealLiteral(value) => nir::Expr::RealLiteral(value),
-            &ComplexLiteral(value) => nir::Expr::ComplexLiteral(value),
-            &BoolLiteral(value) => nir::Expr::BoolLiteral(value),
-            UnitLiteral => nir::Expr::UnitLiteral,
-            SelfLiteral => nir::Expr::SelfLiteral,
-            Path(path) => nir::Expr::Var(self.resolve_func_name(path)),
-            Var(var) => nir::Expr::Var(self.resolve_var(var)),
+            &RealLiteral(value, span) => nir::Expr::RealLiteral(value),
+            &ComplexLiteral(value, span) => nir::Expr::ComplexLiteral(value),
+            &BoolLiteral(value, span) => nir::Expr::BoolLiteral(value),
+            UnitLiteral(span) => nir::Expr::UnitLiteral,
+            SelfValue(span) => nir::Expr::SelfValue,
+            Path(path) => nir::Expr::Var(self.resolve_path(path)),
         }
     }
 
     fn resolve_assign(&mut self, assign: &hir::Assign, self_ty: Option<DefId>) -> nir::Assign {
-        let hir::Assign {lhs, expr} = assign;
+        let hir::Assign {lvalue, expr} = assign;
 
-        let lhs = match lhs {
+        let lvalue = match lvalue {
             hir::LValue::FieldAccess(access) => {
                 nir::LValue::FieldAccess(self.resolve_field_access(access, self_ty))
             },
 
-            hir::LValue::Var(var) => nir::LValue::Var(self.resolve_var(var)),
+            hir::LValue::Path(path) => nir::LValue::Path(self.resolve_path(path)),
         };
         let expr = self.resolve_expr(expr, self_ty);
 
-        nir::Assign {lhs, expr}
+        nir::Assign {lvalue, expr}
     }
 
     fn resolve_method_call(&mut self, call: &hir::MethodCall, self_ty: Option<DefId>) -> nir::MethodCall {
@@ -472,12 +475,16 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<DefId>) -> nir::FuncCall {
-        let hir::FuncCall {func_name, args} = call;
+        let hir::FuncCall {value, args} = call;
 
-        let func_name = self.resolve_func_name(func_name);
+        let value = self.resolve_expr(value, self_ty);
         let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
 
-        nir::FuncCall {func_name, args}
+        nir::FuncCall {value, args}
+    }
+
+    fn resolve_return(&mut self, ret: &hir::Return, self_ty: Option<DefId>) -> nir::Return {
+        todo!()
     }
 
     fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<DefId>) -> nir::StructLiteral {
@@ -518,7 +525,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
-        let &hir::IntegerLiteral {value, suffix} = int_lit;
+        let &hir::IntegerLiteral {value, suffix, span} = int_lit;
 
         let type_hint = suffix.map(|suffix| todo!());
 
@@ -537,13 +544,13 @@ impl<'a> ModuleWalker<'a> {
         field
     }
 
-    /// Resolves a function name. Returns something even if the function wasn't found so that name
+    /// Resolves a path. Returns something even if the path wasn't found so that name
     /// resolution may continue.
-    fn resolve_func_name(&mut self, path: &hir::IdentPath) -> DefId {
+    fn resolve_path(&mut self, path: &hir::Path) -> DefId {
         match self.lookup_path(path) {
             Some(func) => func,
             None => {
-                // Insert a fake function so name resolution may continue
+                // Insert a fake path so name resolution may continue
                 self.top_scope().functions.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
         }
@@ -565,7 +572,7 @@ impl<'a> ModuleWalker<'a> {
     fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<DefId>) -> DefId {
         use hir::NamedTy::*;
         let ty = match ty {
-            SelfType => match self_ty {
+            SelfType(span) => match self_ty {
                 Some(ty) => Some(ty),
                 None => {
                     self.diag.emit_error(format!("cannot find type `Self` in this scope"));
@@ -594,8 +601,8 @@ impl<'a> ModuleWalker<'a> {
     fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
         use hir::Ty::*;
         let ty = match ty {
-            Unit => Some(self.prims.unit()),
-            SelfType => match self_ty {
+            Unit(span) => Some(self.prims.unit()),
+            SelfType(span) => match self_ty {
                 Some(ty) => Some(ty),
                 None => {
                     self.diag.emit_error(format!("cannot find type `Self` in this scope"));
@@ -621,16 +628,15 @@ impl<'a> ModuleWalker<'a> {
     }
 
     /// Attempts to lookup a path
-    fn lookup_path(&self, path: &hir::IdentPath) -> Option<DefId> {
-        let hir::IdentPath {components, root} = path;
+    fn lookup_path(&self, path: &hir::Path) -> Option<DefId> {
+        let hir::Path {prefix, components} = path;
 
-        if *root {
-            //TODO: Lookup the module (starting from the root) and lookup the name in its decls
-            todo!()
-        } else {
-            match &components[..] {
+        match prefix {
+            //TODO: Lookup starting from the given prefix
+            Some(prefix) => todo!(),
+            None => match &components[..] {
                 [name] => self.lookup_name(name),
-                //TODO: Lookup the module and lookup the name in its decls
+                //TODO: Lookup the module or type and lookup the final component name in its decls
                 _ => todo!(),
             }
         }

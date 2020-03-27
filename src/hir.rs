@@ -1,8 +1,9 @@
 //! High-level IR - Completely Desugared AST
 
-use std::fmt;
+use std::sync::Arc;
 
 use crate::ast;
+use crate::span::Span;
 
 /// Represents a single module within the current package
 #[derive(Debug, Clone, PartialEq)]
@@ -20,16 +21,26 @@ pub enum Decl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportPath {
-    pub path: IdentPath,
+    /// The prefix of the path (if any)
+    pub prefix: Option<PathPrefix>,
+    /// The path (within the prefix) to import from
+    pub path: Vec<Ident>,
+    /// The items selected from the path
     pub selection: ImportSelection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportSelection {
     /// A specific list of names being imported
-    Names(Vec<Ident>),
+    Names(Vec<ImportName>),
     /// A wildcard import (all items)
-    All,
+    All(Span),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportName {
+    Name {name: Ident, alias: Option<Ident>},
+    SelfValue {alias: Option<Ident>},
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,8 +74,9 @@ pub struct Function {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSig {
+    pub self_param: Option<Span>,
     pub params: Vec<FuncParam>,
-    pub return_type: Ty,
+    pub return_type: Option<Ty>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,26 +132,26 @@ pub enum Expr {
     MethodCall(Box<MethodCall>),
     FieldAccess(Box<FieldAccess>),
     Cond(Box<Cond>),
-    Call(FuncCall),
-    Return(Option<Box<Expr>>),
+    Call(Box<FuncCall>),
+    Return(Box<Return>),
+    Break(Span),
+    Continue(Span),
     StructLiteral(StructLiteral),
-    BStrLiteral(Vec<u8>),
+    BStrLiteral(Arc<[u8]>, Span),
     IntegerLiteral(IntegerLiteral),
-    RealLiteral(f64),
-    ComplexLiteral(f64),
-    BoolLiteral(bool),
-    UnitLiteral,
-    SelfLiteral,
-    Path(IdentPath),
-    /// Either a variable or function in the module scope
-    Var(Ident),
+    RealLiteral(f64, Span),
+    ComplexLiteral(f64, Span),
+    BoolLiteral(bool, Span),
+    UnitLiteral(Span),
+    SelfValue(Span),
+    Path(Path),
 }
 
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
     /// The left-hand expression to assign a value to
-    pub lhs: LValue,
+    pub lvalue: LValue,
     /// The expression for the value to assign to the left-hand side
     pub expr: Expr,
 }
@@ -148,7 +160,7 @@ pub struct Assign {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue {
     FieldAccess(FieldAccess),
-    Var(Ident),
+    Path(Path),
 }
 
 /// A method call in the form `<expr> . <call-expr>`
@@ -184,8 +196,18 @@ pub struct Cond {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncCall {
-    pub func_name: IdentPath,
+    /// The value being called
+    pub value: Expr,
+    /// The arguments passed to the value
     pub args: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Return {
+    /// The span of the `return` keyword
+    pub return_span: Span,
+    /// The expression being returned (optional)
+    pub expr: Option<Expr>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -208,6 +230,8 @@ pub struct IntegerLiteral {
     /// You can append "int" or "real" to help disambiguate the literal
     /// e.g. 132int or 32real
     pub suffix: Option<LiteralSuffix>,
+    /// The span for the entire integer literal, including its suffix
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -218,49 +242,21 @@ pub enum LiteralSuffix {
     Real,
 }
 
-/// A type explicitly named with an identifier or path (as opposited to (), [T], etc.)
-#[derive(Debug, Clone, PartialEq)]
-pub enum NamedTy {
-    SelfType,
-    Named(IdentPath),
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
-    Unit,
-    SelfType,
-    Named(IdentPath),
+    Unit(Span),
+    SelfType(Span),
+    Named(Path),
 }
 
+/// A type explicitly named with an identifier or path (as opposed to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
-pub struct IdentPath {
-    /// The components of the path (non-empty only if root is false)
-    pub components: Vec<Ident>,
-    /// If true, this path is relative to the root of the current package
-    ///
-    /// i.e. the path started with the `package` keyword
-    pub root: bool,
+pub enum NamedTy {
+    SelfType(Span),
+    Named(Path),
 }
 
-impl fmt::Display for IdentPath {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Self {components, root} = self;
-
-        if *root {
-            write!(f, "package")?;
-            if components.is_empty() {
-                return Ok(());
-            }
-            write!(f, "::")?;
-        }
-
-        write!(f, "{}", components[0])?;
-        for comp in &components[1..] {
-            write!(f, "::{}", comp)?;
-        }
-
-        Ok(())
-    }
-}
+pub type Path = ast::Path;
+pub type PathPrefix = ast::PathPrefix;
 
 pub type Ident = ast::Ident;

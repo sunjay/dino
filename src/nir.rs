@@ -16,7 +16,10 @@ pub use def_data::*;
 pub use def_store::*;
 pub use def_table::*;
 
+use std::sync::Arc;
 use std::collections::HashMap;
+
+use crate::span::Span;
 
 #[derive(Debug)]
 pub struct Module {
@@ -84,16 +87,18 @@ pub enum Expr {
     MethodCall(Box<MethodCall>),
     FieldAccess(Box<FieldAccess>),
     Cond(Box<Cond>),
-    Call(FuncCall),
-    Return(Option<Box<Expr>>),
+    Call(Box<FuncCall>),
+    Return(Box<Return>),
+    Break,
+    Continue,
     StructLiteral(StructLiteral),
-    BStrLiteral(Vec<u8>),
+    BStrLiteral(Arc<[u8]>),
     IntegerLiteral(IntegerLiteral),
     RealLiteral(f64),
     ComplexLiteral(f64),
     BoolLiteral(bool),
     UnitLiteral,
-    SelfLiteral,
+    SelfValue,
     Var(DefId),
 }
 
@@ -101,7 +106,7 @@ pub enum Expr {
 #[derive(Debug)]
 pub struct Assign {
     /// The left-hand expression to assign a value to
-    pub lhs: LValue,
+    pub lvalue: LValue,
     /// The expression for the value to assign to the left-hand side
     pub expr: Expr,
 }
@@ -110,7 +115,7 @@ pub struct Assign {
 #[derive(Debug)]
 pub enum LValue {
     FieldAccess(FieldAccess),
-    Var(DefId),
+    Path(DefId),
 }
 
 /// A method call in the form `<expr> . <call-expr>`
@@ -146,8 +151,18 @@ pub struct Cond {
 
 #[derive(Debug)]
 pub struct FuncCall {
-    pub func_name: DefId,
+    /// The value being called
+    pub value: Expr,
+    /// The arguments passed to the value
     pub args: Vec<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Return {
+    /// The span of the `return` keyword
+    pub return_span: Span,
+    /// The expression being returned (optional)
+    pub expr: Option<Expr>
 }
 
 #[derive(Debug)]
