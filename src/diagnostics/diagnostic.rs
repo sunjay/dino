@@ -93,6 +93,8 @@ impl<'a> DiagnosticWriter<'a> {
             if frag.message != *title {
                 emit_message(&source_files, &mut out, None, title);
             }
+        } else {
+            emit_message(&source_files, &mut out, None, title);
         }
 
         for frag in fragments {
