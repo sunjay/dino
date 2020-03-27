@@ -118,9 +118,9 @@ fn emit_message(
             let start_line = source_files.line(span.start);
             let end_line = source_files.line(span.end);
             if start_line == end_line {
-                Cow::Owned(format!("[{}:{}] {}", path.display(), start_line, label))
+                Cow::Owned(format!("{} [{}:{}]", label, path.display(), start_line))
             } else {
-                Cow::Owned(format!("[{}:{}-{}] {}", path.display(), start_line, end_line, label))
+                Cow::Owned(format!("{} [{}:{}-{}]", label, path.display(), start_line, end_line))
             }
         },
 

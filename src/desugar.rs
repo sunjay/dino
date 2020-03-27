@@ -454,7 +454,7 @@ impl Desugar for ast::Assign {
             _ => {
                 let span = lhs.span();
                 diag.error("invalid left-hand side of assignment")
-                    .span_help(span, "cannot assign to this expression")
+                    .span_info(span, "cannot assign to this expression")
                     .emit();
 
                 // Make a fake lvalue so desugaring can continue
