@@ -20,11 +20,11 @@ impl DiagnosticsWriter for StandardStream {
     }
 
     fn write_info(&mut self, message: &str) -> io::Result<()> {
-        write_message(self.lock(), "info:", Color::Cyan, message)
+        write_message(self.lock(), "info:", Color::Green, message)
     }
 
     fn write_note(&mut self, message: &str) -> io::Result<()> {
-        write_message(self.lock(), "note:", Color::Green, message)
+        write_message(self.lock(), "note:", Color::White, message)
     }
 
     fn write_help(&mut self, message: &str) -> io::Result<()> {
