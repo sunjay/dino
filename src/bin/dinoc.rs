@@ -84,9 +84,10 @@ macro_rules! quit {
 macro_rules! check_errors {
     ($diag:expr) => {
         let diag = $diag;
-        let errors = diag.emitted_errors();
-        if errors > 0 {
-            quit!(diag, "aborting due to {} previous errors", errors);
+        match diag.emitted_errors() {
+            0 => {},
+            1 => quit!(diag, "aborting due to 1 previous error"),
+            errors => quit!(diag, "aborting due to {} previous errors", errors),
         }
     };
 }
