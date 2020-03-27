@@ -25,6 +25,6 @@ impl LineNumbers {
 
     /// Returns the line number corresponding to the given index in the source file
     pub fn number(&self, index: usize) -> usize {
-        self.offsets.binary_search(&index).unwrap_or_else(|index| index - 1)
+        self.offsets.binary_search(&index).unwrap_or_else(|index| index)
     }
 }
