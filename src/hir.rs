@@ -85,17 +85,19 @@ pub struct FuncParam {
     pub ty: Ty,
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub decls: Vec<Decl>,
     pub stmts: Vec<Stmt>,
     /// The final statement of the block, used as the return value of the block
     pub ret: Option<Expr>,
+    /// The span of the entire block
+    pub span: Span,
 }
 
 impl Block {
     pub fn is_empty(&self) -> bool {
-        let Block {decls, stmts, ret} = self;
+        let Block {decls, stmts, ret, span: _} = self;
         decls.is_empty() && stmts.is_empty() && ret.is_none()
     }
 }
@@ -192,6 +194,8 @@ pub struct MethodCall {
     pub method_name: Ident,
     /// The arguments to the method call
     pub args: Vec<Expr>,
+    /// The span of the entire method call
+    pub span: Span,
 }
 
 /// A field access in the form `<expr> . <ident>`
@@ -212,6 +216,8 @@ pub struct Cond {
     pub conds: Vec<(Expr, Block)>,
     /// The `else` clause (if any)
     pub else_body: Option<Block>,
+    /// The span of the entire conditional expression
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,6 +226,8 @@ pub struct FuncCall {
     pub value: Expr,
     /// The arguments passed to the value
     pub args: Vec<Expr>,
+    /// The span of the entire call expression
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -234,6 +242,8 @@ pub struct Return {
 pub struct StructLiteral {
     pub name: NamedTy,
     pub field_values: Vec<StructFieldValue>,
+    /// The span of the entire struct literal
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]

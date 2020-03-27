@@ -360,7 +360,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_block(&mut self, block: &hir::Block, self_ty: Option<DefId>) -> nir::Block {
-        let hir::Block {decls, stmts, ret} = block;
+        let hir::Block {decls, stmts, ret, span} = block;
 
         self.push_scope(ScopeKind::Block);
 
@@ -445,7 +445,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_method_call(&mut self, call: &hir::MethodCall, self_ty: Option<DefId>) -> nir::MethodCall {
-        let hir::MethodCall {lhs, method_name, args} = call;
+        let hir::MethodCall {lhs, method_name, args, span} = call;
 
         let lhs = self.resolve_expr(lhs, self_ty);
         let method_name = method_name.to_string();
@@ -464,7 +464,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_cond(&mut self, cond: &hir::Cond, self_ty: Option<DefId>) -> nir::Cond {
-        let hir::Cond {conds, else_body} = cond;
+        let hir::Cond {conds, else_body, span} = cond;
 
         let conds = conds.iter().map(|(if_cond, if_body)| {
             let if_cond = self.resolve_expr(if_cond, self_ty);
@@ -477,7 +477,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<DefId>) -> nir::FuncCall {
-        let hir::FuncCall {value, args} = call;
+        let hir::FuncCall {value, args, span} = call;
 
         let value = self.resolve_expr(value, self_ty);
         let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
@@ -490,7 +490,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<DefId>) -> nir::StructLiteral {
-        let hir::StructLiteral {name, field_values} = struct_lit;
+        let hir::StructLiteral {name, field_values, span} = struct_lit;
 
         let mut fields = HashMap::new();
         let struct_name = self.resolve_named_ty(name, self_ty);
