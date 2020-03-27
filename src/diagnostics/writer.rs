@@ -8,6 +8,7 @@ pub trait DiagnosticsWriter {
     fn write_info(&mut self, message: &str) -> io::Result<()>;
     fn write_note(&mut self, message: &str) -> io::Result<()>;
     fn write_help(&mut self, message: &str) -> io::Result<()>;
+    fn write_newline(&mut self) -> io::Result<()>;
 }
 
 impl DiagnosticsWriter for StandardStream {
@@ -30,6 +31,10 @@ impl DiagnosticsWriter for StandardStream {
     fn write_help(&mut self, message: &str) -> io::Result<()> {
         write_message(self.lock(), "help:", Color::Blue, message)
     }
+
+    fn write_newline(&mut self) -> io::Result<()> {
+        writeln!(self.lock())
+    }
 }
 
 fn write_message(
@@ -42,7 +47,7 @@ fn write_message(
     write!(out, "{} ", prefix)?;
     out.reset()?;
 
-    writeln!(out, "{}\n", message)
+    writeln!(out, "{}", message)
 }
 
 #[cfg(test)]
@@ -75,6 +80,10 @@ impl DiagnosticsWriter for NullWriter {
     }
 
     fn write_help(&mut self, _message: &str) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_newline(&mut self) -> io::Result<()> {
         Ok(())
     }
 }

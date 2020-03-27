@@ -99,6 +99,7 @@ impl<'a> DiagnosticWriter<'a> {
             let &Fragment {span, ref message} = frag;
             emit_message(&source_files, &mut out, Some(span), message);
         }
+        out.write_newline().expect("IO error");
     }
 }
 
