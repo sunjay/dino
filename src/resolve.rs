@@ -408,6 +408,8 @@ impl<'a> ModuleWalker<'a> {
         use hir::Expr::*;
         match expr {
             Assign(assign) => nir::Expr::Assign(Box::new(self.resolve_assign(assign, self_ty))),
+            BoolOr(bool_or) => todo!(),
+            BoolAnd(bool_and) => todo!(),
             MethodCall(call) => nir::Expr::MethodCall(Box::new(self.resolve_method_call(call, self_ty))),
             FieldAccess(access) => nir::Expr::FieldAccess(Box::new(self.resolve_field_access(access, self_ty))),
             Cond(cond) => nir::Expr::Cond(Box::new(self.resolve_cond(cond, self_ty))),

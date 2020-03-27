@@ -129,6 +129,8 @@ pub struct VarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Assign(Box<Assign>),
+    BoolOr(Box<BoolOr>),
+    BoolAnd(Box<BoolAnd>),
     MethodCall(Box<MethodCall>),
     FieldAccess(Box<FieldAccess>),
     Cond(Box<Cond>),
@@ -154,6 +156,24 @@ pub struct Assign {
     pub lvalue: LValue,
     /// The expression for the value to assign to the left-hand side
     pub expr: Expr,
+}
+
+/// The short-circuiting `||` operator
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoolOr {
+    pub lhs: Expr,
+    /// The span of the `||` operator
+    pub span: Span,
+    pub rhs: Expr,
+}
+
+/// The short-circuiting `&&` operator
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoolAnd {
+    pub lhs: Expr,
+    /// The span of the `&&` operator
+    pub span: Span,
+    pub rhs: Expr,
 }
 
 /// Expressions that can be on the left-hand side of assignment

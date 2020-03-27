@@ -7,15 +7,6 @@ pub trait Operator: Copy {
     fn method_name(self) -> hir::Ident;
 }
 
-impl Operator for ast::BoolOp {
-    fn method_name(self) -> hir::Ident {
-        use ast::BoolOp::*;
-        match self {
-            _ => todo!(),
-        }
-    }
-}
-
 impl Operator for ast::CompareOp {
     fn method_name(self) -> hir::Ident {
         use ast::CompareOp::*;

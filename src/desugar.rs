@@ -374,6 +374,22 @@ impl Desugar for ast::Range {
     }
 }
 
+impl Desugar for ast::Binary<ast::BoolOp> {
+    type Output = hir::Expr;
+
+    fn desugar(&self, diag: &Diagnostics) -> Self::Output {
+        let Self {lhs, op, rhs} = self;
+
+        let lhs = lhs.desugar(diag);
+        let rhs = rhs.desugar(diag);
+
+        match op {
+            &ast::BoolOp::Or(span) => hir::Expr::BoolOr(Box::new(hir::BoolOr {lhs, span, rhs})),
+            &ast::BoolOp::And(span) => hir::Expr::BoolAnd(Box::new(hir::BoolAnd {lhs, span, rhs})),
+        }
+    }
+}
+
 impl<Op: Operator> Desugar for ast::Binary<Op> {
     type Output = hir::Expr;
 
