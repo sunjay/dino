@@ -189,78 +189,78 @@ pub struct Unary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RangeOp {
     /// The `..` operator
-    Exclusive,
+    Exclusive(Span),
     /// The `..=` operator
-    Inclusive,
+    Inclusive(Span),
 }
 
 /// All boolean binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BoolOp {
     /// The `||` operator
-    Or,
+    Or(Span),
     /// The `&&` operator
-    And,
+    And(Span),
 }
 
 /// All comparison operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompareOp {
     /// The `==` operator
-    Eq,
+    Eq(Span),
     /// The `!=` operator
-    Ne,
+    Ne(Span),
     /// The `<` operator
-    Lt,
+    Lt(Span),
     /// The `<=` operator
-    Le,
+    Le(Span),
     /// The `>` operator
-    Gt,
+    Gt(Span),
     /// The `>=` operator
-    Ge,
+    Ge(Span),
 }
 
 /// All bitwise operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BitwiseOp {
     /// The `|` operator (bitwise OR)
-    Or,
+    Or(Span),
     /// The `~` operator (bitwise XOR)
-    Xor,
+    Xor(Span),
     /// The `&` operator (bitwise AND)
-    And,
+    And(Span),
     /// The `<<` operator (shift left)
-    Shl,
+    Shl(Span),
     /// The `>>` operator (shift right)
-    Shr,
+    Shr(Span),
 }
 
 /// All numeric operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NumericOp {
     /// The `+` operator
-    Add,
+    Add(Span),
     /// The `-` operator
-    Sub,
+    Sub(Span),
     /// The `*` operator
-    Mul,
+    Mul(Span),
     /// The `/` operator
-    Div,
+    Div(Span),
     /// The `%` operator
-    Rem,
+    Rem(Span),
     /// The `^` operator
-    Pow,
+    Pow(Span),
 }
 
 /// All unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     /// The `+` operator
-    Pos,
+    Pos(Span),
     /// The `-` operator
-    Neg,
+    Neg(Span),
     /// The `!` operator
-    Not,
+    Not(Span),
 }
 
 #[derive(Debug, Clone, PartialEq)]
