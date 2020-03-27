@@ -150,7 +150,7 @@ impl<'a> ModuleWalker<'a> {
                     // scope as long as the same level doesn't define the same name more than once
                     let insert_res = self.top_scope().types.insert_with(name.value.clone(), struct_data);
                     if let Err(_) = insert_res {
-                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
+                        self.diag.span_error(name.span, format!("the name `{}` is defined multiple times", name)).emit();
                     }
                 },
 
@@ -207,7 +207,7 @@ impl<'a> ModuleWalker<'a> {
             match struct_fields.insert_with(name_ident.value.clone(), nir::DefData::Field {ty}) {
                 Ok(_) => {},
                 Err(_) => {
-                    self.diag.emit_error(format!("field `{}` is already declared", name_ident));
+                    self.diag.span_error(name_ident.span, format!("field `{}` is already declared", name_ident)).emit();
                 },
             };
         }
@@ -230,7 +230,7 @@ impl<'a> ModuleWalker<'a> {
                     // scope as long as the same level doesn't define the same name more than once
                     let insert_res = self.top_scope().functions.insert_with(name.value.clone(), func_data);
                     if let Err(_) = insert_res {
-                        self.diag.emit_error(format!("the name `{}` is defined multiple times", name));
+                        self.diag.span_error(name.span, format!("the name `{}` is defined multiple times", name)).emit();
                     }
                 },
 
@@ -268,7 +268,7 @@ impl<'a> ModuleWalker<'a> {
                         let mut store = self.def_store.lock();
                         let ty_info = store.data_mut(self_ty).unwrap_type_mut();
                         if ty_info.methods.contains_key(&method.name.value) {
-                            self.diag.emit_error(format!("duplicate definitions with name `{}`", method.name));
+                            self.diag.span_error(method.name.span, format!("duplicate definitions with name `{}`", method.name)).emit();
                             continue;
 
                         } else {
@@ -337,7 +337,7 @@ impl<'a> ModuleWalker<'a> {
             let name = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::FuncParam) {
                 Ok(id) => id,
                 Err(_) => {
-                    self.diag.emit_error(format!("identifier `{}` is bound more than once in this parameter list", name));
+                    self.diag.span_error(name.span, format!("identifier `{}` is bound more than once in this parameter list", name)).emit();
 
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
@@ -504,7 +504,7 @@ impl<'a> ModuleWalker<'a> {
 
             // Make sure none of the names are specified more than once
             if fields.contains_key(&field_name) {
-                self.diag.emit_error(format!("field `{}` specified more than once", field_name_ident));
+                self.diag.span_error(field_name_ident.span, format!("field `{}` specified more than once", field_name_ident)).emit();
                 continue;
             }
 
@@ -519,7 +519,7 @@ impl<'a> ModuleWalker<'a> {
             let expected_fields = ty_info.fields.struct_fields().len();
             if fields.len() != expected_fields {
                 let name_ident = store.symbol(struct_name);
-                self.diag.emit_error(format!("missing fields in initializer for `{}` (expected: {})", name_ident, expected_fields))
+                self.diag.span_error(*span, format!("missing fields in initializer for `{}` (expected: {})", name_ident, expected_fields)).emit();
             }
         }
 
@@ -574,17 +574,17 @@ impl<'a> ModuleWalker<'a> {
     fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<DefId>) -> DefId {
         use hir::NamedTy::*;
         let ty = match ty {
-            SelfType(span) => match self_ty {
+            &SelfType(span) => match self_ty {
                 Some(ty) => Some(ty),
                 None => {
-                    self.diag.emit_error(format!("cannot find type `Self` in this scope"));
+                    self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
                     None
                 },
             },
             Named(ty_name) => match self.lookup_path(ty_name) {
                 Some(ty) => Some(ty),
                 None => {
-                    self.diag.emit_error(format!("cannot find type `{}` in this scope", ty_name));
+                    self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
                     None
                 },
             },
@@ -604,17 +604,17 @@ impl<'a> ModuleWalker<'a> {
         use hir::Ty::*;
         let ty = match ty {
             Unit(span) => Some(self.prims.unit()),
-            SelfType(span) => match self_ty {
+            &SelfType(span) => match self_ty {
                 Some(ty) => Some(ty),
                 None => {
-                    self.diag.emit_error(format!("cannot find type `Self` in this scope"));
+                    self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
                     None
                 },
             },
             Named(ty_name) => match self.lookup_path(ty_name) {
                 Some(ty) => Some(ty),
                 None => {
-                    self.diag.emit_error(format!("cannot find type `{}` in this scope", ty_name));
+                    self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
                     None
                 },
             },

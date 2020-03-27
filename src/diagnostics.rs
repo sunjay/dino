@@ -85,14 +85,3 @@ impl Diagnostics {
         }
     }
 }
-
-//TODO: Remove this deprecated API
-impl Diagnostics {
-    pub fn emit_error<'a>(&'a self, message: impl Into<Cow<'a, str>>) {
-        self.error(message).emit();
-    }
-
-    pub fn emit_warning<'a>(&'a self, message: impl Into<Cow<'a, str>>) {
-        self.warning(message).emit();
-    }
-}
