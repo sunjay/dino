@@ -193,11 +193,12 @@ fn block(input: Input) -> ParseResult<Block> {
     enum ParseState {
         Continue,
         FoundExpr,
-        FoundBrace,
+        FoundBrace(Span),
     }
     use ParseState::*;
 
-    let (mut input, _) = tk(OpenDelim(Brace))(input)?;
+    let (mut input, open_brace) = tk(OpenDelim(Brace))(input)?;
+    let span_start = open_brace.span;
 
     let mut decls = Vec::new();
     let mut stmts = Vec::new();
@@ -206,27 +207,33 @@ fn block(input: Input) -> ParseResult<Block> {
     // This loop is mostly equivalent to `tuple((many0(alt((decl, stmt))), opt(expr)))`
     // However, that wouldn't work because `many0` returns an error if its parser goes past the
     // start of its input. This would always happen with `stmt` because has `expr` + ';' as valid.
+    let span_end;
     loop {
         let (inp, state) = alt((
             map(decl, |decl| { decls.push(decl); Continue }),
             map(stmt, |stmt| { stmts.push(stmt); Continue }),
             map(expr, |expr| { ret = Some(expr); FoundExpr }),
-            map(tk(CloseDelim(Brace)), |_| FoundBrace),
+            map(tk(CloseDelim(Brace)), |token| FoundBrace(token.span)),
         ))(input)?;
         input = inp;
 
         match state {
             Continue => {},
             FoundExpr => {
-                let (inp, _) = tk(CloseDelim(Brace))(input)?;
+                let (inp, close_brace) = tk(CloseDelim(Brace))(input)?;
+                span_end = close_brace.span;
                 input = inp;
                 break;
             },
-            FoundBrace => break,
+            FoundBrace(span) => {
+                span_end = span;
+                break;
+            },
         }
     }
 
-    Ok((input, Block {decls, stmts, ret}))
+    let span = span_start.to(span_end);
+    Ok((input, Block {decls, stmts, ret, span}))
 }
 
 fn stmt(input: Input) -> ParseResult<Stmt> {
@@ -432,30 +439,37 @@ fn prec15(input: Input) -> ParseResult<Expr> {
         Index(Expr),
     }
 
-    let postfix_op = alt((
+    let postfix_op = spanned(alt((
         map(parens(comma_separated(expr)), Postfix::FuncCall),
         map(brackets(expr), Postfix::Index),
-    ));
+    )));
 
     fold_many0(
         prec16,
         postfix_op,
-        |value, op| match op {
-            Postfix::FuncCall(args) => Expr::Call(Box::new(FuncCall {value, args})),
-            Postfix::Index(expr) => Expr::Index(Box::new(Index {value, expr})),
+        |value, (op, rhs_span)| match op {
+            Postfix::FuncCall(args) => {
+                let span = value.span().to(rhs_span);
+                Expr::Call(Box::new(FuncCall {value, args, span}))
+            },
+            Postfix::Index(expr) => {
+                let span = value.span().to(rhs_span);
+                Expr::Index(Box::new(Index {value, expr, span}))
+            },
         },
     )(input)
 }
 
 fn prec16(input: Input) -> ParseResult<Expr> {
-    let postfix_op = tuple((tk(Period), ident, opt(parens(comma_separated(expr)))));
+    let postfix_op = tuple((tk(Period), ident, opt(spanned(parens(comma_separated(expr))))));
 
     fold_many0(
         prec17,
         postfix_op,
         |lhs, op| match op {
-            (_, method_name, Some(args)) => {
-                Expr::MethodCall(Box::new(MethodCall {lhs, method_name, args}))
+            (_, method_name, Some((args, args_span))) => {
+                let span = lhs.span().to(args_span);
+                Expr::MethodCall(Box::new(MethodCall {lhs, method_name, args, span}))
             },
             (_, field, None) => {
                 Expr::FieldAccess(Box::new(FieldAccess {lhs, field}))
@@ -483,7 +497,12 @@ fn prec17(input: Input) -> ParseResult<Expr> {
 
 fn cond(input: Input) -> ParseResult<Cond> {
     // Start with a single `if`, since if that isn't found we can quit right away
-    let (mut input, (_, cond, body)) = tuple((kw(Kw::If), expr, block))(input)?;
+    let (mut input, (if_token, cond, (body, if_body_span))) = tuple((
+        kw(Kw::If),
+        expr,
+        spanned(block),
+    ))(input)?;
+    let span_start = if_token.span;
 
     // This is essentially equivalent to:
     // tuple((
@@ -494,6 +513,7 @@ fn cond(input: Input) -> ParseResult<Cond> {
     // fail if we advance further than 1 token.
     let mut conds = vec![(cond, body)];
     let mut else_body = None;
+    let mut span_end = if_body_span;
     loop {
         match opt(kw(Kw::Else))(input)? {
             // Advance in the input past the else
@@ -504,32 +524,36 @@ fn cond(input: Input) -> ParseResult<Cond> {
         }
 
         // One of these must succeed or we produce an error
-        let (inp, stop) = alt((
+        let (inp, (stop, body_span)) = alt((
             // an `else if` block
-            map(tuple((kw(Kw::If), expr, block)), |(_, cond, body)| {
+            map(tuple((kw(Kw::If), expr, spanned(block))), |(_, cond, (body, body_span))| {
                 conds.push((cond, body));
-                false // keep looping
+                // keep looping
+                (false, body_span)
             }),
             // just an `else` block
-            map(block, |body| {
+            map(spanned(block), |(body, body_span)| {
                 else_body = Some(body);
-                true // stop
+                // stop
+                (true, body_span)
             }),
         ))(input)?;
         input = inp;
+        span_end = body_span;
 
         if stop {
             break;
         }
     }
 
-    Ok((input, Cond {conds, else_body}))
+    let span = span_start.to(span_end);
+    Ok((input, Cond {conds, else_body, span}))
 }
 
 fn struct_lit(input: Input) -> ParseResult<StructLiteral> {
     map(
-        tuple((named_ty, braces(comma_separated(struct_field_value)))),
-        |(name, field_values)| StructLiteral {name, field_values},
+        spanned(tuple((named_ty, braces(comma_separated(struct_field_value))))),
+        |((name, field_values), span)| StructLiteral {name, field_values, span},
     )(input)
 }
 
@@ -669,6 +693,24 @@ fn braces<'a, F, O>(f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, O>
     where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
 {
     surrounded(tk(OpenDelim(Brace)), f, tk(CloseDelim(Brace)))
+}
+
+/// Returns the span surrounding the result of the given parser
+fn spanned<'a, F, O>(mut f: F) -> impl FnMut(Input<'a>) -> ParseResult<'a, (O, Span)>
+    where F: FnMut(Input<'a>) -> ParseResult<'a, O>,
+{
+    move |input| {
+        let (_, init_token) = input.advance();
+        let (input, value) = f(input)?;
+        let (_, final_token) = input.advance();
+        let span = Span {
+            start: init_token.span.start,
+            // The final token is one *past* the end token
+            end: final_token.span.start,
+        };
+
+        Ok((input, (value, span)))
+    }
 }
 
 fn kw(keyword: token::Keyword) -> impl FnMut(Input) -> ParseResult<&Token> {

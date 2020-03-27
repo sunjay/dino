@@ -202,7 +202,7 @@ impl Desugar for ast::Block {
     type Output = hir::Block;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {decls, stmts, ret} = self;
+        let Self {decls, stmts, ret, span} = self;
 
         hir::Block {
             decls: decls.desugar(diag),
@@ -422,7 +422,7 @@ impl Desugar for ast::Index {
     type Output = hir::Expr;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {value, expr} = self;
+        let Self {value, expr, span} = self;
 
         hir::Expr::MethodCall(Box::new(hir::MethodCall {
             lhs: value.desugar(diag),
@@ -469,7 +469,7 @@ impl Desugar for ast::MethodCall {
     type Output = hir::MethodCall;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {lhs, method_name, args} = self;
+        let Self {lhs, method_name, args, span} = self;
 
         hir::MethodCall {
             lhs: lhs.desugar(diag),
@@ -496,7 +496,7 @@ impl Desugar for ast::Cond {
     type Output = hir::Cond;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {conds, else_body} = self;
+        let Self {conds, else_body, span} = self;
 
         hir::Cond {
             conds: conds.desugar(diag),
@@ -509,7 +509,7 @@ impl Desugar for ast::FuncCall {
     type Output = hir::FuncCall;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {value, args} = self;
+        let Self {value, args, span} = self;
 
         hir::FuncCall {
             value: value.desugar(diag),
@@ -535,7 +535,7 @@ impl Desugar for ast::StructLiteral {
     type Output = hir::StructLiteral;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
-        let Self {name, field_values} = self;
+        let Self {name, field_values, span} = self;
 
         hir::StructLiteral {
             name: name.desugar(diag),

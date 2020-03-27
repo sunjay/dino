@@ -89,17 +89,19 @@ pub enum FuncParam {
     },
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub decls: Vec<Decl>,
     pub stmts: Vec<Stmt>,
     /// The final statement of the block, used as the return value of the block
     pub ret: Option<Expr>,
+    /// The span of the entire block
+    pub span: Span,
 }
 
 impl Block {
     pub fn is_empty(&self) -> bool {
-        let Block {decls, stmts, ret} = self;
+        let Block {decls, stmts, ret, span: _} = self;
         decls.is_empty() && stmts.is_empty() && ret.is_none()
     }
 }
@@ -163,7 +165,35 @@ pub enum Expr {
 impl Expr {
     /// Returns the span encompassing the entire expression
     pub fn span(&self) -> Span {
-        todo!()
+        use Expr::*;
+        match self {
+            Assign(assign) => assign.span(),
+            Range(range) => range.span(),
+            BoolOp(bin) => bin.span(),
+            CompareOp(bin) => bin.span(),
+            BitwiseOp(bin) => bin.span(),
+            NumericOp(bin) => bin.span(),
+            UnaryOp(unary) => unary.span(),
+            CastAs(cast_as) => cast_as.span(),
+            MethodCall(method_call) => method_call.span,
+            FieldAccess(access) => access.span(),
+            Cond(cond) => cond.span,
+            Call(call) => call.span,
+            Index(index) => index.span,
+            Return(ret) => ret.span(),
+            &Break(span) => span,
+            &Continue(span) => span,
+            Block(block) => block.span,
+            StructLiteral(lit) => lit.span,
+            BStrLiteral(lit) => lit.span,
+            IntegerLiteral(lit) => lit.span,
+            RealLiteral(lit) => lit.span,
+            ComplexLiteral(lit) => lit.span,
+            BoolLiteral(lit) => lit.span,
+            &UnitLiteral(span) => span,
+            &SelfValue(span) => span,
+            Path(path) => path.span(),
+        }
     }
 }
 
@@ -174,10 +204,17 @@ pub struct Range {
     pub rhs: Option<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct CastAs {
-    pub expr: Expr,
-    pub ty: Ty,
+impl Range {
+    pub fn span(&self) -> Span {
+        let Self {lhs, op, rhs} = self;
+
+        match (lhs, rhs) {
+            (None, None) => op.span(),
+            (Some(lhs), None) => lhs.span().to(op.span()),
+            (None, Some(rhs)) => op.span().to(rhs.span()),
+            (Some(lhs), Some(rhs)) => lhs.span().to(rhs.span()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,10 +224,26 @@ pub struct Binary<Op> {
     pub rhs: Expr,
 }
 
+impl<Op> Binary<Op> {
+    pub fn span(&self) -> Span {
+        let Self {lhs, op: _, rhs} = self;
+
+        lhs.span().to(rhs.span())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unary {
     pub op: UnaryOp,
     pub expr: Expr,
+}
+
+impl Unary {
+    pub fn span(&self) -> Span {
+        let Self {op, expr} = self;
+
+        op.span().to(expr.span())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -219,6 +272,15 @@ pub enum BoolOp {
     And(Span),
 }
 
+impl BoolOp {
+    pub fn span(self) -> Span {
+        use BoolOp::*;
+        match self {
+            Or(span) | And(span) => span,
+        }
+    }
+}
+
 /// All comparison operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompareOp {
@@ -236,6 +298,15 @@ pub enum CompareOp {
     Ge(Span),
 }
 
+impl CompareOp {
+    pub fn span(self) -> Span {
+        use CompareOp::*;
+        match self {
+            Eq(span) | Ne(span) | Lt(span) | Le(span) | Gt(span) | Ge(span) => span,
+        }
+    }
+}
+
 /// All bitwise operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BitwiseOp {
@@ -249,6 +320,15 @@ pub enum BitwiseOp {
     Shl(Span),
     /// The `>>` operator (shift right)
     Shr(Span),
+}
+
+impl BitwiseOp {
+    pub fn span(self) -> Span {
+        use BitwiseOp::*;
+        match self {
+            Or(span) | Xor(span) | And(span) | Shl(span) | Shr(span) => span,
+        }
+    }
 }
 
 /// All numeric operators
@@ -268,6 +348,15 @@ pub enum NumericOp {
     Pow(Span),
 }
 
+impl NumericOp {
+    pub fn span(self) -> Span {
+        use NumericOp::*;
+        match self {
+            Add(span) | Sub(span) | Mul(span) | Div(span) | Rem(span) | Pow(span) => span,
+        }
+    }
+}
+
 /// All unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
@@ -279,6 +368,15 @@ pub enum UnaryOp {
     Not(Span),
 }
 
+impl UnaryOp {
+    pub fn span(self) -> Span {
+        use UnaryOp::*;
+        match self {
+            Pos(span) | Neg(span) | Not(span) => span,
+        }
+    }
+}
+
 /// An assignment expression in the form `<lvalue> = <value>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
@@ -286,6 +384,28 @@ pub struct Assign {
     pub lhs: Expr,
     /// The expression for the value to assign to the left-hand side
     pub rhs: Expr,
+}
+
+impl Assign {
+    pub fn span(&self) -> Span {
+        let Self {lhs, rhs} = self;
+
+        lhs.span().to(rhs.span())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CastAs {
+    pub expr: Expr,
+    pub ty: Ty,
+}
+
+impl CastAs {
+    pub fn span(&self) -> Span {
+        let Self {expr, ty} = self;
+
+        expr.span().to(ty.span())
+    }
 }
 
 /// A method call in the form `<expr> . <call-expr>`
@@ -297,6 +417,8 @@ pub struct MethodCall {
     pub method_name: Ident,
     /// The arguments to the method call
     pub args: Vec<Expr>,
+    /// The span of the entire method call
+    pub span: Span,
 }
 
 /// A field access in the form `<expr> . <ident>`
@@ -308,6 +430,14 @@ pub struct FieldAccess {
     pub field: Ident,
 }
 
+impl FieldAccess {
+    pub fn span(&self) -> Span {
+        let Self {lhs, field} = self;
+
+        lhs.span().to(field.span)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cond {
     /// A list of (condition, body) that corresponds to:
@@ -317,6 +447,8 @@ pub struct Cond {
     pub conds: Vec<(Expr, Block)>,
     /// The `else` clause (if any)
     pub else_body: Option<Block>,
+    /// The span of the entire conditional expression
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -325,6 +457,8 @@ pub struct FuncCall {
     pub value: Expr,
     /// The arguments passed to the value
     pub args: Vec<Expr>,
+    /// The span of the entire call expression
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -333,6 +467,8 @@ pub struct Index {
     pub value: Expr,
     /// The index expression
     pub expr: Expr,
+    /// The span of the entire index expression
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -343,10 +479,23 @@ pub struct Return {
     pub expr: Option<Expr>
 }
 
+impl Return {
+    pub fn span(&self) -> Span {
+        let &Self {return_span, ref expr} = self;
+
+        match expr {
+            Some(expr) => return_span.to(expr.span()),
+            None => return_span,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructLiteral {
     pub name: NamedTy,
     pub field_values: Vec<StructFieldValue>,
+    /// The span of the entire struct literal
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -384,6 +533,17 @@ pub enum Ty {
     Named(Path),
 }
 
+impl Ty {
+    pub fn span(&self) -> Span {
+        use Ty::*;
+        match self {
+            &Unit(span) => span,
+            &SelfType(span) => span,
+            Named(path) => path.span(),
+        }
+    }
+}
+
 /// A type explicitly named with an identifier or path (as opposed to (), [T], etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedTy {
@@ -404,7 +564,7 @@ impl From<NamedTy> for Ty {
 pub struct Path {
     /// The prefix of the path (if any)
     pub prefix: Option<PathPrefix>,
-    /// The components of the path (allowed to be empty if `prefix` is not `None`)
+    /// The components of the path (allowed to be empty only if `prefix` is not `None`)
     pub components: Vec<Ident>,
 }
 
@@ -416,6 +576,18 @@ impl Path {
                 value: name.into(),
                 span,
             }).collect(),
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        let Self {prefix, components} = self;
+
+        match (prefix, &components[..]) {
+            (Some(prefix), []) => prefix.span(),
+            (Some(prefix), [.., last]) => prefix.span().to(last.span),
+            (None, [comp]) => comp.span,
+            (None, [first, .., last]) => first.span.to(last.span),
+            (None, []) => unreachable!("bug: path should never be empty"),
         }
     }
 }
@@ -461,6 +633,15 @@ pub enum PathPrefix {
     SelfValue(Span),
     /// The `super` keyword
     Super(Span),
+}
+
+impl PathPrefix {
+    pub fn span(self) -> Span {
+        use PathPrefix::*;
+        match self {
+            Package(span) | SelfType(span) | SelfValue(span) | Super(span) => span,
+        }
+    }
 }
 
 impl fmt::Display for PathPrefix {
