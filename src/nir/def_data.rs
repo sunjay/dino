@@ -1,9 +1,9 @@
-use super::{TypeInfo, DefId, DefTable};
+use super::{TypeInfo, DefTable, Ty};
 
 #[derive(Debug)]
 pub enum DefData {
     Type(TypeInfo),
-    Field {ty: DefId},
+    Field {ty: Ty},
     /// The function signature will be initialized exactly once during name resolution
     Function(Option<super::FuncSig>),
     FuncParam,

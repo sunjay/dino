@@ -1,12 +1,43 @@
 //! Name resolution - translates High-level IR (HIR) to Nameless IR (NIR)
 
-use std::collections::{VecDeque, HashMap};
+use std::collections::VecDeque;
 
 use crate::hir;
 use crate::nir::{self, DefId};
 use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;
+
+/// Given the root module of a program, recursively resolves all the names in all of the modules in
+/// the program. Returns the completely flattened program, with all declarations extracted from
+/// their scopes.
+pub fn resolve_program<'a>(
+    root_module: &hir::Module,
+    def_store: &'a nir::DefStoreSync,
+    packages: &'a Packages,
+    prims: &'a Primitives,
+    diag: &'a Diagnostics,
+) -> nir::Program {
+    let mut walker = ModuleWalker {
+        scope_stack: VecDeque::new(),
+        functions: Vec::new(),
+        def_store,
+        packages,
+        prims,
+        diag,
+    };
+
+    assert!(walker.scope_stack.is_empty(),
+        "bug: attempt to add a root module scope onto a non-empty scope stack");
+
+    walker.resolve_module(root_module);
+
+    assert!(walker.scope_stack.is_empty(), "bug: mismatched push and pop calls");
+
+    nir::Program {
+        functions: walker.functions,
+    }
+}
 
 /// The different kinds of scopes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,7 +91,7 @@ struct Scope {
 }
 
 /// Resolves the declarations for a single module
-pub struct ModuleWalker<'a> {
+struct ModuleWalker<'a> {
     /// The back of the `VecDeque` is the top of the stack
     scope_stack: VecDeque<Scope>,
     /// All functions found throughout the module
@@ -76,41 +107,15 @@ pub struct ModuleWalker<'a> {
 }
 
 impl<'a> ModuleWalker<'a> {
-    pub fn resolve(
-        module: &hir::Module,
-        def_store: &'a nir::DefStoreSync,
-        packages: &'a Packages,
-        prims: &'a Primitives,
-        diag: &'a Diagnostics,
-    ) -> nir::Module {
-        let walker = Self {
-            scope_stack: VecDeque::new(),
-            functions: Vec::new(),
-            def_store,
-            packages,
-            prims,
-            diag,
-        };
-
-        walker.resolve_module(module)
-    }
-
-    fn resolve_module(mut self, module: &hir::Module) -> nir::Module {
-        assert!(self.scope_stack.is_empty(),
-            "bug: attempt to add a root module scope onto a non-empty scope stack");
-
+    fn resolve_module(&mut self, module: &hir::Module) {
         let hir::Module {decls} = module;
 
         self.push_scope(ScopeKind::Module);
         self.insert_decls(decls, None);
         self.pop_scope();
-
-        assert!(self.scope_stack.is_empty(), "bug: mismatched push and pop calls");
-
-        nir::Module {functions: self.functions}
     }
 
-    fn insert_decls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
+    fn insert_decls(&mut self, decls: &[hir::Decl], self_ty: Option<&nir::Ty>) {
         // Add imports/types first, so they can be available for everything else
         self.insert_imports_types(decls, self_ty);
         // Insert fields of each type now that all declared types/imports have been inserted
@@ -122,7 +127,7 @@ impl<'a> ModuleWalker<'a> {
         self.insert_funcs_impls(decls, self_ty);
     }
 
-    fn insert_imports_types(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
+    fn insert_imports_types(&mut self, decls: &[hir::Decl], self_ty: Option<&nir::Ty>) {
         for decl in decls {
             match decl {
                 hir::Decl::Import(import) => {
@@ -173,11 +178,12 @@ impl<'a> ModuleWalker<'a> {
                     // be given that we just inserted it
                     let struct_id = self.top_scope().types.id(&name.value)
                         .expect("bug: all structs should be inserted in the scope at this point");
+                    let struct_def = nir::DefSpan {id: struct_id, span: name.span};
 
                     // Insert into type info so the fields are available by ID
                     // We don't have to worry about overwriting fields because we've already
                     // checked that there is only one decl of this name in this scope
-                    self.insert_struct_fields(struct_id, fields);
+                    self.insert_struct_fields(struct_def, fields);
                 },
 
                 // Ignored in this pass
@@ -187,21 +193,22 @@ impl<'a> ModuleWalker<'a> {
         }
     }
 
-    fn insert_struct_fields(&mut self, self_ty: DefId, fields: &[hir::StructField]) {
+    fn insert_struct_fields(&mut self, self_ty: nir::DefSpan, fields: &[hir::StructField]) {
         // If the struct fields are not currently empty, we must be walking a duplicate decl
         let mut store = self.def_store.lock();
-        let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+        let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
         if !ty_info.fields.is_empty() {
             // Ignore this decl
             return;
         }
 
+        let nir_self_ty = nir::Ty::Def(self_ty);
         for field in fields {
             let hir::StructField {name: name_ident, ty} = field;
-            let ty = self.resolve_ty(ty, Some(self_ty));
+            let ty = self.resolve_ty(ty, Some(&nir_self_ty));
 
             let mut store = self.def_store.lock();
-            let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+            let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
             let struct_fields = ty_info.fields.struct_fields_mut();
             // Need to check that field names are unique
             match struct_fields.insert_with(name_ident.value.clone(), nir::DefData::Field {ty}) {
@@ -240,7 +247,7 @@ impl<'a> ModuleWalker<'a> {
         }
     }
 
-    fn insert_funcs_impls(&mut self, decls: &[hir::Decl], self_ty: Option<DefId>) {
+    fn insert_funcs_impls(&mut self, decls: &[hir::Decl], self_ty: Option<&nir::Ty>) {
         for decl in decls {
             match decl {
                 // Already handled
@@ -256,17 +263,21 @@ impl<'a> ModuleWalker<'a> {
                     // impls don't have to be in the same scope as the struct itself
                     let self_ty = self.resolve_ty(impl_self_ty, self_ty);
 
+                    let self_ty_id = match self_ty {
+                        nir::Ty::Def(def) => def.id,
+                    };
+
                     // Push a scope so that method names do not clash with free function names
                     self.push_scope(ScopeKind::Impl);
                     for method in methods {
-                        let func = match self.resolve_function(method, Some(self_ty)) {
+                        let func = match self.resolve_function(method, Some(&self_ty)) {
                             Some(func) => func,
                             None => continue,
                         };
 
                         // Insert into type info so the methods can be looked up by name later
                         let mut store = self.def_store.lock();
-                        let ty_info = store.data_mut(self_ty).unwrap_type_mut();
+                        let ty_info = store.data_mut(self_ty_id).unwrap_type_mut();
                         if ty_info.methods.contains_key(&method.name.value) {
                             self.diag.span_error(method.name.span, format!("duplicate definitions with name `{}`", method.name)).emit();
                             continue;
@@ -275,7 +286,7 @@ impl<'a> ModuleWalker<'a> {
                             // Only insert the method if a method with that name hasn't been
                             // inserted yet. This means that the first decl of every method name
                             // will be kept in the type info.
-                            ty_info.methods.insert(method.name.value.clone(), func.name);
+                            ty_info.methods.insert(method.name.value.clone(), func.name.id);
                         }
 
                         self.functions.push(func);
@@ -292,12 +303,13 @@ impl<'a> ModuleWalker<'a> {
         }
     }
 
-    fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<DefId>) -> Option<nir::Function> {
+    fn resolve_function(&mut self, func: &hir::Function, self_ty: Option<&nir::Ty>) -> Option<nir::Function> {
         let hir::Function {name, sig, body} = func;
 
         // Name should be in the top scope at this point
-        let name = self.top_scope().functions.id(&name.value)
+        let name_id = self.top_scope().functions.id(&name.value)
             .expect("bug: all functions should be inserted in the scope at this point");
+        let name = nir::DefSpan {id: name_id, span: name.span};
 
         // Push a new scope for this function so that after we're done with it the parameters are
         // not in scope anymore
@@ -310,7 +322,7 @@ impl<'a> ModuleWalker<'a> {
         self.pop_scope();
 
         let mut store = self.def_store.lock();
-        match store.data_mut(name) {
+        match store.data_mut(name_id) {
             nir::DefData::Function(dsig@None) => {
                 *dsig = Some(sig.clone());
             },
@@ -326,15 +338,21 @@ impl<'a> ModuleWalker<'a> {
         Some(nir::Function {name, sig, body})
     }
 
-    fn resolve_sig(&mut self, sig: &hir::FuncSig, self_ty: Option<DefId>) -> nir::FuncSig {
+    fn resolve_sig(&mut self, sig: &hir::FuncSig, self_ty: Option<&nir::Ty>) -> nir::FuncSig {
         let hir::FuncSig {self_param, params, return_type} = sig;
+
+        let self_param = self_param.map(|span| {
+            let id = self.top_scope().variables.insert_with("self".into(), nir::DefData::FuncParam)
+                .expect("bug: parser + desugar should guarantee only a single `self` parameter");
+            nir::DefSpan {id, span}
+        });
 
         // Make sure there are no duplicate parameters
         let mut duplicate_count = 0;
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::FuncParam) {
+            let name_id = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::FuncParam) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.span_error(name.span, format!("identifier `{}` is bound more than once in this parameter list", name)).emit();
@@ -347,20 +365,20 @@ impl<'a> ModuleWalker<'a> {
                 },
             };
 
+            let name = nir::DefSpan {id: name_id, span: name.span};
             let ty = self.resolve_ty(ty, self_ty);
 
             nir::FuncParam {name, ty}
         }).collect();
 
         let return_type = return_type.as_ref()
-            .map(|return_type| self.resolve_ty(return_type, self_ty))
-            .unwrap_or_else(|| self.prims.unit());
+            .map(|return_type| self.resolve_ty(return_type, self_ty));
 
-        nir::FuncSig {params, return_type}
+        nir::FuncSig {self_param, params, return_type}
     }
 
-    fn resolve_block(&mut self, block: &hir::Block, self_ty: Option<DefId>) -> nir::Block {
-        let hir::Block {decls, stmts, ret, span} = block;
+    fn resolve_block(&mut self, block: &hir::Block, self_ty: Option<&nir::Ty>) -> nir::Block {
+        let &hir::Block {ref decls, ref stmts, ref ret, span} = block;
 
         self.push_scope(ScopeKind::Block);
 
@@ -372,10 +390,10 @@ impl<'a> ModuleWalker<'a> {
 
         self.pop_scope();
 
-        nir::Block {stmts, ret}
+        nir::Block {stmts, ret, span}
     }
 
-    fn resolve_stmt(&mut self, stmt: &hir::Stmt, self_ty: Option<DefId>) -> nir::Stmt {
+    fn resolve_stmt(&mut self, stmt: &hir::Stmt, self_ty: Option<&nir::Ty>) -> nir::Stmt {
         match stmt {
             hir::Stmt::Cond(cond) => nir::Stmt::Cond(self.resolve_cond(cond, self_ty)),
             hir::Stmt::WhileLoop(wloop) => nir::Stmt::WhileLoop(self.resolve_while_loop(wloop, self_ty)),
@@ -384,7 +402,7 @@ impl<'a> ModuleWalker<'a> {
         }
     }
 
-    fn resolve_while_loop(&mut self, wloop: &hir::WhileLoop, self_ty: Option<DefId>) -> nir::WhileLoop {
+    fn resolve_while_loop(&mut self, wloop: &hir::WhileLoop, self_ty: Option<&nir::Ty>) -> nir::WhileLoop {
         let hir::WhileLoop {cond, body} = wloop;
 
         let cond = self.resolve_expr(cond, self_ty);
@@ -393,43 +411,45 @@ impl<'a> ModuleWalker<'a> {
         nir::WhileLoop {cond, body}
     }
 
-    fn resolve_var_decl(&mut self, var_decl: &hir::VarDecl, self_ty: Option<DefId>) -> nir::VarDecl {
+    fn resolve_var_decl(&mut self, var_decl: &hir::VarDecl, self_ty: Option<&nir::Ty>) -> nir::VarDecl {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name = self.top_scope().variables.insert_overwrite_with(name.value.clone(), nir::DefData::Variable);
+        let name_id = self.top_scope().variables.insert_overwrite_with(name.value.clone(), nir::DefData::Variable);
+        let name = nir::DefSpan {id: name_id, span: name.span};
+
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
         let expr = self.resolve_expr(expr, self_ty);
 
         nir::VarDecl {name, ty, expr}
     }
 
-    fn resolve_expr(&mut self, expr: &hir::Expr, self_ty: Option<DefId>) -> nir::Expr {
+    fn resolve_expr(&mut self, expr: &hir::Expr, self_ty: Option<&nir::Ty>) -> nir::Expr {
         use hir::Expr::*;
         match expr {
             Assign(assign) => nir::Expr::Assign(Box::new(self.resolve_assign(assign, self_ty))),
-            BoolOr(bool_or) => todo!(),
-            BoolAnd(bool_and) => todo!(),
+            BoolOr(bool_or) => nir::Expr::BoolOr(Box::new(self.resolve_bool_or(bool_or, self_ty))),
+            BoolAnd(bool_and) => nir::Expr::BoolAnd(Box::new(self.resolve_bool_and(bool_and, self_ty))),
             MethodCall(call) => nir::Expr::MethodCall(Box::new(self.resolve_method_call(call, self_ty))),
             FieldAccess(access) => nir::Expr::FieldAccess(Box::new(self.resolve_field_access(access, self_ty))),
             Cond(cond) => nir::Expr::Cond(Box::new(self.resolve_cond(cond, self_ty))),
             Call(call) => nir::Expr::Call(Box::new(self.resolve_func_call(call, self_ty))),
             Return(ret) => nir::Expr::Return(Box::new(self.resolve_return(ret, self_ty))),
-            Break(span) => nir::Expr::Break,
-            Continue(span) => nir::Expr::Continue,
+            &Break(span) => nir::Expr::Break(span),
+            &Continue(span) => nir::Expr::Continue(span),
             StructLiteral(struct_lit) => nir::Expr::StructLiteral(self.resolve_struct_lit(struct_lit, self_ty)),
-            BStrLiteral(lit, span) => nir::Expr::BStrLiteral(lit.clone()),
+            &BStrLiteral(ref lit, span) => nir::Expr::BStrLiteral(lit.clone(), span),
             IntegerLiteral(int_lit) => nir::Expr::IntegerLiteral(self.resolve_int_lit(int_lit)),
-            &RealLiteral(value, span) => nir::Expr::RealLiteral(value),
-            &ComplexLiteral(value, span) => nir::Expr::ComplexLiteral(value),
-            &BoolLiteral(value, span) => nir::Expr::BoolLiteral(value),
-            UnitLiteral(span) => nir::Expr::UnitLiteral,
-            SelfValue(span) => nir::Expr::SelfValue,
-            Path(path) => nir::Expr::Var(self.resolve_path(path)),
+            &RealLiteral(value, span) => nir::Expr::RealLiteral(value, span),
+            &ComplexLiteral(value, span) => nir::Expr::ComplexLiteral(value, span),
+            &BoolLiteral(value, span) => nir::Expr::BoolLiteral(value, span),
+            &UnitLiteral(span) => nir::Expr::UnitLiteral(span),
+            &SelfValue(span) => nir::Expr::SelfValue(span),
+            Path(path) => nir::Expr::Def(self.resolve_path_expr(path, self_ty)),
         }
     }
 
-    fn resolve_assign(&mut self, assign: &hir::Assign, self_ty: Option<DefId>) -> nir::Assign {
+    fn resolve_assign(&mut self, assign: &hir::Assign, self_ty: Option<&nir::Ty>) -> nir::Assign {
         let hir::Assign {lvalue, expr} = assign;
 
         let lvalue = match lvalue {
@@ -437,34 +457,54 @@ impl<'a> ModuleWalker<'a> {
                 nir::LValue::FieldAccess(self.resolve_field_access(access, self_ty))
             },
 
-            hir::LValue::Path(path) => nir::LValue::Path(self.resolve_path(path)),
+            //TODO: Assert that the hir::Path is a plain variable since that's all we support right now
+            //TODO: Assert that the resolved name comes from a variable and not a function
+            hir::LValue::Path(path) => nir::LValue::Path(self.resolve_path_expr(path, self_ty)),
         };
         let expr = self.resolve_expr(expr, self_ty);
 
         nir::Assign {lvalue, expr}
     }
 
-    fn resolve_method_call(&mut self, call: &hir::MethodCall, self_ty: Option<DefId>) -> nir::MethodCall {
-        let hir::MethodCall {lhs, method_name, args, span} = call;
+    fn resolve_bool_or(&mut self, bool_or: &hir::BoolOr, self_ty: Option<&nir::Ty>) -> nir::BoolOr {
+        let &hir::BoolOr {ref lhs, op_span, ref rhs} = bool_or;
 
         let lhs = self.resolve_expr(lhs, self_ty);
-        let method_name = method_name.to_string();
-        let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
+        let rhs = self.resolve_expr(rhs, self_ty);
 
-        nir::MethodCall {lhs, method_name, args}
+        nir::BoolOr {lhs, op_span, rhs}
     }
 
-    fn resolve_field_access(&mut self, access: &hir::FieldAccess, self_ty: Option<DefId>) -> nir::FieldAccess {
+    fn resolve_bool_and(&mut self, bool_and: &hir::BoolAnd, self_ty: Option<&nir::Ty>) -> nir::BoolAnd {
+        let &hir::BoolAnd {ref lhs, op_span, ref rhs} = bool_and;
+
+        let lhs = self.resolve_expr(lhs, self_ty);
+        let rhs = self.resolve_expr(rhs, self_ty);
+
+        nir::BoolAnd {lhs, op_span, rhs}
+    }
+
+    fn resolve_method_call(&mut self, call: &hir::MethodCall, self_ty: Option<&nir::Ty>) -> nir::MethodCall {
+        let &hir::MethodCall {ref lhs, ref method_name, ref args, span} = call;
+
+        let lhs = self.resolve_expr(lhs, self_ty);
+        let method_name = method_name.clone();
+        let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
+
+        nir::MethodCall {lhs, method_name, args, span}
+    }
+
+    fn resolve_field_access(&mut self, access: &hir::FieldAccess, self_ty: Option<&nir::Ty>) -> nir::FieldAccess {
         let hir::FieldAccess {lhs, field} = access;
 
         let lhs = self.resolve_expr(lhs, self_ty);
-        let field = field.to_string();
+        let field = field.clone();
 
         nir::FieldAccess {lhs, field}
     }
 
-    fn resolve_cond(&mut self, cond: &hir::Cond, self_ty: Option<DefId>) -> nir::Cond {
-        let hir::Cond {conds, else_body, span} = cond;
+    fn resolve_cond(&mut self, cond: &hir::Cond, self_ty: Option<&nir::Ty>) -> nir::Cond {
+        let &hir::Cond {ref conds, ref else_body, span} = cond;
 
         let conds = conds.iter().map(|(if_cond, if_body)| {
             let if_cond = self.resolve_expr(if_cond, self_ty);
@@ -473,191 +513,177 @@ impl<'a> ModuleWalker<'a> {
         }).collect();
         let else_body = else_body.as_ref().map(|body| self.resolve_block(body, self_ty));
 
-        nir::Cond {conds, else_body}
+        nir::Cond {conds, else_body, span}
     }
 
-    fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<DefId>) -> nir::FuncCall {
-        let hir::FuncCall {value, args, span} = call;
+    fn resolve_func_call(&mut self, call: &hir::FuncCall, self_ty: Option<&nir::Ty>) -> nir::FuncCall {
+        let &hir::FuncCall {ref value, ref args, span} = call;
 
         let value = self.resolve_expr(value, self_ty);
         let args = args.into_iter().map(|expr| self.resolve_expr(expr, self_ty)).collect();
 
-        nir::FuncCall {value, args}
+        nir::FuncCall {value, args, span}
     }
 
-    fn resolve_return(&mut self, ret: &hir::Return, self_ty: Option<DefId>) -> nir::Return {
-        todo!()
+    fn resolve_return(&mut self, ret: &hir::Return, self_ty: Option<&nir::Ty>) -> nir::Return {
+        let &hir::Return {return_span, ref expr} = ret;
+
+        let expr = expr.as_ref().map(|expr| self.resolve_expr(expr, self_ty));
+
+        nir::Return {return_span, expr}
     }
 
-    fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<DefId>) -> nir::StructLiteral {
-        let hir::StructLiteral {name, field_values, span} = struct_lit;
+    fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<&nir::Ty>) -> nir::StructLiteral {
+        let &hir::StructLiteral {ref name, ref field_values, span} = struct_lit;
 
-        let mut fields = HashMap::new();
-        let struct_name = self.resolve_named_ty(name, self_ty);
+        let struct_name = match self.resolve_named_ty(name, self_ty) {
+            nir::Ty::Def(def) => def,
+        };
+        let struct_name_id = struct_name.id;
+
+        let mut fields: Vec<nir::StructFieldValue> = Vec::new();
         for field_value in field_values {
             let hir::StructFieldValue {name: field_name_ident, value} = field_value;
 
-            let field_name = match self.resolve_field_name(struct_name, field_name_ident) {
+            let field_name = match self.resolve_field_name(struct_name_id, field_name_ident) {
                 Some(name) => name,
                 None => continue,
             };
 
             // Make sure none of the names are specified more than once
-            if fields.contains_key(&field_name) {
+            if fields.iter().any(|field| field.name.id == field_name.id) {
                 self.diag.span_error(field_name_ident.span, format!("field `{}` specified more than once", field_name_ident)).emit();
                 continue;
             }
 
             let value = self.resolve_expr(value, self_ty);
-            fields.insert(field_name, value);
+
+            fields.push(nir::StructFieldValue {name: field_name, value});
         }
 
         // All the fields in `fields` should be valid and unique, so make sure we have the right
         // amount of fields for this type
         let store = self.def_store.lock();
-        if let nir::DefData::Type(ty_info) = store.data(struct_name) {
+        if let nir::DefData::Type(ty_info) = store.data(struct_name_id) {
             let expected_fields = ty_info.fields.struct_fields().len();
             if fields.len() != expected_fields {
-                let name_ident = store.symbol(struct_name);
-                self.diag.span_error(*span, format!("missing fields in initializer for `{}` (expected: {})", name_ident, expected_fields)).emit();
+                let name_ident = store.symbol(struct_name_id);
+                self.diag.span_error(span, format!("missing fields in initializer for `{}` (expected: {})", name_ident, expected_fields)).emit();
             }
         }
 
-        nir::StructLiteral {name: struct_name, field_values: fields}
+        nir::StructLiteral {name: struct_name, field_values: fields, span}
     }
 
     fn resolve_int_lit(&mut self, int_lit: &hir::IntegerLiteral) -> nir::IntegerLiteral {
         let &hir::IntegerLiteral {value, suffix, span} = int_lit;
 
-        let type_hint = suffix.map(|suffix| todo!());
+        let type_hint = suffix.map(|suffix| match suffix {
+            hir::LiteralSuffix::Int => self.prims.int(),
+            hir::LiteralSuffix::Real => self.prims.real(),
+        });
 
-        nir::IntegerLiteral {value, type_hint}
+        nir::IntegerLiteral {value, type_hint, span}
     }
 
-    fn resolve_field_name(&mut self, self_ty: DefId, field_name: &hir::Ident) -> Option<DefId> {
+    fn resolve_field_name(&mut self, self_ty: DefId, field_name: &hir::Ident) -> Option<nir::DefSpan> {
         let store = self.def_store.lock();
         let ty_info = match store.data(self_ty) {
             nir::DefData::Type(ty_info) => ty_info,
             nir::DefData::Error => return None,
             _ => unreachable!("bug: expected def to be either type or error"),
         };
-        let field = ty_info.fields.struct_fields().id(&field_name.value);
+        let field_id = ty_info.fields.struct_fields().id(&field_name.value);
 
-        field
+        field_id.map(|field_id| nir::DefSpan {id: field_id, span: field_name.span})
     }
 
-    /// Resolves a path. Returns something even if the path wasn't found so that name
-    /// resolution may continue.
-    fn resolve_path(&mut self, path: &hir::Path) -> DefId {
-        match self.lookup_path(path) {
-            Some(func) => func,
+    /// Resolves a path in expression context. Returns something even if the path wasn't found so
+    /// that name resolution may continue.
+    fn resolve_path_expr(&mut self, path: &hir::Path, self_ty: Option<&nir::Ty>) -> nir::DefSpan {
+        let id = match self.lookup_path_expr(path, self_ty) {
+            Some(id) => id,
             None => {
+                self.diag.span_error(path.span(), format!("cannot find path `{}` in this scope", path)).emit();
+
                 // Insert a fake path so name resolution may continue
-                self.top_scope().functions.insert_overwrite_with("$error".into(), nir::DefData::Error)
-            },
-        }
-    }
-
-    /// Resolves a variable. Returns something even if the variable wasn't found so that name
-    /// resolution may continue.
-    fn resolve_var(&mut self, name: &hir::Ident) -> DefId {
-        match self.lookup_name(name) {
-            Some(var) => var,
-            None => {
-                // Insert a fake variable so name resolution may continue
                 self.top_scope().variables.insert_overwrite_with("$error".into(), nir::DefData::Error)
             },
-        }
+        };
+
+        nir::DefSpan {id, span: path.span()}
     }
 
     /// Attempts to resolve a named type and emits an error if the type could not be resolved
-    fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<DefId>) -> DefId {
+    fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<&nir::Ty>) -> nir::Ty {
+        //TODO: Remove NamedTy and this entire function
         use hir::NamedTy::*;
-        let ty = match ty {
-            &SelfType(span) => match self_ty {
-                Some(ty) => Some(ty),
-                None => {
-                    self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
-                    None
-                },
-            },
-            Named(ty_name) => match self.lookup_path(ty_name) {
-                Some(ty) => Some(ty),
-                None => {
-                    self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
-                    None
-                },
-            },
-        };
-
-        match ty {
-            Some(ty) => ty,
-            None => {
-                // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error)
-            },
-        }
+        self.resolve_ty(&match ty {
+            &SelfType(span) => hir::Ty::SelfType(span),
+            Named(ty_name) => hir::Ty::Named(ty_name.clone()),
+        }, self_ty)
     }
 
     /// Attempts to resolve a type and emits an error if the type could not be resolved
-    fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<DefId>) -> DefId {
+    fn resolve_ty(&mut self, ty: &hir::Ty, self_ty: Option<&nir::Ty>) -> nir::Ty {
         use hir::Ty::*;
-        let ty = match ty {
-            Unit(span) => Some(self.prims.unit()),
+        match ty {
+            &Unit(span) => {
+                let def = nir::DefSpan {id: self.prims.unit(), span};
+                nir::Ty::Def(def)
+            },
+
             &SelfType(span) => match self_ty {
-                Some(ty) => Some(ty),
+                // Use the same ID since that represents the type, but use the span from the
+                // type we are resolving
+                Some(nir::Ty::Def(def)) => nir::Ty::Def(nir::DefSpan {id: def.id, span}),
+
                 None => {
                     self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
-                    None
+
+                    // Insert a fake type so name resolution may continue
+                    let id = self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error);
+                    nir::Ty::Def(nir::DefSpan {id, span})
                 },
             },
-            Named(ty_name) => match self.lookup_path(ty_name) {
-                Some(ty) => Some(ty),
+
+            Named(ty_name) => match self.lookup_path_type(ty_name, self_ty) {
+                Some(id) => nir::Ty::Def(nir::DefSpan {id, span: ty_name.span()}),
+
                 None => {
                     self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
-                    None
+
+                    // Insert a fake type so name resolution may continue
+                    let id = self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error);
+                    nir::Ty::Def(nir::DefSpan {id, span: ty_name.span()})
                 },
             },
+        }
+    }
+
+    /// Attempts to lookup a path being used in an expression context
+    ///
+    /// This will NOT search types or return an ID that maps to a type
+    fn lookup_path_expr(&self, path: &hir::Path, _self_ty: Option<&nir::Ty>) -> Option<DefId> {
+        let hir::Path {prefix, components} = path;
+        //TODO: Figure out the full path resolution algorithm
+        let name = match (prefix, &components[..]) {
+            (None, [name]) => &name.value,
+            _ => todo!(),
         };
 
-        match ty {
-            Some(ty) => ty,
-            None => {
-                // Insert a fake type so name resolution may continue
-                self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error)
-            },
-        }
-    }
-
-    /// Attempts to lookup a path
-    fn lookup_path(&self, path: &hir::Path) -> Option<DefId> {
-        let hir::Path {prefix, components} = path;
-
-        match prefix {
-            //TODO: Lookup starting from the given prefix
-            Some(prefix) => todo!(),
-            None => match &components[..] {
-                [name] => self.lookup_name(name),
-                //TODO: Lookup the module or type and lookup the final component name in its decls
-                _ => todo!(),
-            }
-        }
-    }
-
-    /// Attempts to lookup a name by walking up the scope stack
-    fn lookup_name(&self, name: &hir::Ident) -> Option<DefId> {
         // Search variables
         for scope in self.scope_stack.iter().rev() {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
                 Impl => break,
-                Function => match scope.variables.id(&name.value) {
+                Function => match scope.variables.id(name) {
                     Some(id) => return Some(id),
                     // Stop searching for variables once we reach a function boundary
                     None => break,
                 },
-                Block => if let Some(id) = scope.variables.id(&name.value) {
+                Block => if let Some(id) = scope.variables.id(name) {
                     return Some(id);
                 },
             }
@@ -668,30 +694,44 @@ impl<'a> ModuleWalker<'a> {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
-                Impl => if let Some(id) = scope.functions.id(&name.value) {
+                Impl => if let Some(id) = scope.functions.id(name) {
                     return Some(id);
                 },
-                Function => if let Some(id) = scope.functions.id(&name.value) {
+                Function => if let Some(id) = scope.functions.id(name) {
                     return Some(id);
                 },
-                Block => if let Some(id) = scope.functions.id(&name.value) {
+                Block => if let Some(id) = scope.functions.id(name) {
                     return Some(id);
                 },
             }
         }
+
+        None
+    }
+
+    /// Attempts to lookup a path being used in a type context
+    ///
+    /// This will only return an ID that maps to a type
+    fn lookup_path_type(&self, path: &hir::Path, _self_ty: Option<&nir::Ty>) -> Option<DefId> {
+        let hir::Path {prefix, components} = path;
+        //TODO: Figure out the full path resolution algorithm
+        let name = match (prefix, &components[..]) {
+            (None, [name]) => &name.value,
+            _ => todo!(),
+        };
 
         // Search types
         for scope in self.scope_stack.iter().rev() {
             use ScopeKind::*;
             match scope.kind {
                 Module => break,
-                Impl => if let Some(id) = scope.types.id(&name.value) {
+                Impl => if let Some(id) = scope.types.id(name) {
                     return Some(id);
                 },
-                Function => if let Some(id) = scope.types.id(&name.value) {
+                Function => if let Some(id) = scope.types.id(name) {
                     return Some(id);
                 },
-                Block => if let Some(id) = scope.types.id(&name.value) {
+                Block => if let Some(id) = scope.types.id(name) {
                     return Some(id);
                 },
             }
