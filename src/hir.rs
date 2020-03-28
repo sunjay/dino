@@ -153,12 +153,19 @@ pub struct Assign {
     pub expr: Expr,
 }
 
+/// Expressions that can be on the left-hand side of assignment
+#[derive(Debug, Clone, PartialEq)]
+pub enum LValue {
+    FieldAccess(FieldAccess),
+    Path(Path),
+}
+
 /// The short-circuiting `||` operator
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoolOr {
     pub lhs: Expr,
     /// The span of the `||` operator
-    pub span: Span,
+    pub op_span: Span,
     pub rhs: Expr,
 }
 
@@ -167,15 +174,8 @@ pub struct BoolOr {
 pub struct BoolAnd {
     pub lhs: Expr,
     /// The span of the `&&` operator
-    pub span: Span,
+    pub op_span: Span,
     pub rhs: Expr,
-}
-
-/// Expressions that can be on the left-hand side of assignment
-#[derive(Debug, Clone, PartialEq)]
-pub enum LValue {
-    FieldAccess(FieldAccess),
-    Path(Path),
 }
 
 /// A method call in the form `<expr> . <call-expr>`

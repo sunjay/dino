@@ -388,8 +388,12 @@ impl Desugar for ast::Binary<ast::BoolOp> {
         let rhs = rhs.desugar(diag);
 
         match op {
-            &ast::BoolOp::Or(span) => hir::Expr::BoolOr(Box::new(hir::BoolOr {lhs, span, rhs})),
-            &ast::BoolOp::And(span) => hir::Expr::BoolAnd(Box::new(hir::BoolAnd {lhs, span, rhs})),
+            &ast::BoolOp::Or(op_span) => {
+                hir::Expr::BoolOr(Box::new(hir::BoolOr {lhs, op_span, rhs}))
+            },
+            &ast::BoolOp::And(op_span) => {
+                hir::Expr::BoolAnd(Box::new(hir::BoolAnd {lhs, op_span, rhs}))
+            },
         }
     }
 }
