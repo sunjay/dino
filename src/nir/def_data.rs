@@ -6,7 +6,6 @@ pub enum DefData {
     Field {ty: Ty},
     /// The function signature will be initialized exactly once during name resolution
     Function(Option<super::FuncSig>),
-    FuncParam,
     Variable,
     /// A placeholder for a def which could not be computed; this is
     /// propagated to avoid useless error messages.

@@ -342,7 +342,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::FuncSig {self_param, params, return_type} = sig;
 
         let self_param = self_param.map(|span| {
-            let id = self.top_scope().variables.insert_with("self".into(), nir::DefData::FuncParam)
+            let id = self.top_scope().variables.insert_with("self".into(), nir::DefData::Variable)
                 .expect("bug: parser + desugar should guarantee only a single `self` parameter");
             nir::DefSpan {id, span}
         });
@@ -352,7 +352,7 @@ impl<'a> ModuleWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name_id = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::FuncParam) {
+            let name_id = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::Variable) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.span_error(name.span, format!("identifier `{}` is bound more than once in this parameter list", name)).emit();
