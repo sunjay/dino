@@ -304,7 +304,7 @@ impl Desugar for ast::Range {
             )),
 
             (Some(lhs), None) => hir::Expr::StructLiteral(hir::StructLiteral {
-                name: hir::NamedTy::Named(hir::Path::hardcoded(
+                name: hir::Ty::Named(hir::Path::hardcoded(
                     vec!["std", "ops", "RangeFrom"],
                     span,
                 )),
@@ -321,7 +321,7 @@ impl Desugar for ast::Range {
             }),
 
             (None, Some(rhs)) => hir::Expr::StructLiteral(hir::StructLiteral {
-                name: hir::NamedTy::Named(hir::Path::hardcoded(
+                name: hir::Ty::Named(hir::Path::hardcoded(
                     vec![
                         "std",
                         "ops",
@@ -345,7 +345,7 @@ impl Desugar for ast::Range {
             }),
 
             (Some(lhs), Some(rhs)) => hir::Expr::StructLiteral(hir::StructLiteral {
-                name: hir::NamedTy::Named(hir::Path::hardcoded(
+                name: hir::Ty::Named(hir::Path::hardcoded(
                     vec![
                         "std",
                         "ops",
@@ -612,12 +612,12 @@ impl Desugar for ast::Ty {
 }
 
 impl Desugar for ast::NamedTy {
-    type Output = hir::NamedTy;
+    type Output = hir::Ty;
 
     fn desugar(&self, diag: &Diagnostics) -> Self::Output {
         match self {
-            &ast::NamedTy::SelfType(span) => hir::NamedTy::SelfType(span),
-            ast::NamedTy::Named(path) => hir::NamedTy::Named(path.desugar(diag)),
+            &ast::NamedTy::SelfType(span) => hir::Ty::SelfType(span),
+            ast::NamedTy::Named(path) => hir::Ty::Named(path.desugar(diag)),
         }
     }
 }

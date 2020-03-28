@@ -536,7 +536,7 @@ impl<'a> ModuleWalker<'a> {
     fn resolve_struct_lit(&mut self, struct_lit: &hir::StructLiteral, self_ty: Option<&nir::Ty>) -> nir::StructLiteral {
         let &hir::StructLiteral {ref name, ref field_values, span} = struct_lit;
 
-        let struct_name = match self.resolve_named_ty(name, self_ty) {
+        let struct_name = match self.resolve_ty(name, self_ty) {
             nir::Ty::Def(def) => def,
         };
         let struct_name_id = struct_name.id;
@@ -612,16 +612,6 @@ impl<'a> ModuleWalker<'a> {
         };
 
         nir::DefSpan {id, span: path.span()}
-    }
-
-    /// Attempts to resolve a named type and emits an error if the type could not be resolved
-    fn resolve_named_ty(&mut self, ty: &hir::NamedTy, self_ty: Option<&nir::Ty>) -> nir::Ty {
-        //TODO: Remove NamedTy and this entire function
-        use hir::NamedTy::*;
-        self.resolve_ty(&match ty {
-            &SelfType(span) => hir::Ty::SelfType(span),
-            Named(ty_name) => hir::Ty::Named(ty_name.clone()),
-        }, self_ty)
     }
 
     /// Attempts to resolve a type and emits an error if the type could not be resolved

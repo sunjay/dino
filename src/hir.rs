@@ -233,7 +233,7 @@ pub struct Return {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructLiteral {
-    pub name: NamedTy,
+    pub name: Ty,
     pub field_values: Vec<StructFieldValue>,
     /// The span of the entire struct literal
     pub span: Span,
@@ -268,13 +268,6 @@ pub enum LiteralSuffix {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
     Unit(Span),
-    SelfType(Span),
-    Named(Path),
-}
-
-/// A type explicitly named with an identifier or path (as opposed to (), [T], etc.)
-#[derive(Debug, Clone, PartialEq)]
-pub enum NamedTy {
     SelfType(Span),
     Named(Path),
 }

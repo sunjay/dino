@@ -62,7 +62,7 @@ bool_lit ::= 'true' | 'false'
 unit_lit ::= '(' ')'
 
 ty ::= '(' ')' | named_ty
-named_ty ::=  'Self' | path
+named_ty ::= 'Self' | path
 
 path ::= path_prefix ('::' (ident '::')* ident)? |
          (ident '::')* ident
