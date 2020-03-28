@@ -457,9 +457,25 @@ impl<'a> ModuleWalker<'a> {
                 nir::LValue::FieldAccess(self.resolve_field_access(access, self_ty))
             },
 
-            //TODO: Assert that the hir::Path is a plain variable since that's all we support right now
-            //TODO: Assert that the resolved name comes from a variable and not a function
-            hir::LValue::Path(path) => nir::LValue::Path(self.resolve_path_expr(path, self_ty)),
+            hir::LValue::Path(path) => {
+                let hir::Path {prefix, components} = path;
+                // Assert that the hir::Path is a plain variable since that's all we support right now
+                if !matches!((prefix, &components[..]), (None, [_])) {
+                    self.diag.span_error(path.span(), "cannot assign to a path that is more than a single variable").emit();
+                }
+
+                let def = self.resolve_path_expr(path, self_ty);
+
+                // Assert that the resolved name comes from a variable and not a function or something else
+                let store = self.def_store.lock();
+                if !matches!(store.data(def.id), nir::DefData::Variable) {
+                    self.diag.error("invalid left-hand side of assignment")
+                        .span_info(path.span(), "this is not a variable that is in scope")
+                        .emit();
+                }
+
+                nir::LValue::Path(def)
+            },
         };
         let expr = self.resolve_expr(expr, self_ty);
 
