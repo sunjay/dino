@@ -95,13 +95,6 @@ pub struct Block {
     pub span: Span,
 }
 
-impl Block {
-    pub fn is_empty(&self) -> bool {
-        let Block {decls, stmts, ret, span: _} = self;
-        decls.is_empty() && stmts.is_empty() && ret.is_none()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Cond(Cond),
