@@ -26,14 +26,13 @@ impl CSymbols {
     /// Inserts a new symbol into the symbol table and returns its ID
     ///
     /// If the symbol was already present in the table, its old ID will be returned.
-    pub fn insert(&mut self, sym: &str) -> Ident {
+    pub fn insert(&mut self, sym: &Arc<str>) -> Ident {
         match self.idents.get(sym).copied() {
             Some(id) => id,
             None => {
-                let sym: Arc<str> = sym.into();
                 let id = Ident(self.symbols.len());
                 self.symbols.push(sym.clone());
-                self.idents.insert(sym, id);
+                self.idents.insert(sym.clone(), id);
                 id
             }
         }
