@@ -1,6 +1,5 @@
 use std::fmt;
-use std::hash::Hash;
-use std::borrow::Borrow;
+use std::sync::Arc;
 use std::collections::HashMap;
 
 use crate::fmt_ctx::DisplayCtx;
@@ -15,42 +14,29 @@ impl DisplayCtx<CSymbols> for Ident {
     }
 }
 
-/// Symbol table for C identifiers
+/// Interned C identifiers
 #[derive(Debug, Default)]
 pub struct CSymbols {
-    ids: HashMap<String, Ident>,
-    symbols: Vec<String>,
+    idents: HashMap<Arc<str>, Ident>,
+    /// Every symbol `Arc<str>` will only be added once to this field
+    symbols: Vec<Arc<str>>,
 }
 
 impl CSymbols {
     /// Inserts a new symbol into the symbol table and returns its ID
     ///
-    /// If the symbol was already present in the table, it will be returned in an `Err`
-    pub fn insert(&mut self, sym: String) -> Result<Ident, String> {
-        if self.ids.contains_key(&sym) {
-            return Err(sym);
+    /// If the symbol was already present in the table, its old ID will be returned.
+    pub fn insert(&mut self, sym: &str) -> Ident {
+        match self.idents.get(sym).copied() {
+            Some(id) => id,
+            None => {
+                let sym: Arc<str> = sym.into();
+                let id = Ident(self.symbols.len());
+                self.symbols.push(sym.clone());
+                self.idents.insert(sym, id);
+                id
+            }
         }
-
-        Ok(self.insert_overwrite(sym))
-    }
-
-    /// Inserts a new symbol into the symbol table and returns its ID
-    ///
-    /// If the symbol was previously present in the table, it will be overwritten with a new ID.
-    pub fn insert_overwrite(&mut self, sym: String) -> Ident {
-        let id = Ident(self.symbols.len());
-        self.symbols.push(sym.clone());
-        self.ids.insert(sym, id);
-
-        id
-    }
-
-    /// Returns the ID associated with the given symbol
-    pub fn id<Q: ?Sized>(&self, sym: &Q) -> Option<Ident>
-        where String: Borrow<Q>,
-              Q: Hash + Eq,
-    {
-        self.ids.get(sym).copied()
     }
 
     /// Retrieves the symbol corresponding to the give ID
