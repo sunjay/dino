@@ -153,7 +153,7 @@ impl<'a> ModuleWalker<'a> {
                     let struct_data = nir::DefData::new_struct(field_names);
                     // You're allowed to redefine structs that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().types.insert_with(name.value.clone(), struct_data);
+                    let insert_res = self.top_scope().types.insert(name.value.clone(), struct_data);
                     if let Err(_) = insert_res {
                         self.diag.span_error(name.span, format!("the name `{}` is defined multiple times", name)).emit();
                     }
@@ -211,7 +211,7 @@ impl<'a> ModuleWalker<'a> {
             let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
             let struct_fields = ty_info.fields.struct_fields_mut();
             // Need to check that field names are unique
-            match struct_fields.insert_with(name_ident.value.clone(), nir::DefData::Field {ty}) {
+            match struct_fields.insert(name_ident.value.clone(), nir::DefData::Field {ty}) {
                 Ok(_) => {},
                 Err(_) => {
                     self.diag.span_error(name_ident.span, format!("field `{}` is already declared", name_ident)).emit();
@@ -235,7 +235,7 @@ impl<'a> ModuleWalker<'a> {
                     let func_data = nir::DefData::new_func();
                     // You're allowed to redefine functions that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
-                    let insert_res = self.top_scope().functions.insert_with(name.value.clone(), func_data);
+                    let insert_res = self.top_scope().functions.insert(name.value.clone(), func_data);
                     if let Err(_) = insert_res {
                         self.diag.span_error(name.span, format!("the name `{}` is defined multiple times", name)).emit();
                     }
@@ -342,7 +342,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::FuncSig {self_param, params, return_type} = sig;
 
         let self_param = self_param.map(|span| {
-            let id = self.top_scope().variables.insert_with("self".into(), nir::DefData::Variable)
+            let id = self.top_scope().variables.insert("self".into(), nir::DefData::Variable)
                 .expect("bug: parser + desugar should guarantee only a single `self` parameter");
             nir::DefSpan {id, span}
         });
@@ -352,7 +352,7 @@ impl<'a> ModuleWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name_id = match self.top_scope().variables.insert_with(name.value.clone(), nir::DefData::Variable) {
+            let name_id = match self.top_scope().variables.insert(name.value.clone(), nir::DefData::Variable) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.span_error(name.span, format!("identifier `{}` is bound more than once in this parameter list", name)).emit();
@@ -360,7 +360,7 @@ impl<'a> ModuleWalker<'a> {
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
                     let fresh_name = format!("{}$p{}", name, duplicate_count).into();
-                    self.top_scope().variables.insert_with(fresh_name, nir::DefData::Error)
+                    self.top_scope().variables.insert(fresh_name, nir::DefData::Error)
                         .expect("bug: fresh variables should not collide")
                 },
             };
@@ -415,7 +415,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name_id = self.top_scope().variables.insert_overwrite_with(name.value.clone(), nir::DefData::Variable);
+        let name_id = self.top_scope().variables.insert_overwrite(name.value.clone(), nir::DefData::Variable);
         let name = nir::DefSpan {id: name_id, span: name.span};
 
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
@@ -623,7 +623,7 @@ impl<'a> ModuleWalker<'a> {
                 self.diag.span_error(path.span(), format!("cannot find path `{}` in this scope", path)).emit();
 
                 // Insert a fake path so name resolution may continue
-                self.top_scope().variables.insert_overwrite_with("$error".into(), nir::DefData::Error)
+                self.top_scope().variables.insert_overwrite("$error".into(), nir::DefData::Error)
             },
         };
 
@@ -648,7 +648,7 @@ impl<'a> ModuleWalker<'a> {
                     self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
 
                     // Insert a fake type so name resolution may continue
-                    let id = self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error);
+                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::DefData::Error);
                     nir::Ty::Def(nir::DefSpan {id, span})
                 },
             },
@@ -660,7 +660,7 @@ impl<'a> ModuleWalker<'a> {
                     self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
 
                     // Insert a fake type so name resolution may continue
-                    let id = self.top_scope().types.insert_overwrite_with("$error".into(), nir::DefData::Error);
+                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::DefData::Error);
                     nir::Ty::Def(nir::DefSpan {id, span: ty_name.span()})
                 },
             },

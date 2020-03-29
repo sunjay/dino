@@ -39,18 +39,18 @@ impl DefTable {
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
     /// If the symbol was already present in the table, it will be returned in an `Err`
-    pub fn insert_with(&mut self, sym: Arc<str>, data: DefData) -> Result<DefId, (Arc<str>, DefData)> {
+    pub fn insert(&mut self, sym: Arc<str>, data: DefData) -> Result<DefId, (Arc<str>, DefData)> {
         if self.ids.contains_key(&sym) {
             return Err((sym, data));
         }
 
-        Ok(self.insert_overwrite_with(sym, data))
+        Ok(self.insert_overwrite(sym, data))
     }
 
     /// Inserts a new symbol into the symbol table with the given data and returns its ID
     ///
     /// If the symbol was previously present in the table, it will be overwritten with a new ID.
-    pub fn insert_overwrite_with(&mut self, sym: Arc<str>, data: DefData) -> DefId {
+    pub fn insert_overwrite(&mut self, sym: Arc<str>, data: DefData) -> DefId {
         let id = self.store().push(sym.clone(), data);
         self.ids.insert(sym, id);
 
