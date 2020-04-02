@@ -132,7 +132,7 @@ impl Machine {
             let mut mem = [0; needed];
             mem.extend(self.mem);
             self.mem = mem;
-            self.current_addr = 0;
+            self.current_addr = extra;
 
         } else if self.current_addr >= self.mem.len() as int {
             let mut needed = self.current_addr as uint - self.mem.len() + 1;
