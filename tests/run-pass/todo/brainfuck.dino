@@ -1,0 +1,283 @@
+//! Brainfuck is an esoteric, turing-complete programming language
+//!
+//! Implementation based on the specification here:
+//! https://github.com/brain-lang/brainfuck/blob/master/brainfuck.md
+
+use std::io;
+
+fn main() {
+    let machine = Machine::new();
+    let input = ByteStream::new();
+
+    // This program prints "Hello World!\n"
+    let program = Program::parse("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
+
+    while let Some(instr) = program.next() {
+        use Instr::*;
+        match instr {
+            Right => machine.right(),
+            Left => machine.left(),
+            Incr => machine.incr(),
+            Decr => machine.decr(),
+            Output => io::write_byte(machine.get()),
+            Input => machine.set(input.read_byte()),
+            JumpForwardIfZero => if machine.get() == 0 {
+                program.jump_forward();
+            },
+            JumpBackwardIfNonZero => if machine.get() != 0 {
+                program.jump_backward();
+            },
+        }
+    }
+}
+
+/// The brainfuck machine
+struct Machine {
+    /// The brainfuck "tape" (linear memory) that grows automatically as needed
+    /// The "memory" of the brainfuck machine
+    mem: [uint],
+    /// The address pointer (an index) to the current cell in memory
+    ///
+    /// This can be negative if movements have resulted in the address pointer going outside the
+    /// current allocated memory. An adjustment will be made before this is actually used to index
+    /// into the memory.
+    current_addr: int,
+}
+
+impl Machine {
+    fn new() -> Self {
+        // Start with a reasonable default memory size which can grow as needed
+        let default_len = 2048;
+
+        Self {
+            mem: [0; default_len],
+            // Starting at half so we don't have to grow it right away if we move left
+            current_addr: default_len as int / 2,
+        }
+    }
+
+    /// Moves the machine address pointer right one cell
+    fn right(self) {
+        self.current_addr += 1;
+    }
+
+    /// Moves the machine address pointer left one cell
+    fn left(self) {
+        self.current_addr -= 1;
+    }
+
+    /// Increments the value at the address pointer
+    ///
+    /// If the value goes above 255, it will wrap back around
+    ///
+    /// If the address pointer has advanced beyond the boundaries of the currently allocated
+    /// memory, this will grow the memory buffer to accomodate the needed space.
+    fn incr(self) {
+        self.grow_if_needed();
+
+        self.mem[self.current_addr as uint] += 1;
+        self.mem[self.current_addr as uint] %= 256;
+    }
+
+    /// Decrements the value at the address pointer
+    ///
+    /// If the value goes below zero, it will wrap back around
+    ///
+    /// If the address pointer has advanced beyond the boundaries of the currently allocated
+    /// memory, this will grow the memory buffer to accomodate the needed space.
+    fn decr(self) {
+        self.grow_if_needed();
+
+        self.mem[self.current_addr as uint] == 0 {
+            self.mem[self.current_addr as uint] = 256;
+        }
+        self.mem[self.current_addr as uint] -= 1;
+    }
+
+    /// Sets the value at the address pointer
+    ///
+    /// The value must be between 0 and 255 (inclusive)
+    ///
+    /// If the address pointer has advanced beyond the boundaries of the currently allocated
+    /// memory, this will grow the memory buffer to accomodate the needed space.
+    fn set(self, value: uint) {
+        assert!(value <= 255);
+        self.grow_if_needed();
+
+        self.mem[self.current_addr as uint] = value;
+    }
+
+    /// Gets the value at the address pointer
+    ///
+    /// The value will be between 0 and 255 (inclusive)
+    ///
+    /// If the address pointer has advanced beyond the boundaries of the currently allocated
+    /// memory, this will grow the memory buffer to accomodate the needed space.
+    fn get(self) -> uint {
+        self.grow_if_needed();
+
+        self.mem[self.current_addr as uint]
+    }
+
+    /// If the address pointer has advanced beyond the boundaries of the currently allocated
+    /// memory, this will grow the memory buffer to accomodate the needed space.
+    fn grow_if_needed(self) {
+        // Allocate some additional space so we don't need to re-allocate too often
+        let extra = self.mem.len() / 4;
+
+        if self.current_addr < 0 {
+            let needed = -self.current_addr as uint;
+            needed += extra;
+
+            let mem = [0; needed];
+            mem.extend(self.mem);
+            self.mem = mem;
+
+        } else if self.current_addr >= self.mem.len() as int {
+            let needed = self.current_addr as uint - self.mem.len() + 1;
+            needed += extra;
+
+            self.mem.extend([0; needed]);
+        }
+    }
+}
+
+/// Brainfuck instructions
+enum Instr {
+    /// The `>` instruction
+    Right,
+    /// The `<` instruction
+    Left,
+    /// The `+` instruction
+    Incr,
+    /// The `-` instruction
+    Decr,
+    /// The `.` instruction
+    Output,
+    /// The `,` instruction
+    Input,
+    /// The `[` instruction
+    JumpForwardIfZero,
+    /// The `]` instruction
+    JumpBackwardIfNonZero,
+}
+
+struct Program {
+    /// The entire brainfuck program
+    instrs: [Instr],
+    /// The next instruction to be executed
+    next: uint,
+}
+
+impl Program {
+    fn parse(program: text) -> Self {
+        let instrs = [];
+
+        for ch in program {
+            use Instr::*;
+            let instr = match ch {
+                '>' => Right,
+                '<' => Left,
+                '+' => Incr,
+                '-' => Decr,
+                '.' => Output,
+                ',' => Input,
+                '[' => JumpForwardIfZero,
+                ']' => JumpBackwardIfNonZero,
+                // Ignore other chars
+                _ => continue,
+            };
+            instrs.push(instr);
+        }
+
+        Self {
+            instrs,
+            next: 0,
+        }
+    }
+
+    fn next(self) -> Option<Instr> {
+        if self.next >= self.instrs.len() {
+            return None;
+        }
+
+        let instr = self.instrs[self.next];
+        self.next += 1;
+        Some(instr)
+    }
+
+    fn jump_forward(self) {
+        let open = 1int;
+        while open != 0 {
+            if self.next >= self.instrs.len() {
+                panic!("no matching `]` instruction was found");
+            }
+
+            use Instr::*;
+            match self.instrs[self.next] {
+                JumpForwardIfZero => open += 1,
+                JumpBackwardIfNonZero => open -= 1,
+                _ => {},
+            }
+
+            self.next += 1;
+        }
+    }
+
+    fn jump_backward(self) {
+        // Start searching at the current instruction
+        self.next -= 1;
+
+        // The current instruction being `]` will set this to -1
+        let open = 0int;
+        while true {
+            use Instr::*;
+            match self.instrs[self.next] {
+                JumpForwardIfZero => open += 1,
+                JumpBackwardIfNonZero => open -= 1,
+                _ => {},
+            }
+
+            if open == 0 {
+                break;
+            }
+
+            if self.next == 0 {
+                panic!("no matching `[` instruction was found");
+            }
+
+            self.next -= 1;
+        }
+    }
+}
+
+/// Abstracts over per-byte input
+struct ByteStream {
+    /// The current line of input being read
+    line: text,
+}
+
+impl ByteStream {
+    fn new() -> Self {
+        Self {
+            line: "",
+        }
+    }
+
+    /// Returns the next byte of input or 0 if EOF has been reached
+    fn read_byte(self) -> uint {
+        if self.line.is_empty() {
+            self.line = io::read_line();
+
+            if self.line.is_empty() {
+                // reached EOF
+                return 0;
+            }
+        }
+
+        let byte = self.line[0];
+        self.line = self.line[1..];
+
+        byte
+    }
+}
