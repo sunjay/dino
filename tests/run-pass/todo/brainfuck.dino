@@ -6,11 +6,11 @@
 use std::io;
 
 fn main() {
-    let machine = Machine::new();
-    let input = ByteStream::new();
+    let mut machine = Machine::new();
+    let mut input = ByteStream::new();
 
     // This program prints "Hello World!\n"
-    let program = Program::parse("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
+    let mut program = Program::parse("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
 
     while let Some(instr) = program.next() {
         use Instr::*;
@@ -57,12 +57,12 @@ impl Machine {
     }
 
     /// Moves the machine address pointer right one cell
-    fn right(self) {
+    fn right(mut self) {
         self.current_addr += 1;
     }
 
     /// Moves the machine address pointer left one cell
-    fn left(self) {
+    fn left(mut self) {
         self.current_addr -= 1;
     }
 
@@ -72,7 +72,7 @@ impl Machine {
     ///
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn incr(self) {
+    fn incr(mut self) {
         self.grow_if_needed();
 
         self.mem[self.current_addr as uint] += 1;
@@ -85,7 +85,7 @@ impl Machine {
     ///
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn decr(self) {
+    fn decr(mut self) {
         self.grow_if_needed();
 
         self.mem[self.current_addr as uint] == 0 {
@@ -100,7 +100,7 @@ impl Machine {
     ///
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn set(self, value: uint) {
+    fn set(mut self, value: uint) {
         assert!(value <= 255);
         self.grow_if_needed();
 
@@ -113,7 +113,7 @@ impl Machine {
     ///
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn get(self) -> uint {
+    fn get(mut self) -> uint {
         self.grow_if_needed();
 
         self.mem[self.current_addr as uint]
@@ -121,20 +121,20 @@ impl Machine {
 
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn grow_if_needed(self) {
+    fn grow_if_needed(mut self) {
         // Allocate some additional space so we don't need to re-allocate too often
         let extra = self.mem.len() / 4;
 
         if self.current_addr < 0 {
-            let needed = -self.current_addr as uint;
+            let mut needed = -self.current_addr as uint;
             needed += extra;
 
-            let mem = [0; needed];
+            let mut mem = [0; needed];
             mem.extend(self.mem);
             self.mem = mem;
 
         } else if self.current_addr >= self.mem.len() as int {
-            let needed = self.current_addr as uint - self.mem.len() + 1;
+            let mut needed = self.current_addr as uint - self.mem.len() + 1;
             needed += extra;
 
             self.mem.extend([0; needed]);
@@ -171,7 +171,7 @@ struct Program {
 
 impl Program {
     fn parse(program: text) -> Self {
-        let instrs = [];
+        let mut instrs = [];
 
         for ch in program {
             use Instr::*;
@@ -196,7 +196,7 @@ impl Program {
         }
     }
 
-    fn next(self) -> Option<Instr> {
+    fn next(mut self) -> Option<Instr> {
         if self.next >= self.instrs.len() {
             return None;
         }
@@ -206,8 +206,8 @@ impl Program {
         Some(instr)
     }
 
-    fn jump_forward(self) {
-        let open = 1int;
+    fn jump_forward(mut self) {
+        let mut open = 1int;
         while open != 0 {
             if self.next >= self.instrs.len() {
                 panic!("no matching `]` instruction was found");
@@ -224,12 +224,12 @@ impl Program {
         }
     }
 
-    fn jump_backward(self) {
+    fn jump_backward(mut self) {
         // Start searching at the current instruction
         self.next -= 1;
 
         // The current instruction being `]` will set this to -1
-        let open = 0int;
+        let mut open = 0int;
         while true {
             use Instr::*;
             match self.instrs[self.next] {
@@ -265,7 +265,7 @@ impl ByteStream {
     }
 
     /// Returns the next byte of input or 0 if EOF has been reached
-    fn read_byte(self) -> uint {
+    fn read_byte(mut self) -> uint {
         if self.line.is_empty() {
             self.line = io::read_line();
 
