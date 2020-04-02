@@ -10,7 +10,7 @@ fn main() {
     let mut input = ByteStream::new();
 
     // This program prints "Hello World!\n"
-    let mut program = Program::parse("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
+    let mut program = Program::parse(b"++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
 
     while let Some(instr) = program.next() {
         use Instr::*;
@@ -19,6 +19,7 @@ fn main() {
             Left => machine.left(),
             Incr => machine.incr(),
             Decr => machine.decr(),
+            //TODO: Check `Result` of writing
             Output => io::write_byte(machine.get()),
             Input => machine.set(input.read_byte()),
             JumpForwardIfZero => if machine.get() == 0 {
@@ -34,8 +35,9 @@ fn main() {
 /// The brainfuck machine
 struct Machine {
     /// The brainfuck "tape" (linear memory) that grows automatically as needed
+    ///
     /// The "memory" of the brainfuck machine
-    mem: [uint],
+    mem: [u8],
     /// The address pointer (an index) to the current cell in memory
     ///
     /// This can be negative if movements have resulted in the address pointer going outside the
@@ -75,8 +77,8 @@ impl Machine {
     fn incr(mut self) {
         self.grow_if_needed();
 
-        self.mem[self.current_addr as uint] += 1;
-        self.mem[self.current_addr as uint] %= 256;
+        let index = self.current_addr as uint;
+        self.mem[index] = self.mem[index].wrapping_add(1);
     }
 
     /// Decrements the value at the address pointer
@@ -88,10 +90,8 @@ impl Machine {
     fn decr(mut self) {
         self.grow_if_needed();
 
-        self.mem[self.current_addr as uint] == 0 {
-            self.mem[self.current_addr as uint] = 256;
-        }
-        self.mem[self.current_addr as uint] -= 1;
+        let index = self.current_addr as uint;
+        self.mem[index] = self.mem[index].wrapping_sub(1);
     }
 
     /// Sets the value at the address pointer
@@ -100,8 +100,7 @@ impl Machine {
     ///
     /// If the address pointer has advanced beyond the boundaries of the currently allocated
     /// memory, this will grow the memory buffer to accomodate the needed space.
-    fn set(mut self, value: uint) {
-        assert!(value <= 255);
+    fn set(mut self, value: u8) {
         self.grow_if_needed();
 
         self.mem[self.current_addr as uint] = value;
@@ -171,20 +170,20 @@ struct Program {
 }
 
 impl Program {
-    fn parse(program: text) -> Self {
+    fn parse(program: [u8]) -> Self {
         let mut instrs = [];
 
-        for ch in program {
+        for byte in program {
             use Instr::*;
-            let instr = match ch {
-                '>' => Right,
-                '<' => Left,
-                '+' => Incr,
-                '-' => Decr,
-                '.' => Output,
-                ',' => Input,
-                '[' => JumpForwardIfZero,
-                ']' => JumpBackwardIfNonZero,
+            let instr = match byte {
+                b'>' => Right,
+                b'<' => Left,
+                b'+' => Incr,
+                b'-' => Decr,
+                b'.' => Output,
+                b',' => Input,
+                b'[' => JumpForwardIfZero,
+                b']' => JumpBackwardIfNonZero,
                 // Ignore other chars
                 _ => continue,
             };
@@ -255,19 +254,20 @@ impl Program {
 /// Abstracts over per-byte input
 struct ByteStream {
     /// The current line of input being read
-    line: text,
+    line: [u8],
 }
 
 impl ByteStream {
     fn new() -> Self {
         Self {
-            line: "",
+            line: b"",
         }
     }
 
     /// Returns the next byte of input or 0 if EOF has been reached
-    fn read_byte(mut self) -> uint {
+    fn read_byte(mut self) -> u8 {
         if self.line.is_empty() {
+            //TODO: Check `Result` of reading
             self.line = io::read_line();
 
             if self.line.is_empty() {
