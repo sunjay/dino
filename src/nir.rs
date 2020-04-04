@@ -6,20 +6,20 @@
 //! Note that this IR still contains field and method names as `Ident`s since those don't get
 //! resolved until later when we know the types.
 
-mod type_info;
 mod def_data;
-mod def_store;
-mod def_table;
+mod type_info;
 
-pub use type_info::*;
 pub use def_data::*;
-pub use def_store::*;
-pub use def_table::*;
+pub use type_info::*;
 
 use std::sync::Arc;
 
 use crate::hir;
 use crate::span::Span;
+use crate::def_table::DefId;
+
+pub type DefTable = crate::def_table::DefTable<DefData>;
+pub type DefStoreSync = crate::def_table::DefStoreSync<DefData>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {

@@ -4,8 +4,6 @@ use parking_lot::Mutex;
 
 use crate::package::PkgId;
 
-use super::DefData;
-
 /// An ID for any module, type, function, variable, etc.
 ///
 /// Note that method names in method calls do NOT get a DefId, but once the method name is
@@ -18,17 +16,17 @@ pub struct DefId {
 }
 
 /// A version of the `DefStore` that can be shared
-pub type DefStoreSync = Arc<Mutex<DefStore>>;
+pub type DefStoreSync<T> = Arc<Mutex<DefStore<T>>>;
 
-/// Stores a mapping from `DefId` to each `DefData` one particular package
+/// Stores a mapping from `DefId` to each `T` one particular package
 #[derive(Debug)]
-pub struct DefStore {
+pub struct DefStore<T> {
     pkg: PkgId,
     /// `def_index` indexes into this field
-    defs: Vec<(Arc<str>, DefData)>,
+    defs: Vec<(Arc<str>, T)>,
 }
 
-impl DefStore {
+impl<T> DefStore<T> {
     pub fn new(pkg: PkgId) -> Self {
         Self {
             pkg,
@@ -37,7 +35,7 @@ impl DefStore {
     }
 
     /// Pushes a new item into the store, returning a new ID for that item
-    pub fn push(&mut self, sym: Arc<str>, data: DefData) -> DefId {
+    pub fn push(&mut self, sym: Arc<str>, data: T) -> DefId {
         self.defs.push((sym, data));
         DefId {
             pkg: self.pkg,
@@ -46,14 +44,14 @@ impl DefStore {
     }
 
     /// Retrieves the data for an item already in the store
-    pub fn data(&self, id: DefId) -> &DefData {
+    pub fn data(&self, id: DefId) -> &T {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (_, data) = &self.defs[id.def_index];
         data
     }
 
     /// Retrieves a mutable version of the data for an item already in the store
-    pub fn data_mut(&mut self, id: DefId) -> &mut DefData {
+    pub fn data_mut(&mut self, id: DefId) -> &mut T {
         assert_eq!(id.pkg, self.pkg, "bug: attempt to access a DefId from another package");
         let (_, data) = &mut self.defs[id.def_index];
         data

@@ -3,7 +3,8 @@
 use std::collections::VecDeque;
 
 use crate::hir;
-use crate::nir::{self, DefId};
+use crate::nir;
+use crate::def_table::DefId;
 use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;

@@ -2,6 +2,7 @@ use super::{TypeInfo, DefTable, Ty};
 
 #[derive(Debug)]
 pub enum DefData {
+    Module,
     Type(TypeInfo),
     Field {ty: Ty},
     /// The function signature will be initialized exactly once during name resolution
