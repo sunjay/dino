@@ -16,7 +16,6 @@ pub mod span;
 pub mod diagnostics;
 pub mod fmt_ctx;
 pub mod primitives;
-pub mod package;
 pub mod ast;
 pub mod parser;
 pub mod hir;
@@ -25,6 +24,7 @@ pub mod nir;
 pub mod resolve;
 pub mod cgenir;
 pub mod cir;
+pub mod package;
 
 use std::fs;
 use std::io;
