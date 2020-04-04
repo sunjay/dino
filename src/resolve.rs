@@ -743,6 +743,8 @@ impl<'a> ModuleWalker<'a> {
             }
         }
 
+        //TODO: Search primitives
+
         None
     }
 
