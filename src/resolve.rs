@@ -194,12 +194,15 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn insert_struct_fields(&mut self, self_ty: nir::DefSpan, fields: &[hir::StructField]) {
-        // If the struct fields are not currently empty, we must be walking a duplicate decl
-        let mut store = self.def_store.lock();
-        let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
-        if !ty_info.fields.is_empty() {
-            // Ignore this decl
-            return;
+        // Extra scope to make sure lock is dropped ASAP
+        {
+            // If the struct fields are not currently empty, we must be walking a duplicate decl
+            let mut store = self.def_store.lock();
+            let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
+            if !ty_info.fields.is_empty() {
+                // Ignore this decl
+                return;
+            }
         }
 
         let nir_self_ty = nir::Ty::Def(self_ty);
