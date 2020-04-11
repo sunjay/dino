@@ -194,7 +194,7 @@ impl<'a> ModuleWalker<'a> {
     }
 
     fn insert_struct_fields(&mut self, self_ty: nir::DefSpan, fields: &[hir::StructField]) {
-        // Extra scope to make sure lock is dropped ASAP
+        // Extra scope to make sure lock is dropped ASAP (avoids deadlock)
         {
             // If the struct fields are not currently empty, we must be walking a duplicate decl
             let mut store = self.def_store.lock();
