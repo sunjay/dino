@@ -1,9 +1,11 @@
 mod def_store;
+mod def_kind;
 mod ty;
 mod scope;
 mod cursor;
 
 pub use def_store::*;
+pub use def_kind::*;
 pub use ty::*;
 pub use scope::*;
 pub use cursor::*;

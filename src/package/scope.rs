@@ -5,8 +5,6 @@ use parking_lot::RwLock;
 
 use super::{PkgId, DefId};
 
-pub type ScopeTreeSync = Arc<RwLock<ScopeTree>>;
-
 /// An ID for a scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId {
@@ -27,6 +25,17 @@ pub enum ScopeKind {
         functions: HashMap<Arc<str>, DefId>,
     },
 
+    Struct {
+        /// Names visible in a type context
+        ///
+        /// Any type names (i.e. from generics) introduced by the struct decl
+        types: HashMap<Arc<str>, DefId>,
+        /// The `Self` type representing the name of the struct
+        self_ty: DefId,
+        /// The fields of the struct
+        fields: HashMap<Arc<str>, DefId>
+    },
+
     Impl {
         /// Names visible in a type context
         ///
@@ -44,7 +53,7 @@ pub enum ScopeKind {
         /// Any variables (i.e from parameters) introduced by the function signature
         ///
         /// The same name may NOT be present multiple times since parameter names must be unique
-        variables: HashMap<Arc<str>, DefId>,
+        params: HashMap<Arc<str>, DefId>,
     },
 
     /// The start of a block
@@ -140,6 +149,9 @@ impl Scope {
     }
 }
 
+/// A version of the `ScopeTree` that can be shared
+pub type ScopeTreeSync = Arc<RwLock<ScopeTree>>;
+
 #[derive(Debug)]
 pub struct ScopeTree {
     pkg_id: PkgId,
@@ -166,14 +178,14 @@ impl ScopeTree {
 
     pub fn scope(&self, id: ScopeId) -> &Scope {
         let ScopeId {pkg, scope_index} = id;
-        assert_eq!(self.pkg_id, pkg);
+        assert_eq!(self.pkg_id, pkg, "bug: attempt to access a scope from another package");
 
         &self.scopes[scope_index]
     }
 
     pub fn scope_mut(&mut self, id: ScopeId) -> &mut Scope {
         let ScopeId {pkg, scope_index} = id;
-        assert_eq!(self.pkg_id, pkg);
+        assert_eq!(self.pkg_id, pkg, "bug: attempt to access a scope from another package");
 
         &mut self.scopes[scope_index]
     }

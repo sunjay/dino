@@ -1,6 +1,6 @@
-use super::DefSpan;
+use super::DefId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
-    Def(DefSpan),
+    Def(DefId),
 }
