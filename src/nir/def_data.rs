@@ -1,7 +1,15 @@
 use super::{TypeInfo, DefTable, Ty};
 
 #[derive(Debug)]
+pub struct Module {
+    pub modules: DefTable,
+    pub types: DefTable,
+    pub functions: DefTable,
+}
+
+#[derive(Debug)]
 pub enum DefData {
+    Module(Module),
     Type(TypeInfo),
     Field {ty: Ty},
     /// The function signature will be initialized exactly once during name resolution
