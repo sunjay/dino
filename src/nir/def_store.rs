@@ -17,12 +17,6 @@ pub struct DefId {
     def_index: usize,
 }
 
-impl DefId {
-    pub fn pkg_id(self) -> PkgId {
-        self.pkg
-    }
-}
-
 /// A version of the `DefStore` that can be shared
 pub type DefStoreSync = Arc<Mutex<DefStore>>;
 
