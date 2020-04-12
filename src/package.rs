@@ -13,7 +13,7 @@ pub use cursor::*;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// An ID for a package
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,7 +24,22 @@ pub struct PkgId(usize);
 #[derive(Debug)]
 pub struct Package {
     id: PkgId,
-    root: ScopeTreeSync,
+    def_store: DefStoreSync,
+    scopes: ScopeTreeSync,
+}
+
+impl Package {
+    pub fn store_mut(&self) -> MutexGuard<DefStore> {
+        self.def_store.lock()
+    }
+
+    pub fn scopes(&self) -> RwLockReadGuard<ScopeTree> {
+        self.scopes.read()
+    }
+
+    pub fn scopes_mut(&self) -> RwLockWriteGuard<ScopeTree> {
+        self.scopes.write()
+    }
 }
 
 /// The registery of all packages in the root scope
@@ -41,7 +56,8 @@ impl Packages {
 
         let package = Package {
             id,
-            root: Arc::new(RwLock::new(ScopeTree::new(id))),
+            def_store: Arc::new(Mutex::new(DefStore::new(id))),
+            scopes: Arc::new(RwLock::new(ScopeTree::new(id))),
         };
 
         assert!(!self.packages.contains_key(&name), "bug: same package inserted twice");

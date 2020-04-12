@@ -598,8 +598,9 @@ impl<'a> ModuleWalker<'a> {
         let &hir::IntegerLiteral {value, suffix, span} = int_lit;
 
         let type_hint = suffix.map(|suffix| match suffix {
-            hir::LiteralSuffix::Int => self.prims.int(),
-            hir::LiteralSuffix::Real => self.prims.real(),
+            _ => todo!(),
+            //hir::LiteralSuffix::Int => self.prims.int(),
+            //hir::LiteralSuffix::Real => self.prims.real(),
         });
 
         nir::IntegerLiteral {value, type_hint, span}
@@ -638,7 +639,7 @@ impl<'a> ModuleWalker<'a> {
         use hir::Ty::*;
         match ty {
             &Unit(span) => {
-                let def = nir::DefSpan {id: self.prims.unit(), span};
+                let def = nir::DefSpan {id: /*self.prims.unit()*/todo!(), span};
                 nir::Ty::Def(def)
             },
 

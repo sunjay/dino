@@ -106,7 +106,7 @@ impl ScopeKind {
     pub fn new_function() -> Self {
         ScopeKind::Function {
             types: HashMap::new(),
-            variables: HashMap::new(),
+            params: HashMap::new(),
         }
     }
 
@@ -136,6 +136,32 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Attempts to insert a type into the current scope.
+    ///
+    /// Returns an error if the type was already present in the scope.
+    ///
+    /// Panics if the scope does not support inserting types.
+    pub fn insert_type(&mut self, name: Arc<str>, def_id: DefId) -> Result<(), (Arc<str>, DefId)> {
+        use ScopeKind::*;
+        match &mut self.kind {
+            Module {types, ..} |
+            Function {types, ..} |
+            Block {types, ..} => {
+                if types.contains_key(&name) {
+                    return Err((name, def_id));
+                }
+                types.insert(name, def_id);
+                Ok(())
+            },
+
+            Struct {..} | Impl {..} | BlockVars {..} => {
+                panic!("bug: attempted to insert name `{}` into a scope that doesn't support types", name);
+            },
+        }
+    }
+}
+
+impl Scope {
     pub fn parent(&self) -> ScopeId {
         self.parent
     }
@@ -160,7 +186,7 @@ pub struct ScopeTree {
 }
 
 impl ScopeTree {
-    pub fn new(pkg_id: PkgId) -> Self {
+    pub(super) fn new(pkg_id: PkgId) -> Self {
         Self {
             pkg_id,
             scopes: vec![Scope {
@@ -172,8 +198,13 @@ impl ScopeTree {
     }
 
     /// Returns the ID of the root scope
-    pub fn root(&self) -> ScopeId {
+    pub fn root_id(&self) -> ScopeId {
         ScopeId {pkg: self.pkg_id, scope_index: 0}
+    }
+
+    /// Returns a mutable version of the root scope
+    pub fn root_mut(&mut self) -> &mut Scope {
+        self.scope_mut(self.root_id())
     }
 
     pub fn scope(&self, id: ScopeId) -> &Scope {
