@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use super::{DefId, DefTable};
+use super::{def_store2::DefId, def_table::DefTable};
 
 /// A named-field of a type
 #[derive(Debug)]

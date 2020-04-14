@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 
 use crate::package::PkgId;
 
-use super::DefData;
+use super::def_data::DefData;
 
 /// An ID for any module, type, function, variable, etc.
 ///

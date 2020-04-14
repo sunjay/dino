@@ -7,14 +7,9 @@
 //! resolved until later when we know the types.
 
 mod type_info;
-mod def_data;
-mod def_store;
-mod def_table;
-
-pub use type_info::*;
-pub use def_data::*;
-pub use def_store::*;
-pub use def_table::*;
+pub mod def_data;
+pub mod def_store2;
+pub mod def_table;
 
 use std::sync::Arc;
 
@@ -222,7 +217,7 @@ pub struct IntegerLiteral {
     pub value: i64,
     /// You can append "int" or "real" to help disambiguate the literal
     /// e.g. 132int or 32real
-    pub type_hint: Option<DefId>,
+    pub type_hint: Option<def_store2::DefId>,
     /// The span for the entire integer literal, including its suffix
     pub span: Span,
 }
@@ -234,7 +229,7 @@ pub enum Ty {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefSpan {
-    pub id: DefId,
+    pub id: def_store2::DefId,
     pub span: Span,
 }
 

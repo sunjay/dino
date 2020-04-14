@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use parking_lot::MutexGuard;
 
-use super::{DefStoreSync, DefStore, DefId, DefData};
+use super::{def_store2::{DefStoreSync, DefStore, DefId}, def_data::DefData};
 
 /// A symbol table containing a shared `DefStore`
 ///

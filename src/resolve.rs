@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 
 use crate::hir;
-use crate::nir::{self, DefId};
+use crate::nir::{self, def_store2::DefId};
 use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
 use crate::package::Packages;
@@ -13,7 +13,7 @@ use crate::package::Packages;
 /// their scopes.
 pub fn resolve_program<'a>(
     root_module: &hir::Module,
-    def_store: &'a nir::DefStoreSync,
+    def_store: &'a nir::def_store2::DefStoreSync,
     packages: &'a Packages,
     prims: &'a Primitives,
     diag: &'a Diagnostics,
@@ -80,14 +80,14 @@ struct Scope {
     /// The name is looked up
     pub wildcard_imports: Vec<DefId>,
     /// All the types in the current scope
-    pub types: nir::DefTable,
+    pub types: nir::def_table::DefTable,
     /// All the functions (*not* methods) in the current scope
-    pub functions: nir::DefTable,
+    pub functions: nir::def_table::DefTable,
     /// All the variables in the current scope
     ///
     /// To support shadowing, variables can be arbitrarily overwritten, at which point they will be
     /// given a fresh `DefId`.
-    pub variables: nir::DefTable,
+    pub variables: nir::def_table::DefTable,
 }
 
 /// Resolves the declarations for a single module
@@ -97,7 +97,7 @@ struct ModuleWalker<'a> {
     /// All functions found throughout the module
     functions: Vec<nir::Function>,
     /// The definitions of all `DefId`s
-    def_store: &'a nir::DefStoreSync,
+    def_store: &'a nir::def_store2::DefStoreSync,
     /// The packages available in the root scope
     packages: &'a Packages,
     /// Compiler built-in primitive types
@@ -149,8 +149,8 @@ impl<'a> ModuleWalker<'a> {
 
                     // Create an empty table for fields for now since we can't insert them until
                     // we've walked all the types
-                    let field_names = nir::DefTable::new(self.def_store.clone());
-                    let struct_data = nir::DefData::new_struct(field_names);
+                    let field_names = nir::def_table::DefTable::new(self.def_store.clone());
+                    let struct_data = nir::def_data::DefData::new_struct(field_names);
                     // You're allowed to redefine structs that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
                     let insert_res = self.top_scope().types.insert(name.value.clone(), struct_data);
@@ -214,7 +214,7 @@ impl<'a> ModuleWalker<'a> {
             let ty_info = store.data_mut(self_ty.id).unwrap_type_mut();
             let struct_fields = ty_info.fields.struct_fields_mut();
             // Need to check that field names are unique
-            match struct_fields.insert(name_ident.value.clone(), nir::DefData::Field {ty}) {
+            match struct_fields.insert(name_ident.value.clone(), nir::def_data::DefData::Field {ty}) {
                 Ok(_) => {},
                 Err(_) => {
                     self.diag.span_error(name_ident.span, format!("field `{}` is already declared", name_ident)).emit();
@@ -235,7 +235,7 @@ impl<'a> ModuleWalker<'a> {
 
                     // Note that we can't actually insert the resolved signature here because then
                     // the parameters of the function wouldn't be in scope when resolving the body.
-                    let func_data = nir::DefData::new_func();
+                    let func_data = nir::def_data::DefData::new_func();
                     // You're allowed to redefine functions that are already at higher levels of
                     // scope as long as the same level doesn't define the same name more than once
                     let insert_res = self.top_scope().functions.insert(name.value.clone(), func_data);
@@ -326,10 +326,10 @@ impl<'a> ModuleWalker<'a> {
 
         let mut store = self.def_store.lock();
         match store.data_mut(name_id) {
-            nir::DefData::Function(dsig@None) => {
+            nir::def_data::DefData::Function(dsig@None) => {
                 *dsig = Some(sig.clone());
             },
-            nir::DefData::Function(Some(_)) => {
+            nir::def_data::DefData::Function(Some(_)) => {
                 // Signature was already initialized, this must be from a duplicate function decl
                 // that we allowed through in order to keep name resolution going. This is where
                 // we should ignore it.
@@ -345,7 +345,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::FuncSig {self_param, params, return_type} = sig;
 
         let self_param = self_param.map(|span| {
-            let id = self.top_scope().variables.insert("self".into(), nir::DefData::Variable)
+            let id = self.top_scope().variables.insert("self".into(), nir::def_data::DefData::Variable)
                 .expect("bug: parser + desugar should guarantee only a single `self` parameter");
             nir::DefSpan {id, span}
         });
@@ -355,7 +355,7 @@ impl<'a> ModuleWalker<'a> {
         let params = params.iter().map(|param| {
             let hir::FuncParam {name, ty} = param;
 
-            let name_id = match self.top_scope().variables.insert(name.value.clone(), nir::DefData::Variable) {
+            let name_id = match self.top_scope().variables.insert(name.value.clone(), nir::def_data::DefData::Variable) {
                 Ok(id) => id,
                 Err(_) => {
                     self.diag.span_error(name.span, format!("identifier `{}` is bound more than once in this parameter list", name)).emit();
@@ -363,7 +363,7 @@ impl<'a> ModuleWalker<'a> {
                     // Generate a fresh name so there is at least the right number of params
                     duplicate_count += 1;
                     let fresh_name = format!("{}$p{}", name, duplicate_count).into();
-                    self.top_scope().variables.insert(fresh_name, nir::DefData::Error)
+                    self.top_scope().variables.insert(fresh_name, nir::def_data::DefData::Error)
                         .expect("bug: fresh variables should not collide")
                 },
             };
@@ -418,7 +418,7 @@ impl<'a> ModuleWalker<'a> {
         let hir::VarDecl {name, ty, expr} = var_decl;
 
         // Using `insert_overwrite` is how we support variable shadowing
-        let name_id = self.top_scope().variables.insert_overwrite(name.value.clone(), nir::DefData::Variable);
+        let name_id = self.top_scope().variables.insert_overwrite(name.value.clone(), nir::def_data::DefData::Variable);
         let name = nir::DefSpan {id: name_id, span: name.span};
 
         let ty = ty.as_ref().map(|ty| self.resolve_ty(ty, self_ty));
@@ -471,7 +471,7 @@ impl<'a> ModuleWalker<'a> {
 
                 // Assert that the resolved name comes from a variable and not a function or something else
                 let store = self.def_store.lock();
-                if !matches!(store.data(def.id), nir::DefData::Variable) {
+                if !matches!(store.data(def.id), nir::def_data::DefData::Variable) {
                     self.diag.error("invalid left-hand side of assignment")
                         .span_info(path.span(), "this is not a variable that is in scope")
                         .emit();
@@ -583,7 +583,7 @@ impl<'a> ModuleWalker<'a> {
         // All the fields in `fields` should be valid and unique, so make sure we have the right
         // amount of fields for this type
         let store = self.def_store.lock();
-        if let nir::DefData::Type(ty_info) = store.data(struct_name_id) {
+        if let nir::def_data::DefData::Type(ty_info) = store.data(struct_name_id) {
             let expected_fields = ty_info.fields.struct_fields().len();
             if fields.len() != expected_fields {
                 let name_ident = store.symbol(struct_name_id);
@@ -609,8 +609,8 @@ impl<'a> ModuleWalker<'a> {
     fn resolve_field_name(&mut self, self_ty: DefId, field_name: &hir::Ident) -> Option<nir::DefSpan> {
         let store = self.def_store.lock();
         let ty_info = match store.data(self_ty) {
-            nir::DefData::Type(ty_info) => ty_info,
-            nir::DefData::Error => return None,
+            nir::def_data::DefData::Type(ty_info) => ty_info,
+            nir::def_data::DefData::Error => return None,
             _ => unreachable!("bug: expected def to be either type or error"),
         };
         let field_id = ty_info.fields.struct_fields().id(&field_name.value);
@@ -627,7 +627,7 @@ impl<'a> ModuleWalker<'a> {
                 self.diag.span_error(path.span(), format!("cannot find path `{}` in this scope", path)).emit();
 
                 // Insert a fake path so name resolution may continue
-                self.top_scope().variables.insert_overwrite("$error".into(), nir::DefData::Error)
+                self.top_scope().variables.insert_overwrite("$error".into(), nir::def_data::DefData::Error)
             },
         };
 
@@ -652,7 +652,7 @@ impl<'a> ModuleWalker<'a> {
                     self.diag.span_error(span, format!("cannot find type `Self` in this scope")).emit();
 
                     // Insert a fake type so name resolution may continue
-                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::DefData::Error);
+                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::def_data::DefData::Error);
                     nir::Ty::Def(nir::DefSpan {id, span})
                 },
             },
@@ -664,7 +664,7 @@ impl<'a> ModuleWalker<'a> {
                     self.diag.span_error(ty_name.span(), format!("cannot find type `{}` in this scope", ty_name)).emit();
 
                     // Insert a fake type so name resolution may continue
-                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::DefData::Error);
+                    let id = self.top_scope().types.insert_overwrite("$error".into(), nir::def_data::DefData::Error);
                     nir::Ty::Def(nir::DefSpan {id, span: ty_name.span()})
                 },
             },
@@ -763,9 +763,9 @@ impl<'a> ModuleWalker<'a> {
         self.scope_stack.push_back(Scope {
             kind,
             wildcard_imports: Vec::new(),
-            types: nir::DefTable::new(self.def_store.clone()),
-            functions: nir::DefTable::new(self.def_store.clone()),
-            variables: nir::DefTable::new(self.def_store.clone()),
+            types: nir::def_table::DefTable::new(self.def_store.clone()),
+            functions: nir::def_table::DefTable::new(self.def_store.clone()),
+            variables: nir::def_table::DefTable::new(self.def_store.clone()),
         });
     }
 

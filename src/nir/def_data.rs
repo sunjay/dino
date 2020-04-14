@@ -1,4 +1,4 @@
-use super::{TypeInfo, DefTable, Ty};
+use super::{type_info::TypeInfo, def_table::DefTable, Ty};
 
 #[derive(Debug)]
 pub enum DefData {
