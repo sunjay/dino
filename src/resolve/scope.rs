@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use parking_lot::RwLock;
 
-use super::{PkgId, DefId};
+use crate::nir::DefId;
+
+use super::package::PkgId;
 
 /// An ID for a scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

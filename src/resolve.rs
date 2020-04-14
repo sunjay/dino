@@ -1,12 +1,17 @@
 //! Name resolution - translates High-level IR (HIR) to Nameless IR (NIR)
 
+mod package;
+mod scope;
+mod cursor;
+
 use std::collections::VecDeque;
 
 use crate::hir;
 use crate::nir::{self, def_store2::DefId};
 use crate::primitives::Primitives;
 use crate::diagnostics::Diagnostics;
-use crate::package::Packages;
+
+use package::Packages;
 
 /// Given the root module of a program, recursively resolves all the names in all of the modules in
 /// the program. Returns the completely flattened program, with all declarations extracted from

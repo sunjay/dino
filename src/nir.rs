@@ -11,6 +11,12 @@ pub mod def_data;
 pub mod def_store2;
 pub mod def_table;
 
+mod def_store;
+mod def_kind;
+
+pub use def_store::*;
+pub use def_kind::*;
+
 use std::sync::Arc;
 
 use crate::hir;

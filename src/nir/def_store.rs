@@ -1,7 +1,10 @@
 use std::sync::Arc;
+
 use parking_lot::Mutex;
 
-use super::{PkgId, DefKind};
+use crate::package::PkgId;
+
+use super::DefKind;
 
 /// An ID for anything that can be defined in the program (e.g. types, functions, variables, etc.)
 ///
@@ -17,7 +20,6 @@ pub struct DefId {
 /// A version of the `DefStore` that can be shared
 pub type DefStoreSync = Arc<Mutex<DefStore>>;
 
-/// Stores a mapping from `DefId`
 #[derive(Debug)]
 pub struct DefStore {
     pkg: PkgId,

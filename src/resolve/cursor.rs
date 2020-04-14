@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use super::{ScopeId, ScopeTree, ScopeKind};
+use super::scope::{ScopeId, ScopeTree, ScopeKind};
 
 /// A mutable pointer to a given scope in the scope tree
 #[derive(Debug)]
