@@ -12,7 +12,18 @@ pub fn populate(package: &mut Package, prims: &Primitives) {
         };
 
         impl bstr {
+            fn len(self) -> uint;
+
             fn eq(self, other: bstr) -> bool;
+            fn gt(self, other: bstr) -> bool;
+            fn gte(self, other: bstr) -> bool;
+            fn lt(self, other: bstr) -> bool;
+            fn lte(self, other: bstr) -> bool;
+
+            fn add(self, other: bstr) -> bstr;
+
+            //TODO: return u8
+            fn index(self, idx: uint) -> uint;
         }
     }
 }

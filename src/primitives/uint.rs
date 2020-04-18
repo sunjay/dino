@@ -13,6 +13,17 @@ pub fn populate(package: &mut Package, prims: &Primitives) {
 
         impl uint {
             fn eq(self, other: uint) -> bool;
+            fn gt(self, other: uint) -> bool;
+            fn gte(self, other: uint) -> bool;
+            fn lt(self, other: uint) -> bool;
+            fn lte(self, other: uint) -> bool;
+
+            fn add(self, other: uint) -> uint;
+            fn sub(self, other: uint) -> uint;
+            fn mul(self, other: uint) -> uint;
+            fn div(self, other: uint) -> uint;
+            fn rem(self, other: uint) -> uint;
+            fn pos(self) -> uint;
         }
     }
 }

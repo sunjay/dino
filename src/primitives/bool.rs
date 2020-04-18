@@ -14,6 +14,7 @@ pub fn populate(package: &mut Package, prims: &Primitives) {
 
         impl bool {
             fn eq(self, other: bool) -> bool;
+            fn not(self) -> bool;
         }
     }
 }

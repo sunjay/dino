@@ -15,6 +15,17 @@ pub fn populate(package: &mut Package, prims: &Primitives) {
 
         impl complex {
             fn eq(self, other: complex) -> bool;
+            fn gt(self, other: complex) -> bool;
+            fn gte(self, other: complex) -> bool;
+            fn lt(self, other: complex) -> bool;
+            fn lte(self, other: complex) -> bool;
+
+            fn add(self, other: complex) -> complex;
+            fn sub(self, other: complex) -> complex;
+            fn mul(self, other: complex) -> complex;
+            fn div(self, other: complex) -> complex;
+            fn pos(self) -> complex;
+            fn neg(self) -> complex;
         }
     }
 }

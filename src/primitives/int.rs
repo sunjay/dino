@@ -23,6 +23,7 @@ pub fn populate(package: &mut Package, prims: &Primitives) {
             fn mul(self, other: int) -> int;
             fn div(self, other: int) -> int;
             fn rem(self, other: int) -> int;
+            fn pos(self) -> int;
             fn neg(self) -> int;
         }
     }
