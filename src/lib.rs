@@ -90,7 +90,7 @@ fn insert_prelude(decls: &mut resolve2::ProgramDecls) {
     let prims = &decls.prims;
     let decls = &mut decls.top_level_decls;
 
-    decls.insert_func(FunctionInfo::new_extern("unit_eq", FuncSig {
+    decls.insert_func(FunctionInfo::new_extern("unit__eq", FuncSig {
         return_type: prims.bool(),
         params: vec![
             FuncParam {name: "left", ty: prims.unit()},

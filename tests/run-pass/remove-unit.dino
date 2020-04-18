@@ -28,12 +28,12 @@ fn main() {
     let u2 = print_unit(u);
     // Unit values should always be equal, even when
     // they come from different functions
-    if unit_eq(u, u2) {
+    if unit__eq(u, u2) {
         print_int(1);
     }
 
     let u3 = nested_expr_unit(32);
-    print_bool(unit_eq(u2, u3));
+    print_bool(unit__eq(u2, u3));
 
     takes_unit(unit(), ());
     takes_unit(u, ());

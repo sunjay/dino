@@ -23,7 +23,7 @@ pub extern fn __dino__DUnit_from_unit_literal(mut out: OutPtr<DUnit>) {
 }
 
 #[no_mangle]
-pub extern fn unit_eq(_x: &DUnit, _y: &DUnit, mut out: OutPtr<DBool>) {
+pub extern fn unit__eq(_x: &DUnit, _y: &DUnit, mut out: OutPtr<DBool>) {
     // Unit is always equal to itself
     out.write(DBool::new(true));
 }
