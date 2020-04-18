@@ -40,16 +40,6 @@ pub extern fn bool_eq(x: &DBool, y: &DBool, mut out: OutPtr<DBool>) {
 }
 
 #[no_mangle]
-pub extern fn bool_and(x: &DBool, y: &DBool, mut out: OutPtr<DBool>) {
-    out.write(DBool::new(x.0 && y.0));
-}
-
-#[no_mangle]
-pub extern fn bool_or(x: &DBool, y: &DBool, mut out: OutPtr<DBool>) {
-    out.write(DBool::new(x.0 || y.0));
-}
-
-#[no_mangle]
 pub extern fn bool_not(x: &DBool, mut out: OutPtr<DBool>) {
     out.write(DBool::new(!x.0));
 }
