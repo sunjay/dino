@@ -35,12 +35,12 @@ pub extern fn __dino__DBool_coerce_bool(x: &DBool, out: &mut bool) {
 }
 
 #[no_mangle]
-pub extern fn bool_eq(x: &DBool, y: &DBool, mut out: OutPtr<DBool>) {
+pub extern fn bool__eq(x: &DBool, y: &DBool, mut out: OutPtr<DBool>) {
     out.write(DBool::new(x.0 == y.0));
 }
 
 #[no_mangle]
-pub extern fn bool_not(x: &DBool, mut out: OutPtr<DBool>) {
+pub extern fn bool__not(x: &DBool, mut out: OutPtr<DBool>) {
     out.write(DBool::new(!x.0));
 }
 

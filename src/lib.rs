@@ -104,7 +104,7 @@ fn insert_prelude(decls: &mut resolve2::ProgramDecls) {
         ],
     })).unwrap();
 
-    decls.insert_func(FunctionInfo::new_extern("bool_eq", FuncSig {
+    decls.insert_func(FunctionInfo::new_extern("bool__eq", FuncSig {
         return_type: prims.bool(),
         params: vec![
             FuncParam {name: "left", ty: prims.bool()},
@@ -125,7 +125,7 @@ fn insert_prelude(decls: &mut resolve2::ProgramDecls) {
             FuncParam {name: "right", ty: prims.bool()},
         ],
     })).unwrap();
-    decls.insert_func(FunctionInfo::new_extern("bool_not", FuncSig {
+    decls.insert_func(FunctionInfo::new_extern("bool__not", FuncSig {
         return_type: prims.bool(),
         params: vec![
             FuncParam {name: "value", ty: prims.bool()},
