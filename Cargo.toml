@@ -4,20 +4,8 @@ version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
 description = "Compiler for the dino programming language"
 edition = "2018"
-build = "build.rs"
 
 [dependencies]
-tempfile = "3.1"
-nom = "5.0"
-snafu = "0.5"
-structopt = "0.3"
-parking_lot = "0.10"
-maplit = "1.0"
-rayon = "1.2"
-rand = { version = "0.7", features = ["small_rng"] }
-ena = "0.13"
-termcolor = "1.1"
-smallvec = "1.2"
 
 [dev-dependencies]
 rayon = "1.2"
