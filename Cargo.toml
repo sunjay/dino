@@ -6,6 +6,7 @@ description = "Compiler for the dino programming language"
 edition = "2018"
 
 [dependencies]
+salsa = "0.14"
 
 [dev-dependencies]
 rayon = "1.3"
